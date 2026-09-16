@@ -3542,7 +3542,6 @@ class MainActivity : Activity() {
         ).apply { topMargin = dp(top) }
         content.addView(sectionLabel(Strings.t("Main settings")), mainParams(0))
         content.addView(navRow(Strings.t("Language"), AppLanguage.label(currentLanguagePref())) { chooseLanguage() }, mainParams(10))
-        content.addView(navRow(Strings.t("Theme"), AppAppearance.mode(this).label) { chooseTheme() }, mainParams())
         content.addView(createToggleRow(
             Strings.t("Auto-connect"),
             Strings.t("Connect automatically after the phone restarts"),
@@ -4330,12 +4329,6 @@ class MainActivity : Activity() {
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.WRAP_CONTENT,
         ).apply { topMargin = dp(26) })
-        // No stored reference: picking a theme calls recreate(), so the row is
-        // rebuilt with the new value rather than being repainted in place.
-        content.addView(navRow(Strings.t("Theme"), AppAppearance.mode(this).label) { chooseTheme() }, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT,
-        ).apply { topMargin = dp(10) })
         // Language sits directly under Theme: both are appearance-scale choices
         // that repaint the whole app via recreate(). No stored reference for
         // the same reason — the settings page is rebuilt, not repainted.
@@ -5241,36 +5234,6 @@ class MainActivity : Activity() {
      * whenever Psiphon is selected, and the service honours the choice either
      * way (armRegionPhase no longer gates on chainMode).
      */
-    /**
-     * Dark or light.
-     *
-     * `recreate()` rather than repainting in place: the palette is read into
-     * fields and baked into ~200 drawables at construction time, plus
-     * [Sculpt.lighting] which decides how every surface is lit. Walking the tree
-     * to re-tint all of it would leave whatever the walk missed in the old
-     * palette, and the app already uses recreate() for the same reason after a
-     * settings restore.
-     *
-     * The tunnel is untouched by this: the VPN lives in a foreground service, not
-     * in the activity, so a connected session survives the recreate. Worth being
-     * sure of before shipping a switch a user might tap mid-session.
-     */
-    private fun chooseTheme(after: (() -> Unit)? = null) {
-        showChoiceSheet(
-            title = Strings.t("Theme"),
-            subtitle = Strings.t("Applies straight away. A running tunnel is not interrupted."),
-            options = AppAppearance.Mode.entries.toList(),
-            selected = AppAppearance.mode(this),
-            label = { mode -> mode.label },
-            description = { mode -> mode.description },
-        ) { chosen ->
-            if (chosen == AppAppearance.mode(this)) return@showChoiceSheet
-            AppAppearance.setMode(this, chosen)
-            ConnectionLog.record("Theme set to ${chosen.label}")
-            after?.invoke()
-            recreate()
-        }
-    }
 
     /** The raw preference, including "system" — what the Language row displays. */
     private fun currentLanguagePref(): String =

@@ -50,7 +50,7 @@ object AppAppearance {
         val label: String get() = Strings.t(enLabel)
 
         companion object {
-            fun from(key: String?): Mode = entries.firstOrNull { it.key == key } ?: DARK
+            fun from(key: String?): Mode = entries.firstOrNull { it.key == key } ?: LIGHT
         }
     }
 
@@ -175,10 +175,10 @@ object AppAppearance {
         lighting = Sculpt.LIGHT_LIGHTING,
     )
 
-    fun mode(context: Context): Mode = Mode.from(
-        context.getSharedPreferences("settings", Context.MODE_PRIVATE)
-            .getString(PREF_KEY, null)
-    )
+    // Dark mode is retired: the app is light-only now, regardless of what an older install had
+    // stored (Mode.DARK/PORCELAIN's palettes stay defined below only because a handful of call
+    // sites still read AppAppearance.Mode.entries; nothing can actually select DARK any more).
+    fun mode(context: Context): Mode = Mode.LIGHT
 
     fun setMode(context: Context, mode: Mode) {
         context.getSharedPreferences("settings", Context.MODE_PRIVATE)
