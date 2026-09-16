@@ -3093,7 +3093,7 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
     private fun startWatchdog() {
         watchdogTask?.cancel(false)
         reconnectAttempts = 0
-        watchdogTicks = 0
+        watchdogTicks.set(0)
         watchdogTask = ladderScheduler.scheduleWithFixedDelay({
             try {
                 if (stopRequested.get() || userInitiatedStop.get()) return@scheduleWithFixedDelay
