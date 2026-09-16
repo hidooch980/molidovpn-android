@@ -23,6 +23,7 @@ object Typefaces {
     @Volatile private var bold: Typeface? = null
     @Volatile private var extraBold: Typeface? = null
     @Volatile private var mono: Typeface? = null
+    @Volatile private var numeric: Typeface? = null
 
     /** The regular-weight label font for the active language. */
     fun regular(ctx: Context): Typeface {
@@ -70,6 +71,9 @@ object Typefaces {
     /** Monospace digits stay the system mono in every language. */
     fun mono(ctx: Context): Typeface =
         mono ?: Typeface.create(Typeface.MONOSPACE, Typeface.NORMAL).also { mono = it }
+
+    /** Space Grotesk — numeric stat/ping/speed digits only, every language. */
+    fun numeric(ctx: Context): Typeface = cached(ctx, R.font.space_grotesk_regular) { numeric }
 
     /**
      * Persian needs more leading than the console's tight default: diacritics

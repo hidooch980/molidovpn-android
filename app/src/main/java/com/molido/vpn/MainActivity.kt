@@ -622,6 +622,7 @@ class MainActivity : Activity() {
             ellipsize = android.text.TextUtils.TruncateAt.END
         }
         chipLatency = label(Strings.t("Latency —"), 12f, MUTED, TypefaceStyle.MEDIUM).apply {
+            typeface = Typefaces.numeric(this@MainActivity)
             gravity = Gravity.CENTER
             contentDescription = "سنجش پینگ اتصال"
             isClickable = true
