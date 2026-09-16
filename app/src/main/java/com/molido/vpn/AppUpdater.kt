@@ -99,7 +99,12 @@ class AppUpdater(private val activity: Activity) {
     }
 
     private fun openDownload(release: Release) {
-        val opened = openLink(release.downloadUrl)
+        // The asset URL's filename never changes release to release, so a browser (or a user who
+        // already has a stale cached response for this exact URL from an earlier update) can silently
+        // hand back yesterday's APK with no error. Appending the version makes every release a
+        // genuinely different URL, which busts any such cache without the user doing anything.
+        val busted = release.downloadUrl + (if ('?' in release.downloadUrl) '&' else '?') + "v=${release.version}"
+        val opened = openLink(busted)
         if (!opened) {
             // No browser resolved the direct asset URL. The release page is served
             // by the same host, so if this fails too there is no usable browser at
