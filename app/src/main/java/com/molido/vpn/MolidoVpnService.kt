@@ -310,6 +310,7 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
      * Liveness watchdog for an established tunnel. See [startWatchdog].
      */
     private var watchdogTask: java.util.concurrent.ScheduledFuture<*>? = null
+    private val watchdogTicks = java.util.concurrent.atomic.AtomicInteger(0)
 
     /**
      * True only when the *user* asked to disconnect (dial tap, notification
@@ -3092,10 +3093,19 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
     private fun startWatchdog() {
         watchdogTask?.cancel(false)
         reconnectAttempts = 0
+        watchdogTicks = 0
         watchdogTask = ladderScheduler.scheduleWithFixedDelay({
             try {
                 if (stopRequested.get() || userInitiatedStop.get()) return@scheduleWithFixedDelay
                 if (!connected.get()) return@scheduleWithFixedDelay
+                // Opt-in anonymous "still connected" ping for the admin panel's live count, piggybacked
+                // on this existing 30s tick (~every other tick, so roughly once a minute).
+                if (watchdogTicks.getAndIncrement() % 2 == 0) {
+                    try {
+                        ConnectionReports.heartbeat(this, mode = currentProtocol.takeIf { it.isNotEmpty() })
+                    } catch (_: Exception) {
+                    }
+                }
                 val dead = tunnelIsDead() ?: return@scheduleWithFixedDelay
                 // SHARD can usually be repaired without a disconnect: the pool has
                 // other nodes and the TUN, tun2socks and the front-end are all still
@@ -3162,6 +3172,7 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
     private fun stopWatchdog() {
         watchdogTask?.cancel(false)
         watchdogTask = null
+        ConnectionReports.endSession()
     }
 
     /**

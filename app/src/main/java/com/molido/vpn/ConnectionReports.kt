@@ -29,6 +29,7 @@ object ConnectionReports {
     const val ASKED_PREF = "anonymous_reports_asked"
 
     private const val ENDPOINT = "https://molido-sub.hidooch980.workers.dev/report"
+    private const val HEARTBEAT_ENDPOINT = "https://molido-sub.hidooch980.workers.dev/heartbeat"
     private const val SCORES_ENDPOINT = "https://molido-sub.hidooch980.workers.dev/scores?op="
     private const val SCORES_PREFS = "remote_scores"
     private const val SCORES_MIN_INTERVAL_MS = 60 * 60 * 1000L
@@ -217,6 +218,52 @@ object ConnectionReports {
                 // Best effort only.
             }
         }, "connection-report").apply { isDaemon = true }.start()
+    }
+
+    @Volatile private var sessionId: String? = null
+
+    /** Random per-connection-session id, generated once and kept until [endSession]. Never any personal
+     * data — only ever sent to [HEARTBEAT_ENDPOINT] so the admin panel can count distinct live sessions. */
+    private fun sessionIdFor(): String = sessionId ?: synchronized(this) {
+        sessionId ?: run {
+            val bytes = ByteArray(12)
+            java.security.SecureRandom().nextBytes(bytes)
+            bytes.joinToString("") { "%02x".format(it) }.also { sessionId = it }
+        }
+    }
+
+    /** Call when the tunnel goes down so the next connection gets a fresh session id. */
+    fun endSession() {
+        sessionId = null
+    }
+
+    /** Opt-in "still connected" ping; fire-and-forget on a daemon thread. Call every ~45-60s while connected. */
+    fun heartbeat(context: Context, mode: String? = null) {
+        if (!enabled(context)) return
+        val app = context.applicationContext
+        Thread({
+            try {
+                val body = JSONObject().apply {
+                    put("session_id", sessionIdFor())
+                    put("op", operator(app))
+                    mode?.lowercase()?.takeIf { Regex("[a-z0-9_-]{1,20}").matches(it) }?.let { put("mode", it) }
+                }.toString()
+                val connection = URL(HEARTBEAT_ENDPOINT).openConnection() as HttpURLConnection
+                try {
+                    connection.connectTimeout = TIMEOUT_MS
+                    connection.readTimeout = TIMEOUT_MS
+                    connection.requestMethod = "POST"
+                    connection.doOutput = true
+                    connection.setRequestProperty("Content-Type", "application/json")
+                    connection.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+                    connection.responseCode
+                } finally {
+                    connection.disconnect()
+                }
+            } catch (_: Exception) {
+                // Best effort only; never surfaces to the UI or the tunnel.
+            }
+        }, "heartbeat").apply { isDaemon = true }.start()
     }
 
     /** Health-memory bucket for the current underlying network, e.g. "wifi:other", "cellular:mci". */
