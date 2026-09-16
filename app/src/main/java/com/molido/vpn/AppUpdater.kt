@@ -3,6 +3,9 @@ package com.molido.vpn
 import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.provider.Settings
+import androidx.core.content.FileProvider
+import java.io.File
 import android.net.Uri
 import android.os.Build
 import android.widget.LinearLayout
@@ -15,35 +18,10 @@ import java.net.URL
 import java.util.concurrent.Executors
 
 /**
- * "Check for updates": tells the user a new version exists and hands the
- * download to the browser.
- *
- * ## Why it no longer installs the APK itself
- *
- * The previous version downloaded the APK into `cacheDir/updates` and invoked the
- * system installer through a `FileProvider` URI. That works, but it is also the
- * exact behavioural signature of an Android *dropper* — fetch a package at
- * runtime, then ask the platform to install it — and it required
- * `REQUEST_INSTALL_PACKAGES` in the manifest. Play Protect and the OEM scanners
- * flag both, and the manifest permission is the worse of the two because it is
- * visible from a static scan without the app ever running.
- *
- * So both signals are gone: no `REQUEST_INSTALL_PACKAGES`, no runtime APK
- * download, no call into the package installer. What is left is a version check
- * against the GitHub releases API and an ordinary `ACTION_VIEW` on an https URL,
- * which is indistinguishable from tapping a link.
- *
- * This does **not** remove the "unknown source / unknown developer" warning the
- * user sees when the browser's download is installed — that belongs to how the
- * app is distributed, not to this code. It removes the *scanner* signals only.
- *
- * ## Why the browser is sent to the asset, not the release page
- *
- * Every release carries two APKs (arm64-v8a and armeabi-v7a). On a release page a
- * user picks by hand, and picking the 32-bit build on a 64-bit phone is easy and
- * produces a working-but-slower install. [assetForAbi] already knows the right
- * one from `Build.SUPPORTED_ABIS`, so the browser is pointed straight at it. The
- * release page is only the fallback for when no matching asset is found.
+ * "Check for updates": finds a newer release (our worker first, GitHub second), then downloads the
+ * right APK for this CPU inside the app and opens the system installer. The owner chose in-app install
+ * over the browser hand-off; the one-time "install unknown apps" permission is requested when needed.
+ * The browser is only a fallback when the in-app download fails.
  */
 class AppUpdater(private val activity: Activity) {
     private val worker = Executors.newSingleThreadExecutor()
@@ -79,40 +57,161 @@ class AppUpdater(private val activity: Activity) {
         }
     }
 
-    /**
-     * The new-version notice.
-     *
-     * Deliberately says the download opens in the browser. A user who taps
-     * "Update" and lands in Chrome without warning assumes the app misbehaved;
-     * saying it up front makes the browser hand-off read as intentional.
-     */
+    /** The new-version notice. */
     private fun announceUpdate(release: Release) {
         dialogBuilder()
             .setTitle(Strings.t("Update available"))
             .setMessage(
                 Strings.tf("MolidoVPN %s has been released. You are on %s.", release.version, appVersion()) + "\n\n" +
-                    Strings.t("Tapping Update opens the download in your browser. Open the downloaded file to install it.")
+                    Strings.t("Tapping Update downloads and installs it inside the app.")
             )
             .setNegativeButton(Strings.t("Later"), null)
             .setPositiveButton(Strings.t("Update")) { _, _ -> openDownload(release) }
             .show()
     }
 
+    /** APK already downloaded but waiting for the "install unknown apps" permission. */
+    private var pendingApk: File? = null
+    private var downloadBar: ProgressBar? = null
+
+    /**
+     * In-app update: downloads the APK with a progress bar, checks it really is a newer build of this
+     * app (a stale cached download is rejected instead of silently reinstalling the old version), then
+     * hands it to the system installer. The browser is only a fallback when the download fails.
+     */
     private fun openDownload(release: Release) {
-        // The asset URL's filename never changes release to release, so a browser (or a user who
-        // already has a stale cached response for this exact URL from an earlier update) can silently
-        // hand back yesterday's APK with no error. Appending the version makes every release a
-        // genuinely different URL, which busts any such cache without the user doing anything.
-        val busted = release.downloadUrl + (if ('?' in release.downloadUrl) '&' else '?') + "v=${release.version}"
-        val opened = openLink(busted)
-        if (!opened) {
-            // No browser resolved the direct asset URL. The release page is served
-            // by the same host, so if this fails too there is no usable browser at
-            // all — worth saying rather than failing silently.
-            if (!openLink(RELEASES_PAGE_URL)) {
-                showMessage(Strings.t("No browser found"), Strings.t("Install a browser, then download the update from GitHub."))
+        val url = release.downloadUrl + (if ('?' in release.downloadUrl) '&' else '?') + "v=${release.version}"
+        showDownloadProgress()
+        worker.execute {
+            val result = runCatching { downloadApk(url, release) }
+            activity.runOnUiThread {
+                dismissProgress()
+                downloadBar = null
+                if (activity.isFinishing || activity.isDestroyed) return@runOnUiThread
+                result.onSuccess { install(it) }.onFailure { error ->
+                    dialogBuilder()
+                        .setTitle(Strings.t("Download failed"))
+                        .setMessage((error.message ?: "") + "\n\n" + Strings.t("Download it from the website instead?"))
+                        .setNegativeButton(Strings.t("Later"), null)
+                        .setPositiveButton(Strings.t("Open website")) { _, _ ->
+                            if (!openLink(url)) openLink(RELEASES_PAGE_URL)
+                        }
+                        .show()
+                }
             }
         }
+    }
+
+    private fun downloadApk(url: String, release: Release): File {
+        val dir = File(activity.cacheDir, "updates").apply { mkdirs() }
+        dir.listFiles()?.forEach { it.delete() }
+        val target = File(dir, "MolidoVPN-${release.version}.apk")
+        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
+            connectTimeout = 15_000
+            readTimeout = 60_000
+            useCaches = false
+            setRequestProperty("Cache-Control", "no-cache")
+            setRequestProperty("User-Agent", "MolidoVPN-Android")
+        }
+        try {
+            check(connection.responseCode == HttpURLConnection.HTTP_OK) { "HTTP ${connection.responseCode}" }
+            val total = connection.contentLengthLong
+            var received = 0L
+            var lastPercent = -1
+            connection.inputStream.use { input ->
+                target.outputStream().use { output ->
+                    val buffer = ByteArray(64 * 1024)
+                    while (true) {
+                        val read = input.read(buffer)
+                        if (read < 0) break
+                        output.write(buffer, 0, read)
+                        received += read
+                        if (total > 0) {
+                            val percent = (received * 100 / total).toInt()
+                            if (percent != lastPercent) {
+                                lastPercent = percent
+                                activity.runOnUiThread { updateDownloadProgress(percent) }
+                            }
+                        }
+                    }
+                }
+            }
+            check(total <= 0 || received == total) { "incomplete download ($received / $total)" }
+        } finally {
+            connection.disconnect()
+        }
+        // Never install something that is not a newer build of this very app.
+        val pm = activity.packageManager
+        val archive = pm.getPackageArchiveInfo(target.path, 0)
+        check(archive != null && archive.packageName == activity.packageName) { Strings.t("The downloaded file is damaged") }
+        val current = pm.getPackageInfo(activity.packageName, 0)
+        @Suppress("DEPRECATION")
+        val newCode = if (Build.VERSION.SDK_INT >= 28) archive!!.longVersionCode else archive!!.versionCode.toLong()
+        @Suppress("DEPRECATION")
+        val oldCode = if (Build.VERSION.SDK_INT >= 28) current.longVersionCode else current.versionCode.toLong()
+        check(newCode > oldCode) { Strings.t("The downloaded file is not newer than this version") }
+        return target
+    }
+
+    private fun install(apk: File) {
+        if (Build.VERSION.SDK_INT >= 26 && !activity.packageManager.canRequestPackageInstalls()) {
+            pendingApk = apk
+            dialogBuilder()
+                .setTitle(Strings.t("One-time permission"))
+                .setMessage(Strings.t("Allow MolidoVPN to install updates, then come back — installation continues automatically."))
+                .setNegativeButton(Strings.t("Later"), null)
+                .setPositiveButton(Strings.t("Allow")) { _, _ ->
+                    try {
+                        activity.startActivity(
+                            Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${activity.packageName}"))
+                        )
+                    } catch (_: ActivityNotFoundException) {
+                        activity.startActivity(Intent(Settings.ACTION_SECURITY_SETTINGS))
+                    }
+                }
+                .show()
+            return
+        }
+        pendingApk = null
+        val uri = FileProvider.getUriForFile(activity, "${activity.packageName}.fileprovider", apk)
+        activity.startActivity(
+            Intent(Intent.ACTION_VIEW)
+                .setDataAndType(uri, "application/vnd.android.package-archive")
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+        )
+    }
+
+    /** Called from the activity's onResume: finishes an install that was waiting for the permission. */
+    fun resumePendingInstall() {
+        val apk = pendingApk ?: return
+        if (Build.VERSION.SDK_INT >= 26 && !activity.packageManager.canRequestPackageInstalls()) return
+        if (apk.exists()) install(apk) else pendingApk = null
+    }
+
+    private fun showDownloadProgress() {
+        val layout = LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(24), dp(8), dp(24), dp(8))
+        }
+        val bar = ProgressBar(activity, null, android.R.attr.progressBarStyleHorizontal).apply {
+            isIndeterminate = true
+            max = 100
+        }
+        downloadBar = bar
+        layout.addView(bar)
+        progressDialog = dialogBuilder()
+            .setTitle(Strings.t("Downloading update"))
+            .setView(layout)
+            .setCancelable(false)
+            .create()
+            .also { it.show() }
+    }
+
+    private fun updateDownloadProgress(percent: Int) {
+        val bar = downloadBar ?: return
+        bar.isIndeterminate = false
+        bar.progress = percent
+        progressDialog?.setTitle(Strings.t("Downloading update") + " " + percent + "%")
     }
 
     private fun openLink(url: String): Boolean = try {

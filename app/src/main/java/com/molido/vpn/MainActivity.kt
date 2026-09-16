@@ -806,6 +806,7 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        if (::appUpdater.isInitialized) appUpdater.resumePendingInstall()
         uiForeground = true
         // Background, bounded, at most every 30 min per network: see CleanIpScanner.
         CleanIpScanner.scanIfDue(this)
