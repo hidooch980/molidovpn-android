@@ -199,7 +199,7 @@ object Sculpt {
         dialBodyDrop = 0.06f,
         // darken(mint #0E9C82, 0.30) = #0A6D5B: 6.9:1 on the white dial face.
         dialTextShift = -0.30f,
-        cardBorder = 0xFFD3E7E1.toInt(),
+        cardBorder = 0xFFE2E8F0.toInt(),
     )
 
     /**
