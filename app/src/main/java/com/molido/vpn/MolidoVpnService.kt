@@ -758,10 +758,10 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
         /**
          * Accent used for the notification's icon tint and header text.
          *
-         * Sampled from the launcher artwork's neon ring (#70E0B0 region), so the
+         * Firoozeh #12A594 from the «Firoozeh & Shab» launcher artwork, so the
          * shade row and the app icon read as the same brand.
          */
-        private const val NOTIFICATION_ACCENT = 0xFF2DD4BF.toInt()
+        private const val NOTIFICATION_ACCENT = 0xFF12A594.toInt()
 
         /** Preference key for the auto-reconnect toggle. */
         const val AUTO_RECONNECT_PREF = "auto_reconnect"

@@ -2,7 +2,7 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#E6121A1F"
+    android:background="#E60C1222"
     android:gravity="center_vertical"
     android:orientation="horizontal"
     android:padding="10dp">
@@ -42,12 +42,12 @@
         android:id="@+id/widget_button"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:background="#3342E6A4"
+        android:background="#332DD4BF"
         android:paddingStart="12dp"
         android:paddingTop="8dp"
         android:paddingEnd="12dp"
         android:paddingBottom="8dp"
         android:text="@string/vpn_disconnect"
-        android:textColor="#FF42E6A4"
+        android:textColor="#FF2DD4BF"
         android:textSize="13sp" />
 </LinearLayout>
