@@ -126,6 +126,7 @@ android {
     // QR decode from a picked image (My configs). Core only: no camera stack.
     implementation("com.google.zxing:core:3.5.3")
     implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.aar"))))
+    testImplementation("junit:junit:4.13.2")
 }
 
 targetAbis.forEach { abi ->

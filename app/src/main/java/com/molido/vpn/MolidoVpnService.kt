@@ -670,6 +670,8 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
 
     companion object {
         const val LOG_TAG = "MolidoVpnService"
+        /** Heartbeat every N watchdog ticks (30 s each): 6 = ~3 min, inside the worker's 300 s online window. */
+        internal const val HEARTBEAT_EVERY_TICKS = 6
         /**
          * Ceiling on in-place SHARD node swaps per session.
          *
@@ -3099,8 +3101,9 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
                 if (stopRequested.get() || userInitiatedStop.get()) return@scheduleWithFixedDelay
                 if (!connected.get()) return@scheduleWithFixedDelay
                 // Opt-in anonymous "still connected" ping for the admin panel's live count, piggybacked
-                // on this existing 30s tick (~every other tick, so roughly once a minute).
-                if (watchdogTicks.getAndIncrement() % 2 == 0) {
+                // on this existing 30s tick: every 6th tick, so about every 3 minutes (the worker counts a
+                // session online for 300 s; was once a minute, now matches the Windows app).
+                if (watchdogTicks.getAndIncrement() % HEARTBEAT_EVERY_TICKS == 0) {
                     try {
                         ConnectionReports.heartbeat(this, mode = currentProtocol.takeIf { it.isNotEmpty() })
                     } catch (_: Exception) {

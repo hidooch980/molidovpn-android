@@ -220,13 +220,25 @@ object ShardHealth {
         }
         if (remote.isEmpty()) return nodes.sortedBy { scores[it]?.rank() ?: 500_000 }
         val remoteByNode = nodes.associateWith {
-            remote[ConnectionReports.fingerprint(it.v2ray?.uri ?: it.key)] ?: 0.0
+            remoteTieScore(remote, ConnectionReports.fingerprint(it.v2ray?.uri ?: it.key))
         }
-        return nodes.sortedWith(
-            compareBy<ShardNode> { scores[it]?.rank() ?: 500_000 }
-                .thenByDescending { remoteByNode[it] ?: 0.0 }
-        )
+        return orderByLocalThenRemote(nodes, { scores[it]?.rank() ?: 500_000 }, { remoteByNode[it] ?: UNKNOWN_REMOTE_SCORE })
     }
+
+    /**
+     * Remote score for a node nobody has reported on yet: the worker's own smoothed
+     * score (ok + 1) / (n + 2) at n = 0. It used to be 0.0, which ranked a node with
+     * zero reports below one that had failed 8 times out of 8 in Iran (score 0.1), so
+     * fresh installs raced the known-bad servers first.
+     */
+    const val UNKNOWN_REMOTE_SCORE = 0.5
+
+    internal fun remoteTieScore(remote: Map<String, Double>, fingerprint: String): Double =
+        remote[fingerprint] ?: UNKNOWN_REMOTE_SCORE
+
+    /** Local rank first (lower is better), then the shared Iran score (higher is better); stable. Pure. */
+    internal fun <T> orderByLocalThenRemote(nodes: List<T>, localRank: (T) -> Int, remoteScore: (T) -> Double): List<T> =
+        nodes.sortedWith(compareBy<T> { localRank(it) }.thenByDescending { remoteScore(it) })
 
     /** Background-scan memory keyed "net|nodeKey" → "consecutiveFails:at:ms". */
     private const val SCAN_PREFS = "shard_scan_health"
