@@ -92,6 +92,7 @@ class ShardRefreshJob : android.app.job.JobService() {
         // does not gate jobFinished, because the subscription fetch below is the
         // one whose result the pool actually waits on.
         RemotePolicy.refreshIfDue(applicationContext)
+        ResilienceConfig.refreshIfDue(applicationContext)
         // The Smart Split profiles ride the same window too — the user asked
         // for exactly this: the Node List refresh, manual or periodic, brings
         // the Serverless profiles along.

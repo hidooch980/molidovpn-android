@@ -6,4 +6,6 @@
          cacheDir/logs. Without this entry FileProvider.getUriForFile throws
          IllegalArgumentException and the share silently fails. -->
     <cache-path name="logs" path="logs/" />
+    <!-- "Send the app file": a copy of base.apk in cacheDir/share for the share sheet. -->
+    <cache-path name="share" path="share/" />
 </paths>

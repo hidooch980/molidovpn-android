@@ -1,0 +1,2 @@
+# MolidoVPN offline emergency set — filled at build time by tools/refresh-emergency-configs.py.
+# Empty in the repository on purpose; release builds carry the best servers of the build day.
