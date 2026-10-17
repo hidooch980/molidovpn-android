@@ -60,7 +60,7 @@ jobs:
           AETHERY_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           chmod +x gradlew
-          ./gradlew assembleRelease --no-daemon \
+          ./gradlew testReleaseUnitTest assembleRelease --no-daemon \
             -PtargetAbi=arm64-v8a,armeabi-v7a \
             -PaetheryKeystore=release.keystore \
             -PmolidoVersionCode=$((20000 + VERSION_CODE)) \
