@@ -145,6 +145,8 @@ object ShardHealth {
             return
         }
         RetryTweaks.recordSuccess(context, node)
+        // Remembered for offline use (national internet / no source reachable).
+        node.v2ray?.let { OfflineConfigs.recordSuccess(context, "v2ray", V2rayNodes.shareLine(it)) }
         val previous = score(context, node)
         // Smoothed, not replaced: one lucky sample on a congested carrier link
         // should not promote a node to the top of the list on its own. Weighted

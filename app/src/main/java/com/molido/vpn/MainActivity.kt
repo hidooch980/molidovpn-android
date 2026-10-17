@@ -564,6 +564,7 @@ class MainActivity : Activity() {
         // ETag, same 6-hour floor — see [RemotePolicy]. Cheap enough to sit next to
         // the subscription fetch: a 304 is a few hundred bytes.
         RemotePolicy.refreshIfDue(this)
+        ResilienceConfig.refreshIfDue(this)
         // Operator-aware SHARD scores (tie-breaker only; hourly, background).
         ConnectionReports.refreshScoresIfDue(this)
         // Owner panel flags (disabled modes, default mode) and the home announcement.
@@ -4029,6 +4030,7 @@ class MainActivity : Activity() {
             // each node has, so refreshing the node list without it would leave the
             // count in the summary computed from stale edges.
             RemotePolicy.refreshIfDue(this, force = true)
+            ResilienceConfig.refreshIfDue(this, force = true)
             // The Smart Split profiles ride the same tap: the mirror is part of
             // what makes SHARD connect, and refreshing the node list without it
             // would leave a stale fragment ladder for the next Smart Split
@@ -8248,6 +8250,15 @@ class MainActivity : Activity() {
         sheet.addView(actions, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, dp(44),
         ).apply { topMargin = dp(16) })
+        // Offline hand-off: the installed APK itself, for Bluetooth / Nearby Share / messengers,
+        // so the app spreads even when GitHub, the website and Telegram are all unreachable.
+        sheet.addView(createSettingsButton(Strings.t("Send the app file")) { shareApkFile() },
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)).apply { topMargin = dp(10) })
+        sheet.addView(label(Strings.t("No internet needed: send the installer by Bluetooth, Nearby Share or any messenger"), 12.5f, MUTED).apply {
+            gravity = Gravity.CENTER
+        }, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+        ).apply { topMargin = dp(6) })
 
         dialog.setContentView(ScrollView(this).apply {
             setPadding(dp(16), 0, dp(16), dp(16))
@@ -8260,6 +8271,35 @@ class MainActivity : Activity() {
             setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.WRAP_CONTENT)
             setGravity(Gravity.BOTTOM)
         }
+    }
+
+    /**
+     * Shares this install's own APK (base.apk; the app ships as whole per-ABI APKs, not splits).
+     * Copied to cacheDir/share under a readable name so receivers see "MolidoVPN-x.y.z.apk".
+     */
+    private fun shareApkFile() {
+        Thread({
+            val result = runCatching {
+                val source = File(applicationInfo.sourceDir)
+                val version = runCatching { packageManager.getPackageInfo(packageName, 0).versionName }.getOrNull() ?: "app"
+                val dir = File(cacheDir, "share").apply { mkdirs() }
+                dir.listFiles()?.forEach { it.delete() }
+                val target = File(dir, "MolidoVPN-$version.apk")
+                source.inputStream().use { input -> target.outputStream().use { input.copyTo(it, 256 * 1024) } }
+                FileProvider.getUriForFile(this, "$packageName.fileprovider", target)
+            }
+            runOnUiThread {
+                result.onSuccess { uri ->
+                    runCatching {
+                        val send = Intent(Intent.ACTION_SEND)
+                            .setType("application/vnd.android.package-archive")
+                            .putExtra(Intent.EXTRA_STREAM, uri)
+                            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        startActivity(Intent.createChooser(send, Strings.t("Send the app file")))
+                    }.onFailure { toastShort(Strings.t("Could not prepare the app file")) }
+                }.onFailure { toastShort(Strings.t("Could not prepare the app file")) }
+            }
+        }, "share-apk").apply { isDaemon = true }.start()
     }
 
     /**

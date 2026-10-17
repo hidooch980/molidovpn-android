@@ -585,7 +585,8 @@ object V2raySubscription {
     /** Nodes from the cache; with no usable cache, fetches synchronously (worker thread only). */
     fun nodes(context: Context): List<V2rayNode> {
         val cached = readCache(context)
-        if (cached.isNotEmpty()) return cached
+        // Servers that worked on this phone are always in the pool ([OfflineConfigs]).
+        if (cached.isNotEmpty()) return OfflineConfigs.withKnownGood(context, cached)
         if (refreshing.compareAndSet(false, true)) {
             try {
                 refreshBlocking(context)
@@ -595,7 +596,12 @@ object V2raySubscription {
                 refreshing.set(false)
             }
         }
-        return readCache(context)
+        val fetched = readCache(context)
+        if (fetched.isNotEmpty()) return OfflineConfigs.withKnownGood(context, fetched)
+        // No list and no source reachable: remembered servers, then the set bundled at build time.
+        val offline = OfflineConfigs.offlineNodes(context)
+        ConnectionLog.record("$TAG no source reachable — using ${offline.size} offline backup config(s)")
+        return offline
     }
 
     /** The pool wrapped for [ShardManager]. */
@@ -661,7 +667,8 @@ object V2raySubscription {
             parsed = V2rayNodes.parse(fetchLines(FALLBACK))
         }
         // workers.dev is often filtered in Iran: the aggregator's GitHub copy has the same flags.
-        for (mirror in MIRRORS) {
+        // Then the owner's extra mirrors (remote/resilience.json: Pages, R2, a domestic bucket...).
+        for (mirror in subscriptionMirrors(ResilienceConfig.subMirrors(context))) {
             if (parsed.isNotEmpty()) break
             parsed = V2rayNodes.parse(fetchLines(mirror))
         }
@@ -679,6 +686,9 @@ object V2raySubscription {
         ConnectionLog.record("$TAG updated — ${parsed.size} nodes")
         return parsed.size
     }
+
+    /** Built-in mirrors first, then configured ones; deduped, empty-safe. */
+    fun subscriptionMirrors(extra: List<String>): List<String> = (MIRRORS + extra).distinct()
 
     private fun fetchLines(url: String): List<String> = try {
         val connection = URL(url).openConnection() as HttpURLConnection
