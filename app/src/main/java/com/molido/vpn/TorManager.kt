@@ -161,6 +161,7 @@ object TorManager {
     ) {
         AUTO("auto", "Auto", "Tries each method until one connects"),
         DIRECT("direct", "Direct", "No bridge; fastest where Tor is not blocked"),
+        WEBTUNNEL("webtunnel", "WebTunnel", "Looks like an ordinary HTTPS website"),
         OBFS4("obfs4", "obfs4", "Bridge that hides Tor's traffic shape"),
         MEEK("meek", "Meek", "Rides a CDN; slow but hard to block"),
         SNOWFLAKE("snowflake", "Snowflake", "Volunteer WebRTC proxies"),
@@ -179,7 +180,21 @@ object TorManager {
     private class Rung(val mode: TorMode, val timeoutSeconds: Long)
 
     /**
-     * Ladder order, as specified: Direct → Meek → obfs4 → Snowflake.
+     * Ladder order for Tor's own Auto mode, now read from `tor.order` in
+     * `resilience.json` ([ResilienceConfig.TorSettings]) so the owner can reorder
+     * or drop rungs without a build. Default: Direct → WebTunnel → Snowflake →
+     * Meek → obfs4, which is Tor's 2026 Connection Assist order for Iran
+     * (WebTunnel, Snowflake, obfs4) with Direct in front and Meek before obfs4.
+     * WebTunnel is skipped when switched off or when no bridge line can be had
+     * (none saved and Moat disabled).
+     *
+     * [quick] is the app-wide Automatic mode: it gives Tor one bounded budget
+     * ([ResilienceConfig.TorSettings.autoBudgetS]), so every rung gets a short
+     * timeout instead of minutes — otherwise the Direct rung alone (150 s) would
+     * outlast Automatic's budget and no bridge would ever be tried there.
+     *
+     * The original (pre-config) reasoning, still true for the relative order of
+     * the older rungs: Direct → Meek → obfs4 → Snowflake.
      *
      * Direct first because when it works it is both fastest to connect and
      * fastest to use. Meek next: it works nearly everywhere because it looks
@@ -189,12 +204,38 @@ object TorManager {
      * thing a censor scans for. Snowflake last: finding a volunteer proxy
      * through a broker is the highest-variance step of the four.
      */
-    private val ladder = listOf(
-        Rung(TorMode.DIRECT, DIRECT_TIMEOUT_S),
-        Rung(TorMode.MEEK, BRIDGE_TIMEOUT_S),
-        Rung(TorMode.OBFS4, BRIDGE_TIMEOUT_S),
-        Rung(TorMode.SNOWFLAKE, BRIDGE_TIMEOUT_S),
-    )
+    private fun ladder(context: Context, quick: Boolean): List<Rung> {
+        val settings = ResilienceConfig.tor(context)
+        val webtunnelPossible = settings.webtunnel &&
+            (settings.moat || TorWebTunnel.known(context).isNotEmpty())
+        return ladderModes(settings.order, webtunnelPossible)
+            .map { Rung(it, if (quick) quickTimeoutS(it) else fullTimeoutS(it)) }
+    }
+
+    /** Config keys → modes, unknown keys dropped, WebTunnel removed when impossible. Pure. */
+    internal fun ladderModes(order: List<String>, webtunnelPossible: Boolean): List<TorMode> {
+        val modes = order.mapNotNull { key ->
+            TorMode.entries.firstOrNull { it.key == key && it != TorMode.AUTO && it != TorMode.MANUAL }
+        }.distinct().filter { it != TorMode.WEBTUNNEL || webtunnelPossible }
+        return modes.ifEmpty { listOf(TorMode.DIRECT, TorMode.MEEK, TorMode.OBFS4, TorMode.SNOWFLAKE) }
+    }
+
+    internal fun fullTimeoutS(mode: TorMode): Long =
+        if (mode == TorMode.DIRECT) DIRECT_TIMEOUT_S else BRIDGE_TIMEOUT_S
+
+    /**
+     * Per-rung budget inside the app-wide Automatic mode. Measured from an
+     * uncensored box (Oct 2026): WebTunnel 7-15 s, Snowflake and Meek tens of
+     * seconds; doubled-plus for a slow mobile link.
+     */
+    internal fun quickTimeoutS(mode: TorMode): Long = when (mode) {
+        TorMode.DIRECT -> 20L
+        TorMode.WEBTUNNEL -> 45L
+        TorMode.SNOWFLAKE -> 60L
+        TorMode.MEEK -> 45L
+        TorMode.OBFS4 -> 30L
+        else -> BRIDGE_TIMEOUT_S
+    }
 
     /**
      * The modes that may run inside WARP, in ladder order: Direct, then Meek.
@@ -387,13 +428,15 @@ object TorManager {
         TorMode.OBFS4 -> listOf("obfs4")
         TorMode.MEEK -> listOf("meek_lite")
         TorMode.SNOWFLAKE -> listOf("snowflake")
+        TorMode.WEBTUNNEL -> listOf("webtunnel")
         TorMode.MANUAL -> TorManualBridges.transports(context)
     }
 
     private fun bridgeLinesFor(context: Context, mode: TorMode): List<String> = when (mode) {
         TorMode.OBFS4 -> TorBridges.OBFS4
         TorMode.MEEK -> TorBridges.MEEK
-        TorMode.SNOWFLAKE -> TorBridges.SNOWFLAKE
+        TorMode.SNOWFLAKE -> ResilienceConfig.tor(context).snowflakeBridges.ifEmpty { TorBridges.SNOWFLAKE }
+        TorMode.WEBTUNNEL -> webtunnelLines
         TorMode.MANUAL -> TorManualBridges.bridges(context).map { it.line }
         else -> emptyList()
     }
@@ -794,9 +837,24 @@ object TorManager {
      * re-download the consensus. The field log's 61%-at-30s Direct run was on a
      * cold cache; SlipNet connects in seconds because it keeps that cache warm.
      */
+    /** WebTunnel lines resolved once per attempt (Moat may be asked), read by the torrc writer. */
+    @Volatile
+    private var webtunnelLines: List<String> = emptyList()
+
     private fun attempt(context: Context, dataDir: File, mode: TorMode, timeoutSeconds: Long): Boolean {
         bootstrapPercent = 0
         lastLoggedPercent = -1
+
+        if (mode == TorMode.WEBTUNNEL) {
+            // Resolved before lyrebird starts: with no line the torrc would say
+            // UseBridges with no Bridge, which tor refuses to read at all.
+            webtunnelLines = if (upstreamProxy != null) TorWebTunnel.known(context) else TorWebTunnel.bridges(context)
+            if (webtunnelLines.isEmpty()) {
+                ConnectionLog.record("$TAG WebTunnel: no bridge line available (Moat blocked, none saved) — skipping")
+                return false
+            }
+            ConnectionLog.record("$TAG WebTunnel: ${webtunnelLines.size} bridge line(s)")
+        }
 
         // Clear the process lock, and on direct mode only, force a fresh guard
         // draw. Bridge rungs keep their guard entries: tor dials every
@@ -1064,7 +1122,7 @@ object TorManager {
      * the ladder shrinks to [chainedLadder] (Direct, then Meek) and the winner is
      * remembered under its own key. Nothing else about the sequence changes.
      */
-    fun start(context: Context): Boolean {
+    fun start(context: Context, quick: Boolean = false): Boolean {
         stopping.set(false)
         activeMode = null
 
@@ -1082,12 +1140,12 @@ object TorManager {
         // Direct and Meek only inside the chain. AUTO takes the short ladder;
         // a pinned obfs4/Snowflake cannot get here at all, because the service
         // does not raise an outer leg for a mode chainArmed() rejects.
-        val rungs = if (chained) chainedLadder else ladder
+        val rungs = if (chained) chainedLadder else ladder(context, quick)
 
         val order: List<Rung> = if (selected != TorMode.AUTO) {
             // An explicit choice is exactly that: one attempt, no silent
             // fallback to a transport the user did not pick.
-            listOf(Rung(selected, if (selected == TorMode.DIRECT) DIRECT_TIMEOUT_S else BRIDGE_TIMEOUT_S))
+            listOf(Rung(selected, fullTimeoutS(selected)))
         } else {
             // Start from whatever last worked on this device, then continue
             // through the rest of the ladder. The remembered rung is retried
@@ -1097,6 +1155,10 @@ object TorManager {
                 .getString(winnerPref(chained), null)
                 ?.let { key -> rungs.firstOrNull { it.mode.key == key } }
             if (remembered == null) rungs else listOf(remembered) + rungs.filter { it !== remembered }
+        }
+        if (!chained && selected == TorMode.AUTO) {
+            ConnectionLog.record("$TAG ladder${if (quick) " (Automatic)" else ""}: " +
+                order.joinToString(" → ") { "${it.mode.label} ${it.timeoutSeconds}s" })
         }
 
         if (chained) {

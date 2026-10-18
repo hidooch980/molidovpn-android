@@ -507,6 +507,8 @@ object Strings {
         "Slovakia" to Triple("Slovakia", "اسلواکی", "斯洛伐克"),
         "Smart Split" to Triple("Smart Split", "تفکیک هوشمند (Smart Split)", "智能分流"),
         "Snowflake" to Triple("Snowflake", "پل Snowflake", "Snowflake"),
+        "WebTunnel" to Triple("WebTunnel", "پل WebTunnel", "WebTunnel"),
+        "Looks like an ordinary HTTPS website" to Triple("Looks like an ordinary HTTPS website", "شبیه یک سایت HTTPS معمولی", "伪装成普通 HTTPS 网站"),
         "Source on GitHub" to Triple("Source on GitHub", "سورس‌کد در گیت‌هاب", "GitHub 开源项目"),
         "Telegram Channel" to Triple("Telegram Channel", "کانال تلگرام", "Telegram 频道"),
         "MolidoVPN website" to Triple("MolidoVPN website", "سایت MolidoVPN", "MolidoVPN 网站"),
