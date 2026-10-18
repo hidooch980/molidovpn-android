@@ -127,18 +127,19 @@ object Sculpt {
         val cardBorder: Int = Color.TRANSPARENT,
     )
 
+    // v2 «Shab»: flatter, calmer surfaces — a hairline outline instead of heavy gradients.
     val DARK_LIGHTING = Lighting(
-        topLift = 0.09f,
-        bottomDrop = 0.09f,
-        specular = 0.06f,
-        innerShadow = 0.18f,
+        topLift = 0.04f,
+        bottomDrop = 0.04f,
+        specular = 0f,
+        innerShadow = 0.08f,
         pressedInnerShadow = 0.45f,
         bevel = 0.08f,
         pressedBevel = 0.05f,
         bevelColor = Color.WHITE,
         elevationDp = 0f,
         elevationAlpha = 0f,
-        defaultOutline = Color.TRANSPARENT,
+        defaultOutline = Color.argb(20, 255, 255, 255),
         recessOutline = Color.argb(20, 255, 255, 255),
         dialShadowAlpha = 0.65f,
         dialSpecular = 0.16f,

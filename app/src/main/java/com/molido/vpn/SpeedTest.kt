@@ -127,4 +127,34 @@ object SpeedTest {
             c.disconnect()
         }
     }
+
+    /**
+     * Small download through a local SOCKS port, for Smart Connect's throughput figure.
+     * Returns kbit/s, or null on failure. Blocking, bounded by [timeoutMs].
+     */
+    fun quickDownloadKbps(port: Int, bytes: Int, timeoutMs: Int): Long? = try {
+        val proxy = Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", port))
+        val c = java.net.URL("$BASE/__down?bytes=$bytes").openConnection(proxy) as HttpURLConnection
+        c.connectTimeout = timeoutMs
+        c.readTimeout = timeoutMs
+        val started = System.nanoTime()
+        var total = 0L
+        try {
+            c.inputStream.use { input ->
+                val buf = ByteArray(16 * 1024)
+                while (true) {
+                    val n = input.read(buf)
+                    if (n < 0) break
+                    total += n
+                    if ((System.nanoTime() - started) / 1_000_000 > timeoutMs) break
+                }
+            }
+        } finally {
+            c.disconnect()
+        }
+        val ms = ((System.nanoTime() - started) / 1_000_000).coerceAtLeast(1)
+        if (total < 4_096) null else total * 8 / ms
+    } catch (_: Exception) {
+        null
+    }
 }
