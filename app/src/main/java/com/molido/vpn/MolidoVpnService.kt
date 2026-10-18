@@ -2727,6 +2727,7 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
                 // exact installs a dead edge would strand. Fire-and-forget: it costs
                 // nothing when nothing changed and never blocks the connect.
                 RemotePolicy.refreshIfDue(this)
+                ResilienceConfig.refreshIfDue(this)
                 // The fragment profiles age on the same clock — a Smart Split
                 // connect from the tile deserves a current ladder, too.
                 SmartSplitSub.refreshIfDue(this)

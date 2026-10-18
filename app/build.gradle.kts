@@ -127,6 +127,8 @@ android {
     implementation("com.google.zxing:core:3.5.3")
     implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.aar"))))
     testImplementation("junit:junit:4.13.2")
+    // Real org.json on the JVM test classpath (android.jar only has stubs).
+    testImplementation("org.json:json:20240303")
 }
 
 targetAbis.forEach { abi ->

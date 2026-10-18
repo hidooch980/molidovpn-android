@@ -48,6 +48,8 @@ jobs:
 
       - name: Prebuilt Psiphon, Tor and Xray (our mirror, checksum verified)
         run: bash tools/fetch-binaries.sh
+      - name: Offline emergency configs + bundled resilience defaults (never fails the build)
+        run: python3 tools/refresh-emergency-configs.py || true
       - name: Signing key (same as earlier MolidoVPN releases)
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}

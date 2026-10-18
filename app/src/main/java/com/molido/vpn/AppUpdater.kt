@@ -17,6 +17,8 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.Executors
 
+private typealias Release = UpdateSources.Release
+
 /**
  * "Check for updates": finds a newer release (our worker first, GitHub second), then downloads the
  * right APK for this CPU inside the app and opens the system installer. The owner chose in-app install
@@ -83,7 +85,22 @@ class AppUpdater(private val activity: Activity) {
         val url = release.downloadUrl + (if ('?' in release.downloadUrl) '&' else '?') + "v=${release.version}"
         showDownloadProgress()
         worker.execute {
-            val result = runCatching { downloadApk(url, release) }
+            // The release's own URL, then the same file on every configured mirror. A copy that
+            // fails the hash or signature check is thrown away and the next source is tried.
+            val urls = UpdateSources.downloadUrls(release, ResilienceConfig.updateMirrors(activity))
+                .mapIndexed { i, u -> if (i == 0) url else u }
+            val result = runCatching {
+                var lastError: Exception? = null
+                for (candidate in urls) {
+                    try {
+                        return@runCatching downloadApk(candidate, release)
+                    } catch (e: Exception) {
+                        lastError = e
+                        ConnectionLog.record("Update: ${runCatching { URL(candidate).host }.getOrDefault("?")} failed: ${e.message}")
+                    }
+                }
+                throw lastError ?: IllegalStateException("no download source")
+            }
             activity.runOnUiThread {
                 dismissProgress()
                 downloadBar = null
@@ -150,7 +167,45 @@ class AppUpdater(private val activity: Activity) {
         @Suppress("DEPRECATION")
         val oldCode = if (Build.VERSION.SDK_INT >= 28) current.longVersionCode else current.versionCode.toLong()
         check(newCode > oldCode) { Strings.t("The downloaded file is not newer than this version") }
+        // Mirrors are untrusted: the hash from the release metadata (when it has one) and the
+        // signing certificate of the installed app must both match.
+        release.sha256?.let { expected ->
+            val actual = UpdateSources.sha256Hex(target)
+            if (actual != expected) {
+                target.delete()
+                error(Strings.t("The downloaded file is damaged") + " (sha256)")
+            }
+        }
+        if (!signedLikeInstalled(target)) {
+            target.delete()
+            error(Strings.t("The downloaded file is damaged") + " (signature)")
+        }
         return target
+    }
+
+    /** True when [apk] carries exactly the signing certificate(s) of the installed app. */
+    @Suppress("DEPRECATION")
+    private fun signedLikeInstalled(apk: File): Boolean = try {
+        val pm = activity.packageManager
+        fun certs(info: android.content.pm.PackageInfo?): List<ByteArray> {
+            if (info == null) return emptyList()
+            return if (Build.VERSION.SDK_INT >= 28) {
+                val signing = info.signingInfo ?: return emptyList()
+                (if (signing.hasMultipleSigners()) signing.apkContentsSigners else signing.signingCertificateHistory)
+                    ?.map { it.toByteArray() }.orEmpty()
+            } else {
+                info.signatures?.map { it.toByteArray() }.orEmpty()
+            }
+        }
+        val flags = if (Build.VERSION.SDK_INT >= 28) android.content.pm.PackageManager.GET_SIGNING_CERTIFICATES
+            else android.content.pm.PackageManager.GET_SIGNATURES
+        val installed = certs(pm.getPackageInfo(activity.packageName, flags))
+        val archive = certs(pm.getPackageArchiveInfo(apk.path, flags))
+        // A rotated key keeps the old one in the history: the new APK's lineage must include ours.
+        UpdateSources.sameSigners(installed, archive) ||
+            (installed.isNotEmpty() && archive.isNotEmpty() && installed.all { c -> archive.any { it.contentEquals(c) } })
+    } catch (_: Exception) {
+        false
     }
 
     private fun install(apk: File) {
@@ -224,10 +279,10 @@ class AppUpdater(private val activity: Activity) {
         false
     }
 
-    /** Our Cloudflare worker first (reachable where GitHub is filtered), then GitHub itself. */
+    /** Our Cloudflare worker first (reachable where GitHub is filtered), then GitHub, then mirrors. */
     private fun latestRelease(): Release? {
         var lastError: Exception? = null
-        for (url in listOf(MIRROR_RELEASE_URL, RELEASE_URL)) {
+        for (url in UpdateSources.releaseJsonUrls(ResilienceConfig.updateMirrors(activity))) {
             try {
                 return fetchRelease(url)
             } catch (error: Exception) {
@@ -246,35 +301,15 @@ class AppUpdater(private val activity: Activity) {
         }
         try {
             if (connection.responseCode == HttpURLConnection.HTTP_NOT_FOUND) return null
-            check(connection.responseCode == HttpURLConnection.HTTP_OK) { "GitHub returned ${connection.responseCode}" }
-            val json = JSONObject(connection.inputStream.bufferedReader().use { reader -> reader.readText() })
-            val version = json.getString("tag_name").removePrefix("v")
-            val assets = json.getJSONArray("assets")
-            val apk = Build.SUPPORTED_ABIS.asSequence()
-                .mapNotNull { abi -> assetForAbi(assets, abi) }
-                .firstOrNull()
-                ?: return null
-            return Release(version, apk.first, apk.second)
+            check(connection.responseCode == HttpURLConnection.HTTP_OK) { "${URL(url).host} returned ${connection.responseCode}" }
+            // MolidoVPN release assets are named MolidoVPN-android-arm64.apk / -armv7.apk / -universal.apk.
+            return UpdateSources.parseRelease(
+                connection.inputStream.bufferedReader().use { reader -> reader.readText() },
+                Build.SUPPORTED_ABIS.toList(),
+            )
         } finally {
             connection.disconnect()
         }
-    }
-
-    private fun assetForAbi(assets: org.json.JSONArray, abi: String): Pair<String, String>? {
-        // MolidoVPN release assets are named MobinVPN-android-arm64.apk / -armv7.apk / -universal.apk.
-        val token = when (abi) {
-            "arm64-v8a" -> "android-arm64"
-            "armeabi-v7a" -> "android-armv7"
-            else -> "android-universal"
-        }
-        for (index in 0 until assets.length()) {
-            val asset = assets.getJSONObject(index)
-            val name = asset.getString("name")
-            if (name.endsWith(".apk") && name.contains(token, ignoreCase = true)) {
-                return name to asset.getString("browser_download_url")
-            }
-        }
-        return null
     }
 
     /**
@@ -324,12 +359,8 @@ class AppUpdater(private val activity: Activity) {
 
     private fun dp(value: Int): Int = (value * activity.resources.displayMetrics.density).toInt()
 
-    private data class Release(val version: String, val assetName: String, val downloadUrl: String)
 
     private companion object {
-        const val RELEASE_HOST = "api.github.com"
-        const val MIRROR_RELEASE_URL = "https://molido-sub.hidooch980.workers.dev/app/latest.json"
-        const val RELEASE_URL ="https://$RELEASE_HOST/repos/hidooch980/molidovpn/releases/latest"
         const val RELEASES_PAGE_URL = "https://github.com/hidooch980/molidovpn/releases/latest"
 
         fun isNewer(remote: String, local: String): Boolean {
