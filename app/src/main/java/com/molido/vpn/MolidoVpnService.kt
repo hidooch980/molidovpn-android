@@ -4352,13 +4352,13 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
                 val score = SmartScore.score(measured)
                 scores[c.id] = score
                 measuredBy[c.id] = measured
-                results[c.label] = if (score > 0) "${score.toInt()} (${SmartScore.reason(measured)})" else "fail"
+                results[c.label] = if (score > 0) "${score.toInt()} (${smartReason(measured)})" else "fail"
                 SmartConnectState.method(
                     c.id,
                     if (score >= smart.minScore) SmartConnectState.Status.OK else SmartConnectState.Status.FAILED,
                     score = score.toInt(),
                     latencyMs = SmartScore.median(measured.probes.filter { it.ok }.mapNotNull { it.latencyMs }),
-                    detail = if (score > 0) SmartScore.reason(measured) else Strings.t("failed"),
+                    detail = if (score > 0) smartReason(measured) else Strings.t("failed"),
                 )
                 SmartConnectState.leader(SmartPlan.pick(scores, smart.minScore).winner)
                 // Fast path: the remembered winner is still as good as before → done.
@@ -4389,7 +4389,7 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
             ConnectionLog.record("Smart $summary")
             SmartConnectState.result(
                 pick.winner,
-                winnerMeasured?.let { SmartScore.reason(it) }.orEmpty(),
+                winnerMeasured?.let { smartReason(it) }.orEmpty(),
                 pick.runnerUp,
                 pick.runnerUp?.let { scores[it]?.toInt() },
             )
@@ -4451,6 +4451,8 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
     }
 
     // ------------------------------------------------------------------ Smart Connect helpers
+
+    private fun smartReason(m: Measured) = SmartScore.reason(m, Strings.t("stable"), Strings.t("IR exit"))
 
     private val smartPrefMemory = "smart_network_memory"
     /** Set by the quality monitor: the next selection tries the runner-up first. */

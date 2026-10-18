@@ -125,7 +125,8 @@ object AppAppearance {
     val ORBIT = Palette(
         // «Firoozeh & Shab» dark: night #0C1222 page, firoozeh #2DD4BF accent.
         canvas = 0xFF0C1222.toInt(),
-        surface = 0x0BFFFFFF,
+        // v2: opaque night card (was 4% white glass, which rendered as grey chrome on some views).
+        surface = 0xFF141D33.toInt(),
         surfaceVariant = 0xFF1C2640.toInt(),
         ink = 0xFFEEF2FA.toInt(),
         muted = 0xFF9AA6C0.toInt(),

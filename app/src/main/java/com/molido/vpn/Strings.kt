@@ -532,6 +532,8 @@ object Strings {
         "probing…" to Triple("probing…", "بررسی دسترسی…", "检测中…"),
         "testing…" to Triple("testing…", "در حال سنجش…", "测试中…"),
         "not needed" to Triple("not needed", "لازم نشد", "无需测试"),
+        "stable" to Triple("stable", "پایدار", "稳定"),
+        "IR exit" to Triple("IR exit", "خروجی ایران", "伊朗出口"),
         "Snowflake" to Triple("Snowflake", "پل Snowflake", "Snowflake"),
         "WebTunnel" to Triple("WebTunnel", "پل WebTunnel", "WebTunnel"),
         "Looks like an ordinary HTTPS website" to Triple("Looks like an ordinary HTTPS website", "شبیه یک سایت HTTPS معمولی", "伪装成普通 HTTPS 网站"),

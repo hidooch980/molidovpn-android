@@ -87,15 +87,15 @@ object SmartScore {
     }
 
     /** Short human reason for the UI, e.g. "84 ms · 3/3 stable · 6.2 Mbit/s". */
-    fun reason(m: Measured): String {
+    fun reason(m: Measured, stableWord: String = "stable", irWord: String = "IR exit"): String {
         val ok = m.probes.count { it.ok }
         val parts = ArrayList<String>()
         median(m.probes.filter { it.ok }.mapNotNull { it.latencyMs })?.let { parts += "$it ms" }
-        parts += "$ok/${m.probes.size} stable"
+        parts += "$ok/${m.probes.size} $stableWord"
         median(m.probes.filter { it.ok }.mapNotNull { it.throughputKbps })?.let {
             parts += if (it >= 1000) String.format(java.util.Locale.US, "%.1f Mbit/s", it / 1000.0) else "$it kbit/s"
         }
-        if (m.iranExit) parts += "IR exit"
+        if (m.iranExit) parts += irWord
         return parts.joinToString(" · ")
     }
 }

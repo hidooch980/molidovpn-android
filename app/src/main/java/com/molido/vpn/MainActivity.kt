@@ -1598,17 +1598,6 @@ class MainActivity : Activity() {
             ViewGroup.LayoutParams.WRAP_CONTENT,
         ).apply { topMargin = dp(7) })
 
-        // v2: Smart Connect live view (methods lighting up → winner card → live speed/ping).
-        // Hidden while idle; rendered from SmartConnectState by [observeSmartConnect].
-        val panel = com.molido.vpn.ui.SmartConnectPanel(
-            this@MainActivity, palette,
-            Typefaces.regular(this@MainActivity), Typefaces.bold(this@MainActivity), Typefaces.numeric(this@MainActivity),
-        )
-        smartPanel = panel
-        addView(panel, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT,
-        ).apply { topMargin = dp(14) })
 
         // MolidoVPN home order: connect control -> location card -> mode chips ->
         // mode add-on card -> stats.
@@ -1760,6 +1749,18 @@ class MainActivity : Activity() {
             ViewGroup.LayoutParams.MATCH_PARENT,
             dp(48),
         ).apply { topMargin = dp(10) })
+
+        // v2: Smart Connect live view (methods lighting up → winner card → live speed/ping).
+        // Outside the advanced box so it shows in simple mode too. Hidden while idle; rendered from SmartConnectState by [observeSmartConnect].
+        val panel = com.molido.vpn.ui.SmartConnectPanel(
+            this@MainActivity, palette,
+            Typefaces.regular(this@MainActivity), Typefaces.bold(this@MainActivity), Typefaces.numeric(this@MainActivity),
+        )
+        smartPanel = panel
+        addView(panel, firstAdvanced, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+        ).apply { topMargin = dp(14) })
 
         val support = label(Strings.t("Having trouble? Message support"), 13f, palette.mint, TypefaceStyle.MEDIUM).apply {
             gravity = Gravity.CENTER
