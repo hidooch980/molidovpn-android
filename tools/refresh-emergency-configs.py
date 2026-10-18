@@ -32,6 +32,18 @@ def lines(body: str):
     return [l.strip() for l in text.splitlines() if l.strip().startswith(SCHEMES)]
 
 
+def name_of(line: str) -> str:
+    """Display name: the #fragment, or for vmess the "ps" field inside the base64 JSON payload."""
+    if line.startswith("vmess://"):
+        payload = line[len("vmess://"):].split("#", 1)[0]
+        try:
+            import json
+            return str(json.loads(base64.b64decode(payload + "=" * (-len(payload) % 4))).get("ps", ""))
+        except Exception:  # noqa: BLE001
+            pass
+    return urllib.parse.unquote(line.split("#", 1)[1]) if "#" in line else ""
+
+
 def main():
     try:
         shutil.copyfile(os.path.join(ROOT, "remote", "resilience.json"), os.path.join(ASSETS, "resilience-defaults.json"))
@@ -47,7 +59,7 @@ def main():
         seen, picked = set(), []
         include_vip = os.environ.get("EMERGENCY_INCLUDE_VIP") == "1"
         for l in got:
-            if not include_vip and "VIP" in urllib.parse.unquote(l.split("#", 1)[-1] if "#" in l else ""):
+            if not include_vip and "VIP" in name_of(l):
                 continue
             key = l.split("#", 1)[0]
             if key not in seen:
