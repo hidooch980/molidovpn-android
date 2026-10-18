@@ -15,6 +15,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  *    (a Cloudflare Pages/R2 copy, an ArvanCloud bucket, ...). Tried after the worker and GitHub.
  *  * `mirrors.sub`    — extra full URLs of the V2Ray subscription text. Tried after the built-in ones.
  *  * `dns_tunnel`     — the dnstt last-resort mode ([DnsTunnel]). Off unless the owner turns it on.
+ *  * `smart`          — Smart Connect budgets, caps and re-evaluation ([com.molido.vpn.engine.SmartConfig]).
  *  * `tor`            — Tor ladder order, the WebTunnel rung ([TorWebTunnel]) and its bridge lines,
  *    a Snowflake bridge-line override, and how long Automatic gives Tor. See [TorSettings].
  *
@@ -86,6 +87,7 @@ object ResilienceConfig {
         val subMirrors: List<String> = emptyList(),
         val dnsTunnel: DnsTunnelSettings = DnsTunnelSettings(),
         val tor: TorSettings = TorSettings(),
+        val smart: com.molido.vpn.engine.SmartConfig = com.molido.vpn.engine.SmartConfig(),
     )
 
     @Volatile private var cached: Config? = null
@@ -187,6 +189,7 @@ object ResilienceConfig {
             subMirrors = strings(mirrors?.optJSONArray("sub"), MAX_MIRRORS, ::httpsUrl),
             dnsTunnel = settings,
             tor = parseTor(json.optJSONObject("tor")),
+            smart = com.molido.vpn.engine.SmartConfig.parse(json.optJSONObject("smart")),
         )
     }
 
@@ -201,6 +204,7 @@ object ResilienceConfig {
             subMirrors = (remote.subMirrors + bundled.subMirrors).distinct().take(MAX_MIRRORS),
             dnsTunnel = if (remote.dnsTunnel == DnsTunnelSettings()) bundled.dnsTunnel else remote.dnsTunnel,
             tor = if (remote.tor == TorSettings()) bundled.tor else remote.tor,
+            smart = if (remote.smart == com.molido.vpn.engine.SmartConfig()) bundled.smart else remote.smart,
         )
     }
 
@@ -233,6 +237,7 @@ object ResilienceConfig {
     fun subMirrors(context: Context): List<String> = get(context).subMirrors
     fun dnsTunnel(context: Context): DnsTunnelSettings = get(context).dnsTunnel
     fun tor(context: Context): TorSettings = get(context).tor
+    fun smart(context: Context): com.molido.vpn.engine.SmartConfig = get(context).smart
 
     /** Background refresh with a 6 h floor. Safe to call from any trigger. */
     fun refreshIfDue(context: Context, force: Boolean = false) {

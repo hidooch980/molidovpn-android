@@ -40,5 +40,28 @@
     "auto_budget_s": 180,
     "webtunnel_bridges": [],
     "snowflake_bridges": []
+  },
+  "smart": {
+    "enabled": true,
+    "total_budget_s": 240,
+    "max_trials": 8,
+    "min_trials": 3,
+    "good_enough": 80,
+    "min_score": 15,
+    "parallel_probes": 6,
+    "stability_probes": 3,
+    "download_bytes": 200000,
+    "memory_ttl_days": 14,
+    "battery_saver_pct": 20,
+    "reeval": {
+      "enabled": true,
+      "interval_s": 60,
+      "window": 5,
+      "fail_threshold": 3,
+      "latency_factor": 3.0,
+      "latency_floor_ms": 1500,
+      "cooldown_s": 600,
+      "max_per_hour": 3
+    }
   }
 }

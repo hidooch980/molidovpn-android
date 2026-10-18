@@ -55,6 +55,12 @@ android {
         }
     }
 
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -125,10 +131,15 @@ android {
     implementation("com.google.android.material:material:1.12.0")
     // QR decode from a picked image (My configs). Core only: no camera stack.
     implementation("com.google.zxing:core:3.5.3")
+    // StateFlow for UI state (ui/state) + Dispatchers.Main for collecting it. No AndroidX lifecycle needed.
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.aar"))))
     testImplementation("junit:junit:4.13.2")
     // Real org.json on the JVM test classpath (android.jar only has stubs).
     testImplementation("org.json:json:20240303")
+    // Screenshots of the real views on the JVM (no emulator/KVM needed). Only used by
+    // ScreenshotTest, which is skipped unless MOLIDO_SCREENS is set.
+    testImplementation("org.robolectric:robolectric:4.17")
 }
 
 targetAbis.forEach { abi ->

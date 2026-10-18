@@ -73,3 +73,4 @@ make-release.py
 /app/src/main/jniLibs/*/libaether.so
 release.keystore
 /app/src/main/jniLibs/*/libdnstt.so
+app/src/test/jniLibs/

@@ -42,8 +42,8 @@ object AppAppearance {
 
     /** Which palette the user picked. Persisted in the shared "settings" store. */
     enum class Mode(val key: String, val enLabel: String, val description: String) {
-        DARK("dark", "Dark", "The original console — black glass and neon"),
-        LIGHT("light", "Light — theme", "Porcelain — grey page, white cards"),
+        DARK("dark", "Dark", "Night — turquoise on deep navy"),
+        LIGHT("light", "Light — theme", "Turquoise on mist — white cards"),
         ;
 
         /** Localized at call time so a language switch refreshes the label. */
@@ -177,10 +177,32 @@ object AppAppearance {
         lighting = Sculpt.LIGHT_LIGHTING,
     )
 
-    // Dark mode is retired: the app is light-only now, regardless of what an older install had
-    // stored (Mode.DARK/PORCELAIN's palettes stay defined below only because a handful of call
-    // sites still read AppAppearance.Mode.entries; nothing can actually select DARK any more).
-    fun mode(context: Context): Mode = Mode.LIGHT
+    /**
+     * Dark («Shab») and light («Firoozeh») are both offered again (v2 design). The stored value is
+     * `dark`, `light` or `system`; with nothing stored the app follows the system night mode.
+     */
+    fun mode(context: Context): Mode {
+        val stored = context.getSharedPreferences("settings", Context.MODE_PRIVATE).getString(PREF_KEY, PREF_SYSTEM)
+        return when (stored) {
+            Mode.DARK.key -> Mode.DARK
+            Mode.LIGHT.key -> Mode.LIGHT
+            else -> if (systemIsNight(context)) Mode.DARK else Mode.LIGHT
+        }
+    }
+
+    const val PREF_SYSTEM = "system"
+
+    /** The raw preference including "system", for the settings row. */
+    fun storedPref(context: Context): String =
+        context.getSharedPreferences("settings", Context.MODE_PRIVATE).getString(PREF_KEY, PREF_SYSTEM) ?: PREF_SYSTEM
+
+    fun setPref(context: Context, value: String) {
+        context.getSharedPreferences("settings", Context.MODE_PRIVATE).edit().putString(PREF_KEY, value).apply()
+    }
+
+    private fun systemIsNight(context: Context): Boolean =
+        (context.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
+            android.content.res.Configuration.UI_MODE_NIGHT_YES
 
     fun setMode(context: Context, mode: Mode) {
         context.getSharedPreferences("settings", Context.MODE_PRIVATE)

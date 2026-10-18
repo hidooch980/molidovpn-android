@@ -29,10 +29,25 @@ import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import ca.psiphon.PsiphonTunnel
+import com.molido.vpn.engine.Cost
+import com.molido.vpn.engine.Measured
+import com.molido.vpn.engine.NetworkMemory
+import com.molido.vpn.engine.Probe
+import com.molido.vpn.engine.QualityMonitor
+import com.molido.vpn.engine.SmartConfig
+import com.molido.vpn.engine.SmartPlan
+import com.molido.vpn.engine.SmartScore
+import com.molido.vpn.methods.MethodRegistry
+import com.molido.vpn.methods.TunnelMethod
+import com.molido.vpn.ui.state.SmartConnectState
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
+
+
+/** Automatic's candidate is the engine's [com.molido.vpn.engine.Candidate]. */
+private typealias AutoCandidate = com.molido.vpn.engine.Candidate
 
 /**
  * Protocol sets shared between a rung's config and its winner-detection.
@@ -2063,6 +2078,8 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
                 // The one place that means "the user wants this off". Auto-reconnect
                 // reads this latch and stays out of the way.
                 userInitiatedStop.set(true)
+                smartSession = false
+                SmartConnectState.reset()
                 // Clears the reconnect latch too, or a Reconnect that never came back
                 // up would leave the service un-stoppable: every teardown path reads
                 // the latch and declines to end the service while it is set.
@@ -3112,6 +3129,11 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
                     } catch (_: Exception) {
                     }
                 }
+                // Smart Connect: live ping/speed for the home screen and the quality monitor
+                // (re-evaluates, runner-up first, when the session degrades).
+                if (autoBaseConfig != null && storedConfig == autoBaseConfig) {
+                    try { smartTick() } catch (_: Exception) {}
+                }
                 val dead = tunnelIsDead() ?: return@scheduleWithFixedDelay
                 // SHARD can usually be repaired without a disconnect: the pool has
                 // other nodes and the TUN, tun2socks and the front-end are all still
@@ -3953,7 +3975,6 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
     // across every candidate so failAndStop / the native finally keep the service
     // alive instead of stopSelf()-ing it between candidates.
 
-    private data class AutoCandidate(val coreName: String, val label: String, val budgetMs: Long)
 
     private val autoExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private val autoRunning = AtomicBoolean(false)
@@ -3974,36 +3995,8 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
     private val autoHandoverMs = 1_000L
     private val autoLogTag = "MolidoAuto"
 
-    private val autoPrefLearn = "auto_learn"
 
-    private fun autoLearnKey(): String {
-        val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
-        return "${ConnectionReports.operator(this)}_${hour / 3}"
-    }
 
-    private fun autoLearned(prefs: android.content.SharedPreferences, key: String): Pair<String, Long>? = try {
-        JSONObject(prefs.getString(autoPrefLearn, "{}") ?: "{}").optJSONObject(key)?.let { e ->
-            e.optString("t").takeIf { t -> t.isNotEmpty() }?.let { t -> t to e.optLong("ms", -1L) }
-        }
-    } catch (_: Exception) {
-        null
-    }
-
-    /** Keeps the 16 most recently written (operator, hour/3) keys. */
-    private fun autoLearn(prefs: android.content.SharedPreferences, key: String, transport: String, ms: Long, country: String = "") {
-        try {
-            val old = JSONObject(prefs.getString(autoPrefLearn, "{}") ?: "{}")
-            old.remove(key)
-            val keys = ArrayList<String>()
-            val it = old.keys()
-            while (it.hasNext()) keys.add(it.next())
-            val out = JSONObject()
-            keys.takeLast(15).forEach { k -> out.put(k, old.get(k)) }
-            out.put(key, JSONObject().put("t", transport).put("ms", ms).put("c", country).put("at", System.currentTimeMillis()))
-            prefs.edit().putString(autoPrefLearn, out.toString()).apply()
-        } catch (_: Exception) {
-        }
-    }
 
     private val autoPrefLastCountry = "auto_last_exit_country"
 
@@ -4020,14 +4013,6 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
             ""
         }
         return mcc == "432" || prefs.getString(PREF_HOME_COUNTRY, null) == "IR"
-    }
-
-    /** Country learned with [key] (operator, hour/3), or null. */
-    private fun autoLearnedCountry(prefs: android.content.SharedPreferences, key: String): String? = try {
-        JSONObject(prefs.getString(autoPrefLearn, "{}") ?: "{}").optJSONObject(key)
-            ?.optString("c")?.takeIf { it.isNotEmpty() }
-    } catch (_: Exception) {
-        null
     }
 
     /**
@@ -4117,31 +4102,6 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
             .putExtra(EXTRA_DETAIL, text))
     }
 
-    private fun autoPhaseA(): List<AutoCandidate> {
-        val proxy = CoreConfig.proxyOnly(this)
-        return listOfNotNull(
-            AutoCandidate("wireguard", "WireGuard", 10_000L),
-            // AmneziaWG (a WARP account, so an Iranian user's exit is IR and the
-            // IR-exit ranking below applies). Always present: without an import it
-            // runs the built-in endpoint list. Budget ~8 s per endpoint for the first few.
-            AutoCandidate(
-                AmneziaConfig.PROTOCOL,
-                "AmneziaWG",
-                6_000L + 8_000L * (if (AmneziaConfig.isImported(this)) {
-                    AmneziaConfig.endpointCount(this)
-                } else {
-                    AmneziaConfig.BUILTIN_ENDPOINTS.size
-                }).coerceIn(1, 4),
-            ),
-            AutoCandidate("masque", "MASQUE", if (CoreConfig.mimArmed(this)) 20_000L else 12_000L),
-            // SHARD has no proxy mode (refused in startTunnel).
-            if (proxy) null else AutoCandidate("shard", "SHARD", 16_000L),
-            // V2Ray servers: same SHARD path, same proxy-mode refusal.
-            if (proxy) null else AutoCandidate("v2ray", "V2Ray", 16_000L),
-            // The user's own configs, same path; only when there are any.
-            if (proxy || !MyConfigs.hasProxyNodes(this)) null else AutoCandidate(MyConfigs.PROTOCOL, "My configs", 16_000L),
-        )
-    }
 
     /**
      * UDP reachability for this network, cached 30 min per CleanIpScanner key.
@@ -4194,30 +4154,6 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
         return blocked
     }
 
-    private fun autoPhaseB(): List<AutoCandidate> {
-        val proxy = CoreConfig.proxyOnly(this)
-        return listOfNotNull(
-            AutoCandidate("gool", "WARP-on-WARP", 30_000L),
-            // Smart chain: the existing Psiphon-over-WARP chain, tried with its own
-            // budget after Phase A failed and before plain Psiphon/Tor. Same
-            // lowercase marker the tile/auto-connect pass as a protocol.
-            AutoCandidate(CHAIN_PROTOCOL_MARKER.lowercase(), "Psiphon over WARP", 40_000L),
-            // V2Ray through Psiphon: Psiphon gets past the censor, the exit is the
-            // V2Ray server (non-IR). Falls back to Psiphon inside the same session.
-            if (proxy || V2raySubscription.cachedCount(this) <= 0) {
-                null
-            } else {
-                AutoCandidate(V2RAY_PSIPHON_PROTOCOL, "V2Ray over Psiphon", 90_000L)
-            },
-            AutoCandidate("psiphon", "Psiphon", 45_000L),
-            // Tor has no proxy mode (refused in startTunnel).
-            // Budget from resilience.json (`tor.auto_budget_s`, default 180 s): the
-            // Tor ladder inside it is Direct → WebTunnel → Snowflake → Meek → obfs4
-            // with short rungs. 60 s used to end inside the Direct rung, so no bridge
-            // was ever tried from Automatic.
-            if (proxy) null else AutoCandidate("tor", "Tor", ResilienceConfig.tor(this).autoBudgetS * 1_000L),
-        )
-    }
 
     private fun beginAutoSelection(config: String) {
         if (connected.get()) return
@@ -4327,200 +4263,155 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
         return null
     }
 
+    /**
+     * Smart Connect: race-then-pick.
+     *
+     *  1. **Probe in parallel** (out of tunnel, [MethodRegistry] plugins): TCP/TLS handshakes to
+     *     the V2Ray/SHARD servers and the Tor fronts, all at once, capped by `smart.parallel_probes`.
+     *     UDP methods and Psiphon cannot be judged this way and are simply unprobed.
+     *  2. **Order** ([SmartPlan.order]): this network's remembered winner and runner-up first,
+     *     then cheap methods by probe result, then the expensive ones (Psiphon, Tor) staged last.
+     *  3. **Trial** each in turn (one TUN at a time is all Android allows): real handshake, latency,
+     *     a small download where a local proxy exists, and 2–3 stability checks → [SmartScore].
+     *  4. **Stop** when the best score is good enough, the trial cap or the time budget is hit
+     *     (`smart` in resilience.json; halved on low battery), **pick** the best, keep the runner-up
+     *     for instant failover, remember both for this network ([NetworkMemory]).
+     *
+     * Every step is published to [SmartConnectState] for the home screen's live view.
+     */
     private fun runAutoSelection(token: Int, forceFull: Boolean, attempts: Int) {
         val results = LinkedHashMap<String, String>()
-        var winner: AutoCandidate? = null
-        var winnerMs = -1L
+        val scores = LinkedHashMap<String, Double>()
+        val measuredBy = HashMap<String, Measured>()
+        val countries = HashMap<String, String>()
         var live: AutoCandidate? = null
-        var fullTest = false
+        var fullTest = true
         try {
             val prefs = getSharedPreferences("settings", MODE_PRIVATE)
-            // UDP blocked on this network: WireGuard and MASQUE (both UDP) cannot work.
-            // A chosen country ([CountryFilter]): only the pools that can exit there (V2Ray servers and
-            // My configs, already narrowed to that country), the exit must be in it, and nothing else
-            // (WARP/WireGuard/Amnezia/MASQUE/Psiphon/Tor, an Iran exit) is ever used instead.
+            val smartRaw = ResilienceConfig.smart(this)
+            // Smart off (remote switch): behave like the old ladder — first working method wins.
+            val smart = if (smartRaw.enabled) smartRaw else smartRaw.copy(goodEnough = 1, minTrials = 1)
+            val lowBattery = smartLowBattery(smart)
+            // A chosen country ([CountryFilter]): only the pools that can exit there.
             val wantedCountry = CountryFilter.selected(this)
             fun countryOk(cc: String) = wantedCountry.isEmpty() || cc.isEmpty() || cc == wantedCountry
-            // Modes the owner switched off in the panel ([AppRemote]) are never tried.
-            val phaseAEnabled = autoPhaseA().filter {
-                !AppRemote.isDisabled(this, it.coreName) &&
-                    (wantedCountry.isEmpty() || it.coreName == "v2ray" || it.coreName == MyConfigs.PROTOCOL)
+            val udpOff = udpBlocked()
+            val methods = MethodRegistry.all(this).filter { m ->
+                val c = m.candidate
+                !AppRemote.isDisabled(this, c.coreName) &&
+                    (wantedCountry.isEmpty() || c.coreName == "v2ray" || c.coreName == MyConfigs.PROTOCOL) &&
+                    !(udpOff && c.coreName in MethodRegistry.UDP)
             }
-            val phaseAUdp = if (udpBlocked()) {
-                phaseAEnabled.filter {
-                    it.coreName != "wireguard" && it.coreName != "masque" && it.coreName != AmneziaConfig.PROTOCOL
+            if (wantedCountry.isNotEmpty()) ConnectionLog.record("Smart: country $wantedCountry — V2Ray/My configs from it only")
+            val netKey = smartNetworkKey()
+            val now = System.currentTimeMillis()
+            var memory = NetworkMemory.read(prefs.getString(smartPrefMemory, null), netKey, now, smart.memoryTtlDays)
+            if (smartPreferRunnerUp && memory?.runnerUp != null) {
+                // Re-evaluation after a quality drop: the runner-up gets the first shot.
+                memory = memory.copy(winner = memory.runnerUp!!, runnerUp = memory.winner)
+            }
+            smartPreferRunnerUp = false
+            SmartConnectState.begin(netKey, methods.map { it.id to it.candidate.label }, now)
+            val sinceFull = now - prefs.getLong(autoPrefLastFullTest, 0L)
+            val fastAllowed = !forceFull && memory != null && sinceFull in 0 until autoRetestMs
+            // Probes cost ~3 s; skipped while the remembered winner may still be enough.
+            var pre: Map<String, Probe> = if (fastAllowed) emptyMap() else smartPreProbe(methods, smart, token)
+            if (token != autoToken) return
+            val shared = methods.mapNotNull { m -> ConnectionReports.modeScore(this, m.candidate.coreName)?.let { m.id to it } }.toMap()
+            // Iranian user: WARP-family exits are in IR, so foreign exits are tried first.
+            val demote = if (autoHomeIsIran(prefs)) MethodRegistry.WARP_FAMILY else emptySet()
+            var order = SmartPlan.order(methods.map { it.candidate }, memory, pre, shared, demote)
+            Log.i(autoLogTag, "smart net=$netKey order=${order.joinToString { it.label }} lowBattery=$lowBattery")
+            ConnectionLog.record("Smart: ${order.size} methods, order ${order.joinToString(" → ") { it.label }}")
+            SmartConnectState.phase(SmartConnectState.Phase.TESTING)
+            val started = SystemClock.elapsedRealtime()
+            var trials = 0
+            var i = 0
+            while (i < order.size) {
+                val c = order[i++]
+                if (scores.isNotEmpty() && SmartPlan.shouldStop(scores, trials, SystemClock.elapsedRealtime() - started, smart, lowBattery)) {
+                    order.drop(i - 1).forEach { SmartConnectState.method(it.id, SmartConnectState.Status.SKIPPED) }
+                    break
                 }
-            } else {
-                phaseAEnabled
-            }
-            // Best mode for this operator (shared reports; global when the operator has few) goes first.
-            // Stable: every other candidate keeps its tuned order.
-            val bestShared = phaseAUdp
-                .mapNotNull { c -> ConnectionReports.modeScore(this, c.coreName)?.let { c to it } }
-                .filter { it.second >= 0.6 }
-                .maxByOrNull { it.second }?.first
-            val phaseAAll = if (bestShared == null) phaseAUdp else listOf(bestShared) + (phaseAUdp - bestShared)
-            // Iranian user: WARP exits in IR, so test the transports that exit abroad first.
-            val homeIran = autoHomeIsIran(prefs)
-            val phaseA = if (homeIran) {
-                phaseAAll.sortedBy { if (it.coreName == "shard" || it.coreName == "v2ray" || it.coreName == MyConfigs.PROTOCOL) 0 else 1 }
-            } else {
-                phaseAAll
-            }
-            Log.i(autoLogTag, "homeIran=$homeIran order=${phaseA.joinToString { it.label }}")
-            val countries = HashMap<String, String>()
-            var irWinner: AutoCandidate? = null
-            var irWinnerMs = -1L
-            val phaseB = if (wantedCountry.isNotEmpty()) {
-                emptyList()
-            } else {
-                autoPhaseB().filter { !AppRemote.isDisabled(this, it.coreName) }
-            }
-            if (wantedCountry.isNotEmpty()) ConnectionLog.record("Auto: country $wantedCountry — V2Ray/My configs from it only")
-            // Learned winner for (operator, 3-hour bucket) first, global last winner second.
-            val learnKey = autoLearnKey()
-            val learned = autoLearned(prefs, learnKey)
-            val lastName = learned?.first ?: prefs.getString(autoPrefLastWinner, null)
-            val lastMs = learned?.second ?: prefs.getLong(autoPrefLastLatency, -1L)
-            val sinceFull = System.currentTimeMillis() - prefs.getLong(autoPrefLastFullTest, 0L)
-            // Country the remembered winner exited in; an IR-exit winner never takes the
-            // fast path, so the full test gets a chance to find a non-IR exit.
-            val lastCountry = (if (learned != null) autoLearnedCountry(prefs, learnKey)
-                else prefs.getString(autoPrefLastCountry, null)).orEmpty()
-            val remembered = (phaseA + phaseB).firstOrNull { it.coreName == lastName }
-            var rememberedMs: Long? = null
-
-            if (!forceFull && sinceFull in 0 until autoRetestMs && remembered != null && lastCountry != "IR") {
-                val fast = remembered in phaseA
-                rememberedMs = runAutoTrial(remembered, token, measure = fast)
-                if (token != autoToken) return
-                results[remembered.label] = rememberedMs?.let { "${it}ms" } ?: "fail"
-                live = if (rememberedMs != null) remembered else null
-                val ms = rememberedMs
-                if (ms != null) {
-                    val cc = autoExitCountry(remembered)
+                SmartConnectState.method(c.id, SmartConnectState.Status.TESTING)
+                val m = smartTrial(c, token, smart) ?: return
+                trials++
+                live = if (m.probes.firstOrNull()?.ok == true) c else null
+                var measured = m
+                if (live != null) {
+                    val cc = autoExitCountry(c)
                     if (token != autoToken) return
-                    countries[remembered.label] = cc
-                    if (cc == "IR") results[remembered.label] = "${ms}ms IR"
-                    if (cc != "IR" && countryOk(cc) && (!fast || lastMs <= 0L || ms <= lastMs * 5 / 4)) {
-                        winner = remembered
-                        winnerMs = ms
+                    countries[c.label] = cc
+                    measured = m.copy(iranExit = cc == "IR")
+                    if (!countryOk(cc)) {
+                        ConnectionLog.record("Smart: ${c.label} exit $cc is not $wantedCountry")
+                        ShardManager.activeNode?.let { ShardHealth.recordFailure(this, it) }
+                        measured = Measured(c.id, listOf(Probe(false)))
                     }
                 }
-            }
-
-            if (winner == null) {
-                fullTest = true
-                for (candidate in phaseA) {
-                    val ms = if (candidate == remembered && results.containsKey(candidate.label)) {
-                        rememberedMs
-                    } else {
-                        runAutoTrial(candidate, token, measure = true).also {
-                            if (token != autoToken) return
-                            results[candidate.label] = it?.let { v -> "${v}ms" } ?: "fail"
-                            live = if (it != null) candidate else null
-                            if (it != null) {
-                                val cc = autoExitCountry(candidate)
-                                if (token != autoToken) return
-                                countries[candidate.label] = cc
-                                if (cc == "IR") results[candidate.label] = "${it}ms IR"
-                            }
-                        }
-                    }
-                    if (ms == null) continue
-                    if (!countryOk(countries[candidate.label].orEmpty())) {
-                        // Exit outside the chosen country: set that node back and let the pool
-                        // race pick another server from the country, twice at most.
-                        ConnectionLog.record("Auto: ${candidate.label} exit ${countries[candidate.label]} is not $wantedCountry")
-                        var matchedMs: Long? = null
-                        var tries = 0
-                        while (tries++ < 2) {
-                            ShardManager.activeNode?.let { ShardHealth.recordFailure(this, it) }
-                            val again = runAutoTrial(candidate, token, measure = true)
-                            if (token != autoToken) return
-                            live = if (again != null) candidate else null
-                            if (again == null) break
-                            val cc = autoExitCountry(candidate)
-                            if (token != autoToken) return
-                            countries[candidate.label] = cc
-                            if (countryOk(cc)) {
-                                matchedMs = again
-                                break
-                            }
-                        }
-                        results[candidate.label] = matchedMs?.let { "${it}ms $wantedCountry" } ?: "exit not $wantedCountry"
-                        if (matchedMs != null && (winnerMs < 0L || matchedMs < winnerMs)) {
-                            winner = candidate
-                            winnerMs = matchedMs
-                        }
-                        continue
-                    }
-                    if (countries[candidate.label] == "IR") {
-                        // Iran exit: only a fallback while any non-IR candidate works.
-                        if (irWinnerMs < 0L || ms < irWinnerMs) {
-                            irWinner = candidate
-                            irWinnerMs = ms
-                        }
-                    } else if (winnerMs < 0L || ms < winnerMs) {
-                        winner = candidate
-                        winnerMs = ms
-                    }
+                val score = SmartScore.score(measured)
+                scores[c.id] = score
+                measuredBy[c.id] = measured
+                results[c.label] = if (score > 0) "${score.toInt()} (${SmartScore.reason(measured)})" else "fail"
+                SmartConnectState.method(
+                    c.id,
+                    if (score >= smart.minScore) SmartConnectState.Status.OK else SmartConnectState.Status.FAILED,
+                    score = score.toInt(),
+                    latencyMs = SmartScore.median(measured.probes.filter { it.ok }.mapNotNull { it.latencyMs }),
+                    detail = if (score > 0) SmartScore.reason(measured) else Strings.t("failed"),
+                )
+                SmartConnectState.leader(SmartPlan.pick(scores, smart.minScore).winner)
+                // Fast path: the remembered winner is still as good as before → done.
+                if (fastAllowed && trials == 1 && c.id == memory?.winner &&
+                    score >= minOf(smart.goodEnough.toDouble(), memory.score * 0.8).coerceAtLeast(smart.minScore.toDouble())
+                ) {
+                    fullTest = false
+                    order.drop(1).forEach { SmartConnectState.method(it.id, SmartConnectState.Status.SKIPPED) }
+                    break
                 }
-            }
-
-            if (winner == null) {
-                for (candidate in phaseB) {
-                    if (candidate == remembered && results[candidate.label] == "fail") continue
-                    val ms = runAutoTrial(candidate, token, measure = false)
+                if (fastAllowed && trials == 1 && pre.isEmpty()) {
+                    // Remembered winner was not enough: now probe everyone and re-order the rest.
+                    pre = smartPreProbe(methods.filter { it.id != c.id }, smart, token)
                     if (token != autoToken) return
-                    results[candidate.label] = ms?.let { "${it}ms" } ?: "fail"
-                    live = if (ms != null) candidate else null
-                    if (ms != null) {
-                        val cc = autoExitCountry(candidate)
-                        if (token != autoToken) return
-                        countries[candidate.label] = cc
-                        if (cc == "IR") {
-                            results[candidate.label] = "${ms}ms IR"
-                            if (irWinner == null) {
-                                irWinner = candidate
-                                irWinnerMs = ms
-                            }
-                            continue
-                        }
-                        winner = candidate
-                        winnerMs = ms
-                        break
-                    }
+                    order = listOf(c) + SmartPlan.order(methods.map { it.candidate }.filter { it.id != c.id },
+                        memory.copy(winner = memory.runnerUp ?: ""), pre, shared, demote)
+                    i = 1
                 }
             }
 
-            // Every working candidate exits in Iran: use the best of them, with a warning.
-            var iranExit = false
-            if (winner == null && irWinner != null && wantedCountry.isEmpty()) {
-                winner = irWinner
-                winnerMs = irWinnerMs
-                iranExit = true
-            }
-
+            val pick = SmartPlan.pick(scores, smart.minScore)
+            val chosen = order.firstOrNull { it.id == pick.winner }
+            val winnerMeasured = pick.winner?.let { measuredBy[it] }
             val summary = "results: " + results.entries.joinToString(", ") { "${it.key}=${it.value}" } +
-                " winner=${winner?.label ?: "none"}" + (if (winner != null) " (${winnerMs}ms)" else "") +
+                " winner=${chosen?.label ?: "none"} runnerUp=${pick.runnerUp ?: "none"}" +
                 (if (fullTest) " [full test]" else " [fast path]")
             Log.i(autoLogTag, summary)
-            ConnectionLog.record("Auto $summary")
-
-            val chosen = winner
-            if (chosen == null) {
+            ConnectionLog.record("Smart $summary")
+            SmartConnectState.result(
+                pick.winner,
+                winnerMeasured?.let { SmartScore.reason(it) }.orEmpty(),
+                pick.runnerUp,
+                pick.runnerUp?.let { scores[it]?.toInt() },
+            )
+            if (chosen == null || winnerMeasured == null) {
                 prefs.edit().remove(autoPrefLastFullTest).apply()
                 finishAutoWithoutWinner(token, attempts)
                 return
             }
+            val winnerMs = SmartScore.median(winnerMeasured.probes.filter { it.ok }.mapNotNull { it.latencyMs })
+                ?: winnerMeasured.connectMs ?: 0L
+            val iranExit = winnerMeasured.iranExit
             prefs.edit()
                 .putString(autoPrefLastWinner, chosen.coreName)
                 .putLong(autoPrefLastLatency, winnerMs)
                 .putString(autoPrefLastCountry, countries[chosen.label].orEmpty())
+                .putString(smartPrefMemory, NetworkMemory.write(prefs.getString(smartPrefMemory, null), netKey,
+                    NetworkMemory.Entry(chosen.id, pick.runnerUp, scores[chosen.id] ?: 0.0, System.currentTimeMillis())))
                 .apply { if (fullTest) putLong(autoPrefLastFullTest, System.currentTimeMillis()) }
                 .apply()
-            autoLearn(prefs, learnKey, chosen.coreName, winnerMs, countries[chosen.label].orEmpty())
+            smartSession = true
+            smartBaselineMs = winnerMs.takeIf { it > 0 }
+            smartMonitor = null
 
             val bestText = Strings.tf("Best: %s (%sms)", chosen.label, winnerMs) +
                 (if (iranExit) " · " + Strings.t("Exit is in Iran; some services (e.g. Gemini) won't work") else "")
@@ -4529,6 +4420,7 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
                 // The winner is the candidate that is up right now: keep it.
                 autoTrialActive.set(false)
                 reconnectRequested.set(false)
+                SmartConnectState.connected()
                 sendStatus(STATUS_CONNECTED, bestText)
                 return
             }
@@ -4544,7 +4436,7 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
         } catch (_: InterruptedException) {
             // Service destroyed.
         } catch (e: Exception) {
-            ConnectionLog.record("Auto selection crashed: ${e.message}")
+            ConnectionLog.record("Smart selection crashed: ${e.message}")
             if (token == autoToken) {
                 try {
                     finishAutoWithoutWinner(token, attempts)
@@ -4555,6 +4447,145 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
             // Never leave the status intercept armed after the thread is gone.
             if (token == autoToken) autoTrialActive.set(false)
             autoRunning.set(false)
+        }
+    }
+
+    // ------------------------------------------------------------------ Smart Connect helpers
+
+    private val smartPrefMemory = "smart_network_memory"
+    /** Set by the quality monitor: the next selection tries the runner-up first. */
+    @Volatile private var smartPreferRunnerUp = false
+    /** The current session was chosen by Smart Connect (quality monitor applies). */
+    @Volatile private var smartSession = false
+    @Volatile private var smartBaselineMs: Long? = null
+    @Volatile private var smartMonitor: QualityMonitor? = null
+    private var smartLastRx = 0L
+    private var smartLastTx = 0L
+
+    /** Network identity for [NetworkMemory]: operator MCC/MNC, or a hash of the Wi-Fi gateway + DNS. */
+    private fun smartNetworkKey(): String = try {
+        val cm = getSystemService(CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+        // The underlying network, not our own VPN.
+        val net = cm.allNetworks.firstOrNull { n ->
+            val caps = cm.getNetworkCapabilities(n)
+            caps != null && !caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN) &&
+                caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
+        }
+        val caps = net?.let { cm.getNetworkCapabilities(it) }
+        val lp = net?.let { cm.getLinkProperties(it) }
+        val wifi = caps?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) == true
+        val eth = caps?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_ETHERNET) == true
+        val tm = getSystemService(TELEPHONY_SERVICE) as? android.telephony.TelephonyManager
+        val mccMnc = tm?.networkOperator?.takeIf { it.length >= 5 } ?: tm?.simOperator
+        val fp = lp?.let { p ->
+            (p.routes.mapNotNull { r -> r.gateway?.hostAddress?.takeIf { r.isDefaultRoute } } +
+                p.dnsServers.mapNotNull { it.hostAddress } + listOfNotNull(p.domains)).joinToString(",")
+        }
+        NetworkMemory.key(wifi, eth, mccMnc, fp)
+    } catch (_: Exception) {
+        "unknown"
+    }
+
+    private fun smartLowBattery(cfg: SmartConfig): Boolean = try {
+        val bm = getSystemService(BATTERY_SERVICE) as android.os.BatteryManager
+        val pct = bm.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY)
+        pct in 0 until cfg.batterySaverPct && !bm.isCharging
+    } catch (_: Exception) {
+        false
+    }
+
+    /** Stage 1: every method's out-of-tunnel probe, in parallel, bounded. */
+    private fun smartPreProbe(methods: List<TunnelMethod>, cfg: SmartConfig, token: Int): Map<String, Probe> {
+        if (!cfg.enabled) return emptyMap()
+        val out = java.util.concurrent.ConcurrentHashMap<String, Probe>()
+        val pool = Executors.newFixedThreadPool(cfg.parallelProbes)
+        try {
+            methods.forEach { m ->
+                pool.execute {
+                    if (token != autoToken) return@execute
+                    SmartConnectState.method(m.id, SmartConnectState.Status.PROBING)
+                    val p = runCatching { m.preProbe(this, 3_000) }.getOrNull()
+                    if (p != null) out[m.id] = p
+                    SmartConnectState.method(
+                        m.id, SmartConnectState.Status.QUEUED, latencyMs = p?.latencyMs,
+                        detail = when {
+                            p == null -> ""
+                            p.ok -> Strings.tf("reachable %sms", p.latencyMs ?: 0)
+                            else -> Strings.t("no answer")
+                        },
+                    )
+                }
+            }
+            pool.shutdown()
+            pool.awaitTermination(8, TimeUnit.SECONDS)
+        } finally {
+            pool.shutdownNow()
+        }
+        ConnectionLog.record("Smart probes: " + out.entries.joinToString { "${it.key}=${if (it.value.ok) "${it.value.latencyMs}ms" else "no"}" })
+        return out
+    }
+
+    /** The local SOCKS port of the tunnel that is up now, when there is one we may dial. */
+    private fun smartSocksPort(coreName: String): Int? = when {
+        ShardManager.isRunning -> ShardManager.listenPort
+        proxyMode -> CoreConfig.proxyListenPort(this)
+        coreName == "tor" && TorManager.isTorActive -> TorManager.FRONT_SOCKS_PORT
+        else -> null
+    }
+
+    private fun smartTimedCheck(port: Int): Probe {
+        val t0 = SystemClock.elapsedRealtime()
+        val ok = ShardProbe.check(port, 6_000)
+        return Probe(ok, if (ok) SystemClock.elapsedRealtime() - t0 else null)
+    }
+
+    /**
+     * One exclusive trial: bring [c] up with the existing trial machinery, then measure
+     * stability (repeated checks), latency and a small download. Null = selection superseded.
+     */
+    private fun smartTrial(c: AutoCandidate, token: Int, cfg: SmartConfig): Measured? {
+        val cheap = c.cost == Cost.CHEAP
+        val ms = runAutoTrial(c, token, measure = cheap)
+        if (token != autoToken) return null
+        if (ms == null) return Measured(c.id, listOf(Probe(false)))
+        val probes = ArrayList<Probe>()
+        probes += if (cheap) Probe(true, ms) else Probe(true)
+        val port = smartSocksPort(c.coreName)
+        repeat(cfg.stabilityProbes - 1) {
+            if (token != autoToken || userInitiatedStop.get()) return null
+            Thread.sleep(700L)
+            val up = connected.get() && !autoTrialFailed
+            probes += if (!up) Probe(false) else if (port != null) smartTimedCheck(port) else Probe(true)
+        }
+        var kbps: Long? = null
+        if (port != null && cfg.downloadBytes > 0 && connected.get()) {
+            kbps = SpeedTest.quickDownloadKbps(port, cfg.downloadBytes, 8_000)
+            if (kbps != null) probes[0] = probes[0].copy(throughputKbps = kbps)
+        }
+        return Measured(c.id, probes, connectMs = if (cheap) null else ms)
+    }
+
+    /** Called from the watchdog tick while connected: live figures + quality monitor. */
+    private fun smartTick() {
+        val rx = currentRx
+        val tx = currentTx
+        val dRx = (rx - smartLastRx).coerceAtLeast(0)
+        val dTx = (tx - smartLastTx).coerceAtLeast(0)
+        smartLastRx = rx
+        smartLastTx = tx
+        val interval = WATCHDOG_INTERVAL_S.coerceAtLeast(1)
+        val port = smartSocksPort(if (currentProtocol.contains("TOR")) "tor" else "")
+        val sample = port?.let { smartTimedCheck(it) }
+        SmartConnectState.live(sample?.latencyMs, dRx * 8 / 1000 / interval, dTx * 8 / 1000 / interval)
+        if (!smartSession || sample == null || autoTrialActive.get()) return
+        val cfg = ResilienceConfig.smart(this)
+        if (!cfg.enabled || !cfg.reeval.enabled || smartLowBattery(cfg)) return
+        val monitor = smartMonitor ?: QualityMonitor(cfg.reeval, smartBaselineMs).also { smartMonitor = it }
+        if (monitor.add(sample, System.currentTimeMillis()) == QualityMonitor.Verdict.DEGRADED) {
+            ConnectionLog.record("Smart: quality dropped (ping ${sample.latencyMs ?: "fail"}, baseline ${smartBaselineMs}ms) — re-evaluating, runner-up first")
+            smartPreferRunnerUp = true
+            smartSession = false
+            onTunnelLost(Strings.t("Quality dropped — finding a better route"))
         }
     }
 
@@ -5308,6 +5339,11 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
 
     private fun sendStatus(status: String, detail: String? = null, progress: Int = -1) {
         Log.i(LOG_TAG, "status=$status${detail?.let { " detail=$it" } ?: ""}")
+        if (status == STATUS_CONNECTED && !autoTrialActive.get() &&
+            SmartConnectState.state.value.phase == SmartConnectState.Phase.CONNECTING
+        ) {
+            SmartConnectState.connected()
+        }
         if (reportPending && (status == STATUS_CONNECTED || status == STATUS_FAILED)) {
             reportPending = false
             try {

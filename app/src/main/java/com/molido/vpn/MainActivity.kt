@@ -1,5 +1,8 @@
 package com.molido.vpn
 
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+
 import android.app.Activity
 import android.app.Dialog
 import android.content.BroadcastReceiver
@@ -772,6 +775,7 @@ class MainActivity : Activity() {
 
     override fun onStart() {
         super.onStart()
+        observeSmartConnect()
         val filter = IntentFilter(MolidoVpnService.ACTION_STATUS)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(statusReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
@@ -782,7 +786,22 @@ class MainActivity : Activity() {
         receiverRegistered = true
     }
 
+    private var smartPanel: com.molido.vpn.ui.SmartConnectPanel? = null
+    private var smartScope: kotlinx.coroutines.CoroutineScope? = null
+
+    /** Collects [com.molido.vpn.ui.state.SmartConnectState] while the activity is visible. */
+    private fun observeSmartConnect() {
+        smartScope?.cancel()
+        val scope = kotlinx.coroutines.MainScope()
+        smartScope = scope
+        scope.launch {
+            com.molido.vpn.ui.state.SmartConnectState.state.collect { smartPanel?.render(it) }
+        }
+    }
+
     override fun onStop() {
+        smartScope?.cancel()
+        smartScope = null
         if (receiverRegistered) {
             unregisterReceiver(statusReceiver)
             receiverRegistered = false
@@ -1578,6 +1597,18 @@ class MainActivity : Activity() {
             ViewGroup.LayoutParams.WRAP_CONTENT,
             ViewGroup.LayoutParams.WRAP_CONTENT,
         ).apply { topMargin = dp(7) })
+
+        // v2: Smart Connect live view (methods lighting up → winner card → live speed/ping).
+        // Hidden while idle; rendered from SmartConnectState by [observeSmartConnect].
+        val panel = com.molido.vpn.ui.SmartConnectPanel(
+            this@MainActivity, palette,
+            Typefaces.regular(this@MainActivity), Typefaces.bold(this@MainActivity), Typefaces.numeric(this@MainActivity),
+        )
+        smartPanel = panel
+        addView(panel, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+        ).apply { topMargin = dp(14) })
 
         // MolidoVPN home order: connect control -> location card -> mode chips ->
         // mode add-on card -> stats.
@@ -4334,6 +4365,10 @@ class MainActivity : Activity() {
         // Language sits directly under Theme: both are appearance-scale choices
         // that repaint the whole app via recreate(). No stored reference for
         // the same reason — the settings page is rebuilt, not repainted.
+        content.addView(navRow(Strings.t("Theme"), themeLabel(AppAppearance.storedPref(this@MainActivity))) { chooseTheme() }, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+        ).apply { topMargin = dp(8) })
         content.addView(navRow(Strings.t("Language"), AppLanguage.label(currentLanguagePref())) { chooseLanguage() }, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -5276,6 +5311,35 @@ class MainActivity : Activity() {
             if (chosen == currentLanguagePref()) return@showChoiceSheet
             AppLanguage.set(this, chosen)
             ConnectionLog.record("UI language set to ${AppLanguage.label(chosen)}")
+            recreate()
+        }
+    }
+
+    private fun themeLabel(key: String): String = when (key) {
+        AppAppearance.Mode.DARK.key -> Strings.t("Dark")
+        AppAppearance.Mode.LIGHT.key -> Strings.t("Light — theme")
+        else -> Strings.t("Follow system")
+    }
+
+    /** Dark / light / follow system. Same shape as the language picker: store, recreate(). */
+    private fun chooseTheme() {
+        val options = listOf(AppAppearance.PREF_SYSTEM, AppAppearance.Mode.DARK.key, AppAppearance.Mode.LIGHT.key)
+        showChoiceSheet(
+            title = Strings.t("Theme"),
+            subtitle = Strings.t("Applies straight away. A running tunnel is not interrupted."),
+            options = options,
+            selected = AppAppearance.storedPref(this),
+            label = { themeLabel(it) },
+            description = { key ->
+                when (key) {
+                    AppAppearance.Mode.DARK.key -> AppAppearance.Mode.DARK.description.let(Strings::t)
+                    AppAppearance.Mode.LIGHT.key -> AppAppearance.Mode.LIGHT.description.let(Strings::t)
+                    else -> ""
+                }
+            },
+        ) { chosen ->
+            if (chosen == AppAppearance.storedPref(this)) return@showChoiceSheet
+            AppAppearance.setPref(this, chosen)
             recreate()
         }
     }
