@@ -15,6 +15,8 @@ import java.util.concurrent.atomic.AtomicBoolean
  *    (a Cloudflare Pages/R2 copy, an ArvanCloud bucket, ...). Tried after the worker and GitHub.
  *  * `mirrors.sub`    — extra full URLs of the V2Ray subscription text. Tried after the built-in ones.
  *  * `dns_tunnel`     — the dnstt last-resort mode ([DnsTunnel]). Off unless the owner turns it on.
+ *  * `tor`            — Tor ladder order, the WebTunnel rung ([TorWebTunnel]) and its bridge lines,
+ *    a Snowflake bridge-line override, and how long Automatic gives Tor. See [TorSettings].
  *
  * Source order: `remote/resilience.json` from this repo (raw GitHub → jsDelivr → worker), then the same file on every known update mirror. Fallback: last good cache, then the
  * copy bundled into the APK (`assets/resilience-defaults.json`). Every field is validated; a bad
@@ -55,10 +57,35 @@ object ResilienceConfig {
             (udpResolvers.isNotEmpty() || dohUrls.isNotEmpty() || dotAddrs.isNotEmpty() || useSystemDns)
     }
 
+    /**
+     * Tor knobs. Defaults follow what Tor's own Connection Assist does for Iran in 2026
+     * (WebTunnel, then Snowflake, then obfs4), with Direct first because it costs nothing
+     * when Tor is not blocked and Meek kept as the CDN-fronted fallback.
+     */
+    data class TorSettings(
+        /** Offer the WebTunnel rung at all. */
+        val webtunnel: Boolean = true,
+        /** Ask Tor's Moat API for fresh WebTunnel bridges at connect time. */
+        val moat: Boolean = true,
+        /** Ladder order for Tor's own Auto mode; keys from [TOR_RUNGS]. */
+        val order: List<String> = DEFAULT_TOR_ORDER,
+        /** Owner-supplied WebTunnel lines (tried with any Moat ones). */
+        val webtunnelBridges: List<String> = emptyList(),
+        /** Replaces the built-in Snowflake lines when not empty. */
+        val snowflakeBridges: List<String> = emptyList(),
+        /** How long the app-wide Automatic mode lets Tor try, in seconds. */
+        val autoBudgetS: Int = DEFAULT_TOR_AUTO_BUDGET_S,
+    )
+
+    val TOR_RUNGS = setOf("direct", "webtunnel", "snowflake", "meek", "obfs4")
+    val DEFAULT_TOR_ORDER = listOf("direct", "webtunnel", "snowflake", "meek", "obfs4")
+    const val DEFAULT_TOR_AUTO_BUDGET_S = 180
+
     data class Config(
         val updateMirrors: List<String> = emptyList(),
         val subMirrors: List<String> = emptyList(),
         val dnsTunnel: DnsTunnelSettings = DnsTunnelSettings(),
+        val tor: TorSettings = TorSettings(),
     )
 
     @Volatile private var cached: Config? = null
@@ -106,6 +133,33 @@ object ResilienceConfig {
         return out.toList()
     }
 
+    private val SNOWFLAKE_LINE = Regex("^snowflake 192\\.0\\.2\\.[0-9]{1,3}:[0-9]{1,5} [0-9A-Fa-f]{40}( \\S+=\\S+)+$")
+
+    /** A Snowflake bridge line with a doc-range address, a fingerprint and an https broker `url=`. */
+    fun snowflakeLine(value: String): String? {
+        val v = value.trim().removePrefix("Bridge ").trim().replace(Regex("\\s+"), " ")
+        if (v.length > 1200 || !SNOWFLAKE_LINE.matches(v)) return null
+        val url = v.split(' ').firstOrNull { it.startsWith("url=") }?.removePrefix("url=") ?: return null
+        return if (httpsUrl(url) != null) v else null
+    }
+
+    fun parseTor(tor: JSONObject?): TorSettings {
+        if (tor == null) return TorSettings()
+        val order = strings(tor.optJSONArray("order"), TOR_RUNGS.size) { v ->
+            v.trim().lowercase().takeIf { it in TOR_RUNGS }
+        }.ifEmpty { DEFAULT_TOR_ORDER }
+        val wt = tor.optJSONArray("webtunnel_bridges")
+        val wtLines = if (wt == null) emptyList() else TorWebTunnel.clean((0 until wt.length()).map { wt.optString(it, "") })
+        return TorSettings(
+            webtunnel = tor.optBoolean("webtunnel", true),
+            moat = tor.optBoolean("moat", true),
+            order = order,
+            webtunnelBridges = wtLines,
+            snowflakeBridges = strings(tor.optJSONArray("snowflake_bridges"), 4, ::snowflakeLine),
+            autoBudgetS = tor.optInt("auto_budget_s", DEFAULT_TOR_AUTO_BUDGET_S).coerceIn(30, 600),
+        )
+    }
+
     /** Parses one file. Invalid entries are dropped; a missing section is the empty default. */
     fun parse(text: String): Config {
         val json = JSONObject(text)
@@ -132,6 +186,7 @@ object ResilienceConfig {
             updateMirrors = strings(mirrors?.optJSONArray("update"), MAX_MIRRORS, ::httpsUrl),
             subMirrors = strings(mirrors?.optJSONArray("sub"), MAX_MIRRORS, ::httpsUrl),
             dnsTunnel = settings,
+            tor = parseTor(json.optJSONObject("tor")),
         )
     }
 
@@ -145,6 +200,7 @@ object ResilienceConfig {
             updateMirrors = (remote.updateMirrors + bundled.updateMirrors).distinct().take(MAX_MIRRORS),
             subMirrors = (remote.subMirrors + bundled.subMirrors).distinct().take(MAX_MIRRORS),
             dnsTunnel = if (remote.dnsTunnel == DnsTunnelSettings()) bundled.dnsTunnel else remote.dnsTunnel,
+            tor = if (remote.tor == TorSettings()) bundled.tor else remote.tor,
         )
     }
 
@@ -176,6 +232,7 @@ object ResilienceConfig {
     fun updateMirrors(context: Context): List<String> = get(context).updateMirrors
     fun subMirrors(context: Context): List<String> = get(context).subMirrors
     fun dnsTunnel(context: Context): DnsTunnelSettings = get(context).dnsTunnel
+    fun tor(context: Context): TorSettings = get(context).tor
 
     /** Background refresh with a 6 h floor. Safe to call from any trigger. */
     fun refreshIfDue(context: Context, force: Boolean = false) {
@@ -194,7 +251,8 @@ object ResilienceConfig {
                     prefs.edit().putLong(LAST_CHECK_PREF, System.currentTimeMillis()).apply()
                     ConnectionLog.record("$TAG: updated from ${URL(url).host} — " +
                         "${parsed.updateMirrors.size} update mirror(s), ${parsed.subMirrors.size} sub mirror(s), " +
-                        "dns tunnel ${if (parsed.dnsTunnel.usable) "on" else "off"}")
+                        "dns tunnel ${if (parsed.dnsTunnel.usable) "on" else "off"}, " +
+                        "tor ${parsed.tor.order.joinToString(">")}")
                     break
                 }
             } catch (_: Exception) {

@@ -2575,7 +2575,9 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
                 // percentage under "Connecting" is its own bootstrap figure.
                 startTorProgressPolling()
 
-                if (!TorManager.start(this)) {
+                // Inside Automatic, Tor gets one bounded budget, so its own
+                // ladder runs with short per-rung timeouts (see TorManager.ladder).
+                if (!TorManager.start(this, quick = autoTrialActive.get())) {
                     error(
                         when {
                             // Named before the generic messages: this one is a
@@ -4209,7 +4211,11 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
             },
             AutoCandidate("psiphon", "Psiphon", 45_000L),
             // Tor has no proxy mode (refused in startTunnel).
-            if (proxy) null else AutoCandidate("tor", "Tor", 60_000L),
+            // Budget from resilience.json (`tor.auto_budget_s`, default 180 s): the
+            // Tor ladder inside it is Direct → WebTunnel → Snowflake → Meek → obfs4
+            // with short rungs. 60 s used to end inside the Direct rung, so no bridge
+            // was ever tried from Automatic.
+            if (proxy) null else AutoCandidate("tor", "Tor", ResilienceConfig.tor(this).autoBudgetS * 1_000L),
         )
     }
 

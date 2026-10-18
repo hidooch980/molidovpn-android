@@ -26,5 +26,19 @@
       "https://dns.google/dns-query"
     ],
     "dot": []
+  },
+  "tor": {
+    "webtunnel": true,
+    "moat": true,
+    "order": [
+      "direct",
+      "webtunnel",
+      "snowflake",
+      "meek",
+      "obfs4"
+    ],
+    "auto_budget_s": 180,
+    "webtunnel_bridges": [],
+    "snowflake_bridges": []
   }
 }
