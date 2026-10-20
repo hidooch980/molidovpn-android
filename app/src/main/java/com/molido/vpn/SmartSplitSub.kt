@@ -100,6 +100,7 @@ object SmartSplitSub {
                 val entry = array.optJSONObject(i) ?: continue
                 val masks = entry.optJSONArray("masks") ?: continue
                 if (masks.length() == 0) continue
+                if (!FragmentMasks.valid(masks)) continue
                 val profile = SmartSplit.FragmentProfile(
                     key = i.toString(),
                     name = entry.optString("name"),

@@ -4586,6 +4586,11 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
         val monitor = smartMonitor ?: QualityMonitor(cfg.reeval, smartBaselineMs).also { smartMonitor = it }
         if (monitor.add(sample, System.currentTimeMillis()) == QualityMonitor.Verdict.DEGRADED) {
             ConnectionLog.record("Smart: quality dropped (ping ${sample.latencyMs ?: "fail"}, baseline ${smartBaselineMs}ms) — re-evaluating, runner-up first")
+            if (currentProtocol.contains("SHARD") && rotateShardNode("quality degraded")) {
+                smartBaselineMs = port?.let { smartTimedCheck(it).latencyMs }
+                smartMonitor = QualityMonitor(cfg.reeval, smartBaselineMs)
+                return
+            }
             smartPreferRunnerUp = true
             smartSession = false
             onTunnelLost(Strings.t("Quality dropped — finding a better route"))

@@ -908,6 +908,12 @@ object ShardManager {
             val deadline = System.currentTimeMillis() + 12000
             while (System.currentTimeMillis() < deadline) {
                 if (cancelled()) return null
+                val probeProcess = if (detached) detachedProc else process
+                if (probeProcess?.isAlive != true) {
+                    lastError = "probe process exited before listeners bound"
+                    ConnectionLog.record("$TAG $lastError")
+                    return null
+                }
                 if (portAccepts(basePort, 300)) {
                     ready = true
                     break

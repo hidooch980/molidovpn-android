@@ -242,6 +242,8 @@ object ShardConfigs {
         if (address.isEmpty() || port !in 1..65535) return null
 
         val params = parseQuery(query)
+        val finalMask = params["fm"].orEmpty()
+        if (finalMask.isNotEmpty() && !FragmentMasks.valid(finalMask)) return null
         val host = params["host"].orEmpty()
         val sni = params["sni"].orEmpty()
         val security = params["security"]?.lowercase(Locale.US).orEmpty().ifEmpty { "none" }
