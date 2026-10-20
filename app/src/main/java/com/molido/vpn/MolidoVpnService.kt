@@ -6039,18 +6039,37 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
      * xray domain rule (SHARD/V2Ray) and route everything else as before.
      */
     /**
-     * TUN MTU for the tun2socks transports (SHARD/V2Ray, Psiphon, chain, Tor).
-     * Auto MTU (default on): 1400 on cellular, 1500 otherwise. WireGuard/MASQUE
-     * build their own interface and are not affected. Also stored in
-     * [Tun2SocksManager.sessionMtu] so lwIP uses the same value.
+     * Select once, before establishing TUN. The reported physical-link MTU caps
+     * our cellular/Wi-Fi preset; this is not a path-MTU discovery measurement.
+     * Native WireGuard/MASQUE retain their own interface sizing.
      */
     private fun tun2socksMtu(): Int {
         val auto = getSharedPreferences("settings", MODE_PRIVATE)
             .getBoolean(Tun2SocksManager.AUTO_MTU_PREF, true)
-        val cellular = auto && CleanIpScanner.networkKey(this).startsWith("cell")
-        val mtu = if (cellular) Tun2SocksManager.CELLULAR_MTU else Tun2SocksManager.VPN_INTERFACE_MTU
+        var cellular = CleanIpScanner.networkKey(this).startsWith("cell")
+        var linkMtu = 0
+        if (auto) runCatching {
+            val cm = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
+            val physical = cm.allNetworks.filter { network ->
+                val caps = cm.getNetworkCapabilities(network)
+                caps != null && !caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN) &&
+                    caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            }
+            // When Android's default is our VPN, there may be several eligible
+            // links. Bound by all of them rather than assume which one carries it.
+            val active = cm.activeNetwork?.takeIf { it in physical }
+            val links = active?.let { listOf(it) } ?: physical
+            if (links.isNotEmpty()) {
+                cellular = links.any {
+                    cm.getNetworkCapabilities(it)?.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) == true
+                }
+                linkMtu = links.mapNotNull { cm.getLinkProperties(it)?.mtu }
+                    .filter { it in 1280..65535 }.minOrNull() ?: 0
+            }
+        }
+        val mtu = ConnectionTuning.tunMtu(auto, cellular, linkMtu)
         Tun2SocksManager.sessionMtu = mtu
-        ConnectionLog.record("TUN MTU $mtu" + if (auto) " (auto)" else "")
+        ConnectionLog.record("TUN MTU $mtu" + if (auto) " (auto; link=$linkMtu)" else "")
         return mtu
     }
 
