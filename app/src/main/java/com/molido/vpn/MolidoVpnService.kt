@@ -2039,6 +2039,7 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        LiveCatalogSync.acquire(this, applicationContext)
         // The service can start before the activity ever runs (quick tile,
         // auto-reconnect after process death), so it seeds the language
         // resolver itself. Cheap: one field write per start.
@@ -2192,6 +2193,7 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
     }
 
     override fun onDestroy() {
+        LiveCatalogSync.release(this)
         cancelAutoSelection()
         cancelAutoReconnect()
         stopTorProgressPolling()

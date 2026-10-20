@@ -663,22 +663,6 @@ object V2raySubscription {
     /** Built-in mirrors first, then configured ones; deduped, empty-safe. */
     fun subscriptionMirrors(extra: List<String>): List<String> = (MIRRORS + extra).distinct()
 
-    private fun fetchLines(url: String): List<String> = try {
-        val connection = URL(url).openConnection() as HttpURLConnection
-        try {
-            connection.connectTimeout = CONNECT_TIMEOUT_MS
-            connection.readTimeout = READ_TIMEOUT_MS
-            connection.instanceFollowRedirects = true
-            connection.setRequestProperty("User-Agent", "Mozilla/5.0")
-            if (connection.responseCode != HttpURLConnection.HTTP_OK) {
-                emptyList()
-            } else {
-                V2rayNodes.decodeBody(connection.inputStream.bufferedReader().use { it.readText() })
-            }
-        } finally {
-            connection.disconnect()
-        }
-    } catch (_: Exception) {
-        emptyList()
-    }
+    private fun fetchLines(url: String): List<String> =
+        ConditionalCatalogFetch.get(url)?.let { V2rayNodes.decodeBody(it) } ?: emptyList()
 }
