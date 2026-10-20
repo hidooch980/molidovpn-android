@@ -40,7 +40,8 @@ jobs:
             -x buildRustCoreArm64V8a \
             -x externalNativeBuildRelease \
             --tests com.molido.vpn.VpnProfilePreflightTest \
-            --tests com.molido.vpn.ProfileCipherTest
+            --tests com.molido.vpn.ProfileCipherTest \
+            --tests com.molido.vpn.ConnectionTuningTest
       - name: Keep test reports
         if: always()
         uses: actions/upload-artifact@v4
