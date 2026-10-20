@@ -340,10 +340,12 @@ object SmartSplit {
      */
     fun probeThroughSocks(socksPort: Int, timeoutMs: Int): Boolean {
         if (timeoutMs <= 0) return false
-        val deadline = android.os.SystemClock.elapsedRealtime() + timeoutMs
+        val deadline = System.nanoTime() + timeoutMs * 1_000_000L
         for (host in PROBE_HOSTS) {
-            val remaining = (deadline - android.os.SystemClock.elapsedRealtime()).toInt()
-            if (remaining <= 0) break
+            val remainingNs = deadline - System.nanoTime()
+            if (remainingNs <= 0) break
+            val remaining = ((remainingNs + 999_999L) / 1_000_000L)
+                .coerceAtMost(timeoutMs.toLong()).toInt()
             if (probeOne(socksPort, host, remaining)) return true
         }
         return false
@@ -357,7 +359,7 @@ object SmartSplit {
             raw = watched
             // One wall-clock deadline covers SOCKS negotiation, TLS and HTTP.
             expiry = probeDeadlines.schedule(
-                { runCatching { watched.close() } }, timeoutMs.toLong(), java.util.concurrent.TimeUnit.MILLISECONDS
+                Runnable { runCatching { watched.close() } }, timeoutMs.toLong(), java.util.concurrent.TimeUnit.MILLISECONDS
             )
             raw.tcpNoDelay = true
             raw.soTimeout = timeoutMs
