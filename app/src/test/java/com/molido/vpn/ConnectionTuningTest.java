@@ -30,4 +30,40 @@ public class ConnectionTuningTest {
         assertFalse(ConnectionTuning.freshMeasurement(0, 1000, false));
         assertFalse(ConnectionTuning.freshMeasurement(2000, 1000, false));
     }
+    @Test public void fragmentBlackholeConsumesOneTotalBudget() throws Exception {
+        java.net.ServerSocket server = new java.net.ServerSocket(
+            0, 8, java.net.InetAddress.getByName("127.0.0.1"));
+        java.util.concurrent.atomic.AtomicInteger accepted = new java.util.concurrent.atomic.AtomicInteger();
+        java.util.concurrent.ConcurrentLinkedQueue<java.net.Socket> sockets =
+            new java.util.concurrent.ConcurrentLinkedQueue<>();
+        java.util.concurrent.CountDownLatch ready = new java.util.concurrent.CountDownLatch(1);
+        Thread listener = new Thread(() -> {
+            ready.countDown();
+            while (!server.isClosed()) {
+                try {
+                    sockets.add(server.accept());
+                    accepted.incrementAndGet();
+                    // Deliberately never answer SOCKS greeting: no internet is used.
+                } catch (java.io.IOException stopped) { break; }
+            }
+        }, "fragment-blackhole-test");
+        listener.setDaemon(true);
+        listener.start();
+        try {
+            assertTrue(ready.await(2, java.util.concurrent.TimeUnit.SECONDS));
+            assertFalse(SmartSplit.INSTANCE.probeThroughSocks(server.getLocalPort(), 250));
+            // A per-host timeout would open three stalled connections. A total
+            // budget expires on the first one and never starts another host.
+            assertEquals(1, accepted.get());
+        } finally {
+            server.close();
+            for (java.net.Socket socket : sockets) socket.close();
+            listener.join(1000);
+        }
+    }
+
+    @Test public void exhaustedFragmentBudgetDoesNotStartNetworkWork() {
+        assertFalse(SmartSplit.INSTANCE.probeThroughSocks(1, 0));
+    }
+
 }
