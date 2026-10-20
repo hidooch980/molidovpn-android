@@ -927,7 +927,8 @@ object ShardManager {
             }
 
             val winner = java.util.concurrent.atomic.AtomicReference<ShardNode?>(null)
-            val winnerLatency = java.util.concurrent.atomic.AtomicInteger(0)
+            val latencies = java.util.concurrent.ConcurrentHashMap<String, Int>()
+            val raceFinished = java.util.concurrent.atomic.AtomicBoolean(false)
             val runnerUp = java.util.concurrent.atomic.AtomicReference<ShardNode?>(null)
             val latch = java.util.concurrent.CountDownLatch(1)
             val runnerUpLatch = java.util.concurrent.CountDownLatch(1)
@@ -952,13 +953,13 @@ object ShardManager {
                     val started = System.currentTimeMillis()
                     val ok = ShardProbe.check(basePort + index, PROBE_TIMEOUT_MS)
                     val elapsed = (System.currentTimeMillis() - started).toInt()
+                    if (raceFinished.get() || cancelled()) return@execute
                     if (ok) {
                         ShardHealth.recordSuccess(context, node, elapsed)
+                        latencies[node.key] = elapsed
                         responders.add(node)
-                        // compareAndSet, so the genuinely first success wins even
-                        // when two finish in the same millisecond.
+                        // First success wakes the selector; final choice uses quality history.
                         if (winner.compareAndSet(null, node)) {
-                            winnerLatency.set(elapsed)
                             latch.countDown()
                         } else if (runnerUp.compareAndSet(null, node)) {
                             runnerUpLatch.countDown()
@@ -979,13 +980,16 @@ object ShardManager {
                     runnerUpLatch.await(grace, java.util.concurrent.TimeUnit.MILLISECONDS)
                 }
             }
+            raceFinished.set(true)
             pool.shutdownNow()
 
-            val chosen = winner.get()
+            val answered = responders.toList().distinctBy { it.key }
+            val rankedResponders = runCatching { ShardHealth.rank(context, answered) }.getOrDefault(answered)
+            val chosen = rankedResponders.firstOrNull() ?: winner.get()
             if (!detached) {
-                lastResponders = if (chosen == null) emptyList() else responders.filter { it.key != chosen.key }.take(3)
+                lastResponders = if (chosen == null) emptyList() else rankedResponders.filter { it.key != chosen.key }.take(3)
             }
-            standbyNode = runnerUp.get()?.takeIf { chosen != null }
+            standbyNode = if (chosen == null) null else rankedResponders.firstOrNull { it.key != chosen.key }
             standbyNode?.let {
                 ConnectionLog.record("$TAG standby ${LogRedactor.nodeTag(it.key)}")
             }
@@ -993,7 +997,7 @@ object ShardManager {
                 lastError = "no node answered"
                 ConnectionLog.record("$TAG race found nothing in ${RACE_BUDGET_MS}ms")
             } else {
-                ConnectionLog.record("$TAG winner ${LogRedactor.nodeTag(chosen.key)} in ${winnerLatency.get()}ms")
+                ConnectionLog.record("$TAG winner ${LogRedactor.nodeTag(chosen.key)} in ${latencies[chosen.key] ?: 0}ms (quality-ranked)")
             }
             return chosen
         } catch (e: Exception) {

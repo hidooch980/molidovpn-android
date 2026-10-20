@@ -25,8 +25,8 @@ data class Measured(
 /** Relative weight of each quality; they need not sum to 1 (normalised). */
 data class Weights(
     val stability: Double = 0.45,
-    val latency: Double = 0.30,
-    val throughput: Double = 0.15,
+    val latency: Double = 0.20,
+    val throughput: Double = 0.25,
     val connect: Double = 0.10,
 )
 
