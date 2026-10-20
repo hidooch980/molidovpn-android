@@ -71,6 +71,9 @@ import javax.net.ssl.SSLSocketFactory
 object SmartSplit {
 
     private const val TAG = "SmartSplit"
+    private val probeDeadlines = java.util.concurrent.Executors.newSingleThreadScheduledExecutor { work ->
+        Thread(work, "fragment-probe-deadline").apply { isDaemon = true }
+    }
 
     private const val PREFS = "settings"
 
@@ -210,24 +213,31 @@ object SmartSplit {
      * 43211, Irancell 43235, Rightel 43220. That is exactly the granularity that
      * matters, because the DPI box belongs to the carrier.
      *
-     * On Wi-Fi the upstream ISP is not discoverable without location permission,
-     * which this app does not ask for and should not start asking for over a
-     * fragment setting. So all Wi-Fi shares one key and the measurement is simply
-     * redone when the user moves to a network where it is wrong. That is a worse
-     * cache but an honest one; guessing per-SSID without being able to see the ISP
-     * would fragment the cache without improving it.
+     * Wi-Fi/Ethernet use Android's connection handle without asking for SSID or
+     * location access. A different attachment is measured again. Retained
+     * measurements are bounded and expire; a cache entry only orders trials.
      */
-    private fun networkKey(context: Context): String {
+    internal fun networkKey(context: Context): String {
         val manager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
             ?: return "unknown"
-        val capabilities = runCatching {
-            manager.getNetworkCapabilities(manager.activeNetwork)
+        val physical = runCatching {
+            (listOfNotNull(manager.activeNetwork) + manager.allNetworks.toList())
+                .distinct().firstOrNull { network ->
+                    manager.getNetworkCapabilities(network)?.let { caps ->
+                        !caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN) &&
+                            caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                    } == true
+                }
         }.getOrNull()
-        if (capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true) return "wifi"
-        if (capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) == true) return "eth"
+        val capabilities = physical?.let { manager.getNetworkCapabilities(it) }
+        // Network handles need no location permission and change on Wi-Fi moves.
+        if (capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true)
+            return "wifi:" + (physical?.networkHandle ?: 0L)
+        if (capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) == true)
+            return "eth:" + (physical?.networkHandle ?: 0L)
         val operator = runCatching {
-            (context.getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager)
-                ?.simOperator.orEmpty()
+            val tm = context.getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
+            tm?.networkOperator?.takeIf { it.isNotBlank() } ?: tm?.simOperator.orEmpty()
         }.getOrDefault("")
         return if (operator.isNotEmpty()) "cell:$operator" else "cell"
     }
@@ -239,35 +249,54 @@ object SmartSplit {
      * *use* a profile, "measured as impossible here" and "not measured" are both
      * "no profile". Only [measuredUnavailable] distinguishes them.
      */
-    fun cachedProfile(context: Context): FragmentProfile? {
-        val stored = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getString(PROFILE_PREFIX + networkKey(context), null)
-        return FragmentProfile.byKey(stored)
+    fun cachedProfile(context: Context): FragmentProfile? =
+        FragmentProfile.byKey(measuredValue(context))
+
+    private fun catalogRevision(): String {
+        val content = SmartSplitSub.cachedProfiles().joinToString("\n") { it.key + ":" + it.masks.toString() }
+        return java.security.MessageDigest.getInstance("SHA-256").digest(content.toByteArray())
+            .joinToString("") { "%02x".format(it.toInt() and 255) }
     }
 
-    /**
-     * True when this network was probed and neither profile worked.
-     *
-     * Distinct from `cachedProfile() == null`, which is also true before the first
-     * probe. Without the distinction the app would re-probe on every connect for
-     * exactly the carriers where probing is known to be futile — paying the full
-     * budget twice per session for no possible gain.
-     */
-    fun measuredUnavailable(context: Context): Boolean =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getString(PROFILE_PREFIX + networkKey(context), null) == NO_PROFILE
+    private fun measuredValue(context: Context): String? {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val key = PROFILE_PREFIX + networkKey(context)
+        val value = prefs.getString(key, null) ?: return null
+        if (!ConnectionTuning.freshMeasurement(
+                prefs.getLong(key + "_at", 0L), System.currentTimeMillis(), value == NO_PROFILE
+            ) || prefs.getString(key + "_revision", "") != catalogRevision()) return null
+        return value
+    }
 
-    /** Persist a successful measurement for this network. */
-    fun remember(context: Context, profile: FragmentProfile) {
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .edit().putString(PROFILE_PREFIX + networkKey(context), profile.key).apply()
+    /** Failed measurements expire quickly; a changed catalog can be tried immediately. */
+    fun measuredUnavailable(context: Context): Boolean = measuredValue(context) == NO_PROFILE
+
+    fun remember(context: Context, profile: FragmentProfile, network: String = networkKey(context)) {
+        saveMeasurement(context, profile.key, network)
         ConnectionLog.record("$TAG tuned for this network (${profile.attempt})")
     }
 
-    /** Persist "fragmentation does not work on this network". */
-    fun recordNoProfile(context: Context) {
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .edit().putString(PROFILE_PREFIX + networkKey(context), NO_PROFILE).apply()
+    fun recordNoProfile(context: Context, network: String = networkKey(context)) {
+        saveMeasurement(context, NO_PROFILE, network)
+    }
+
+    private fun saveMeasurement(context: Context, value: String, network: String) {
+        // A Wi-Fi/mobile handover during the probe must not poison the new network's cache.
+        if (network != networkKey(context)) return
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val key = PROFILE_PREFIX + network
+        val editor = prefs.edit()
+        // Bound retained networks, including old Wi-Fi handles.
+        prefs.all.filterKeys { it.startsWith(PROFILE_PREFIX) && it.endsWith("_at") }
+            .entries.sortedBy { (it.value as? Long) ?: 0L }
+            .let { entries ->
+                entries.take((entries.size - 63).coerceAtLeast(0)).forEach { entry ->
+                    val base = entry.key.removeSuffix("_at")
+                    editor.remove(base).remove(base + "_at").remove(base + "_revision")
+                }
+            }
+        editor.putString(key, value).putLong(key + "_at", System.currentTimeMillis())
+            .putString(key + "_revision", catalogRevision()).apply()
     }
 
     /** Drop every measurement, so the next connect re-probes. For the settings row. */
@@ -291,8 +320,8 @@ object SmartSplit {
      */
     fun summary(context: Context): String = when {
         !enabled(context) -> Strings.t("Off")
-        measuredUnavailable(context) -> "On · not effective on this network"
-        cachedProfile(context) == null -> "On · will measure this network"
+        measuredUnavailable(context) -> Strings.t("On · not effective on this network")
+        cachedProfile(context) == null -> Strings.t("On · will measure this network")
         else -> Strings.t("On · tuned for this network")
     }
 
@@ -310,19 +339,29 @@ object SmartSplit {
      * confirms the session carries data.
      */
     fun probeThroughSocks(socksPort: Int, timeoutMs: Int): Boolean {
+        if (timeoutMs <= 0) return false
+        val deadline = android.os.SystemClock.elapsedRealtime() + timeoutMs
         for (host in PROBE_HOSTS) {
-            if (probeOne(socksPort, host, timeoutMs)) return true
+            val remaining = (deadline - android.os.SystemClock.elapsedRealtime()).toInt()
+            if (remaining <= 0) break
+            if (probeOne(socksPort, host, remaining)) return true
         }
         return false
     }
 
     private fun probeOne(socksPort: Int, host: String, timeoutMs: Int): Boolean {
         var raw: Socket? = null
+        var expiry: java.util.concurrent.ScheduledFuture<*>? = null
         try {
-            raw = Socket()
+            val watched = Socket()
+            raw = watched
+            // One wall-clock deadline covers SOCKS negotiation, TLS and HTTP.
+            expiry = probeDeadlines.schedule(
+                { runCatching { watched.close() } }, timeoutMs.toLong(), java.util.concurrent.TimeUnit.MILLISECONDS
+            )
             raw.tcpNoDelay = true
             raw.soTimeout = timeoutMs
-            raw.connect(InetSocketAddress("127.0.0.1", socksPort), 3_000)
+            raw.connect(InetSocketAddress("127.0.0.1", socksPort), minOf(3_000, timeoutMs))
             val output = raw.getOutputStream()
             val input = raw.getInputStream()
 
@@ -363,6 +402,7 @@ object SmartSplit {
             val tls = (SSLSocketFactory.getDefault() as SSLSocketFactory)
                 .createSocket(raw, host, 443, false) as SSLSocket
             tls.soTimeout = timeoutMs
+            tls.sslParameters = tls.sslParameters.apply { endpointIdentificationAlgorithm = "HTTPS" }
             tls.startHandshake()
             val tlsOut = tls.outputStream
             tlsOut.write(
@@ -382,6 +422,7 @@ object SmartSplit {
         } catch (_: Exception) {
             return false
         } finally {
+            expiry?.cancel(false)
             runCatching { raw?.close() }
         }
     }
