@@ -10,6 +10,16 @@ val targetAbis = (project.findProperty("targetAbi") as String?)
     ?.map(String::trim)
     ?.filter(String::isNotEmpty)
     ?: listOf("arm64-v8a", "armeabi-v7a", "x86_64")
+// Explicit opt-in for experimental native inspection APKs; ordinary releases are unchanged.
+val openVpnNativeDir = providers.gradleProperty("openVpnNativeDir").orNull
+if (openVpnNativeDir != null) {
+    require(targetAbis.all { it in listOf("arm64-v8a", "armeabi-v7a") })
+    targetAbis.forEach { abi ->
+        require(file("$openVpnNativeDir/$abi/libmolido_openvpn.so").isFile) {
+            "Missing experimental OpenVPN native library for $abi"
+        }
+    }
+}
 val releaseKeystore = project.findProperty("aetheryKeystore") as String?
 
 kotlin {
@@ -37,6 +47,12 @@ android {
             abiFilters += listOf("arm64-v8a", "armeabi-v7a")
         }
 
+    }
+
+    if (openVpnNativeDir != null) {
+        sourceSets.getByName("main").jniLibs.srcDir(openVpnNativeDir)
+        // Keep the lab APK separate from the user's installed production VPN.
+        defaultConfig.applicationIdSuffix = ".openvpnlab"
     }
 
     splits {

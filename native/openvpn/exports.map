@@ -1,0 +1,4 @@
+{
+    global: Java_com_molido_vpn_OpenVpnCore_*;
+    local: *;
+};

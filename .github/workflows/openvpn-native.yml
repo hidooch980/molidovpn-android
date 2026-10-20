@@ -1,0 +1,146 @@
+name: Build and run pinned OpenVPN native core
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'native/openvpn/**'
+      - 'app/src/main/java/com/molido/vpn/OpenVpnCore.java'
+      - 'app/src/main/java/com/molido/vpn/VpnProfilePreflight.java'
+      - 'app/build.gradle.kts'
+      - '.github/workflows/openvpn-native.yml'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: openvpn-native-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cross-build:
+    strategy:
+      fail-fast: false
+      matrix:
+        abi: [arm64-v8a, armeabi-v7a, x86_64]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: platform-tools
+      - name: Android NDK and SDK
+        run: sdkmanager "ndk;26.3.11579264" "platforms;android-36" "build-tools;36.0.0"
+      - name: Build pinned dependencies and JNI library
+        env:
+          TARGET_ABI: ${{ matrix.abi }}
+        run: python3 native/openvpn/build.py --abi "$TARGET_ABI" --ndk "$ANDROID_HOME/ndk/26.3.11579264"
+      - name: Build isolated inspection probe APKs
+        env:
+          TARGET_ABI: ${{ matrix.abi }}
+        run: |
+          python3 native/openvpn/prepare-probe.py --abi "$TARGET_ABI"
+          chmod +x gradlew
+          ./gradlew -p native/openvpn/probe assembleDebug assembleDebugAndroidTest --no-daemon -PprobeAbi="$TARGET_ABI"
+          mkdir -p probe-artifacts
+          cp native/openvpn/probe/build/outputs/apk/debug/*-debug.apk probe-artifacts/probe-app.apk
+          cp native/openvpn/probe/build/outputs/apk/androidTest/debug/*-androidTest.apk probe-artifacts/probe-test.apk
+          python3 - "$TARGET_ABI" <<'PY'
+          import sys, zipfile
+          with zipfile.ZipFile("probe-artifacts/probe-app.apk") as apk:
+              assert "lib/" + sys.argv[1] + "/libmolido_openvpn.so" in apk.namelist()
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: openvpn-probe-${{ matrix.abi }}
+          path: probe-artifacts/
+          if-no-files-found: error
+      - name: Keep experimental native library and provenance
+        uses: actions/upload-artifact@v4
+        with:
+          name: openvpn-native-${{ matrix.abi }}
+          path: native/openvpn/dist/${{ matrix.abi }}/
+          if-no-files-found: error
+
+  android-runtime:
+    needs: cross-build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          name: openvpn-probe-x86_64
+          path: probe-artifacts
+      - name: Enable emulator acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Load production JNI bridge and evaluate local fixtures on Android
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          target: default
+          disable-animations: true
+          script: bash native/openvpn/run-probe.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: openvpn-android-runtime-report
+          path: probe-runtime.txt
+          if-no-files-found: warn
+
+  experimental-app:
+    needs: cross-build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: platform-tools
+      - run: sdkmanager "ndk;26.3.11579264" "cmake;3.22.1" "platforms;android-36" "build-tools;36.0.0"
+      - uses: actions/download-artifact@v4
+        with:
+          name: openvpn-native-arm64-v8a
+          path: native/openvpn/dist/arm64-v8a
+      - uses: actions/download-artifact@v4
+        with:
+          name: openvpn-native-armeabi-v7a
+          path: native/openvpn/dist/armeabi-v7a
+      - name: Rust toolchain
+        run: |
+          rustup target add aarch64-linux-android armv7-linux-androideabi
+          cargo install cargo-ndk --locked
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core/aether -> target
+      - run: bash tools/fetch-binaries.sh
+      - name: Build separate lab app with native OpenVPN inspection
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:assembleDebug --no-daemon \
+            -PtargetAbi=arm64-v8a,armeabi-v7a \
+            -PopenVpnNativeDir="$PWD/native/openvpn/dist" \
+            -PmolidoVersionName=OpenVPN-lab-inspection-only
+          python3 native/openvpn/verify-apk.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: molidovpn-openvpn-lab-no-tunnel
+          path: |
+            app/build/outputs/apk/debug/*.apk
+            native/openvpn/dist/*/deps.lock.json
+            native/openvpn/dist/*/licenses/
+          if-no-files-found: error
