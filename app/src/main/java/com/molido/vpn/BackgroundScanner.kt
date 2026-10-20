@@ -110,6 +110,7 @@ object BackgroundScanner {
         var tested = 0
         for (batch in pool.chunked(BATCH)) {
             if (cancelled || !canRun(app)) break
+            if (healthy.get() >= 8) break
             if (System.currentTimeMillis() - started > RUNTIME_CAP_MS) break
             val file = runCatching {
                 ShardConfigs.writeConfig(app, "bg-scan.json", ShardConfigs.probeConfig(app, batch, BASE_PORT))
