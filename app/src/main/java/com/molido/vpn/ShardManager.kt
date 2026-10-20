@@ -574,8 +574,8 @@ object ShardManager {
      * fall back to the node-only config — which is what the user had before
      * this feature existed.
      *
-     * A cached measurement skips the loop and is trusted without re-probing —
-     * that is the point of caching it.
+     * A cached measurement goes first, but is verified through TLS again.
+     * Failure falls through to the other profiles without latching user cancellation.
      */
     private fun startSmartSplit(
         context: Context,
@@ -585,6 +585,7 @@ object ShardManager {
         logLevel: String,
     ): Boolean {
         if (!SmartSplit.enabled(context)) return false
+        val measurementNetwork = SmartSplit.networkKey(context)
         if (SmartSplit.measuredUnavailable(context)) {
             ConnectionLog.record("$TAG Smart Split not effective on this network; node-only")
             return false
@@ -598,11 +599,9 @@ object ShardManager {
         }
 
         val cached = SmartSplit.cachedProfile(context)
-        val candidates = if (cached != null) {
-            listOf(cached)
-        } else {
-            SmartSplitSub.profiles(context)
-        }
+        val candidates = (listOfNotNull(cached) + SmartSplitSub.profiles(context))
+            .distinctBy { it.key }
+            .filter { FragmentMasks.valid(it.masks) }
         if (candidates.isEmpty()) {
             // No profiles at all — not even the seed. Smart Split cannot run;
             // the node-only config is the honest fallback, not a silent skip.
@@ -621,16 +620,16 @@ object ShardManager {
             val splitFile = ShardConfigs.writeConfig(context, "tunnel.json", splitConfig)
             if (!launch(context, splitFile, TAG)) continue
             if (!awaitListener(port)) {
-                stop()
+                killProcess()
                 continue
             }
             // The measurement: a real fragmented TLS handshake to a host the censor
             // inspects. Not a latency ping — see [SmartSplit] for why a port-80 or
             // whitelisted-host probe returns a confident wrong answer.
-            val ok = cached != null ||
-                SmartSplit.probeThroughSocks(port, profile.probeBudgetMs)
+            val ok = SmartSplit.probeThroughSocks(port, profile.probeBudgetMs)
             if (ok) {
-                if (cached == null) SmartSplit.remember(context, profile)
+                if (stopRequestedDuringStart) { killProcess(); return false }
+                SmartSplit.remember(context, profile, measurementNetwork)
                 running.set(true)
                 activeNode = winner
                 ConnectionLog.record("$TAG up on $port via ${LogRedactor.nodeTag(winner.key)} · Smart Split active")
@@ -638,11 +637,12 @@ object ShardManager {
                 return true
             }
             ConnectionLog.record("$TAG Smart Split: ${profile.attempt} did not carry a blocked site")
-            stop()
+            killProcess()
         }
         // No profile worked: remembered, so the next connect on this network
         // does not pay every probe budget again.
-        SmartSplit.recordNoProfile(context)
+        if (stopRequestedDuringStart) return false
+        SmartSplit.recordNoProfile(context, measurementNetwork)
         ConnectionLog.record("$TAG Smart Split unavailable here; using node for everything")
         return false
     }
