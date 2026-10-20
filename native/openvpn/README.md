@@ -2,7 +2,7 @@
 
 This experimental branch builds the official OpenVPN 3 core and a JNI profile
 inspection bridge. It does not yet connect a VPN, configure Android TUN, or
-publish an APK. The generated .so is not automatically copied into app/jniLibs.
+publish a production release. Native libraries are opt-in; ordinary releases are unchanged.
 
 All source revisions are fixed in deps.lock.json. build.py verifies each Git
 checkout, cross-builds OpenSSL, builds the core, and checks JNI exports, external
@@ -26,3 +26,25 @@ Upstreams:
 - https://github.com/chriskohlhoff/asio
 - https://github.com/lz4/lz4
 - https://github.com/fmtlib/fmt
+
+## Android runtime and packaging gates
+
+The native workflow now also cross-builds x86_64 **for emulator testing only**.
+A separate, minimal probe APK packages the actual production OpenVpnCore and
+VpnProfilePreflight Java sources plus the JNI library. It has no INTERNET
+permission, no launcher and no VPN service. Its instrumentation verifies native
+loading, the pinned revision, repeated parsing of a generated CA/auth profile,
+and rejection of an oversized profile that passes Java preflight. The metadata
+parser does not validate a certificate chain or authenticate a server. This is a parser
+runtime test, not an authenticated OpenVPN connection or ARM phone runtime test.
+
+ARM libraries can be included explicitly with
+`-PopenVpnNativeDir=/absolute/path/to/native/openvpn/dist`.
+This opt-in uses a separate `com.mobin.mobin_vpn.openvpnlab` package, debug signing,
+and an inspection-only version label so it cannot replace the production app.
+The workflow verifies both ARM ABIs in the lab APKs and retains upstream license
+files alongside the artifacts. Do not install this build as a production update.
+
+A green cross-build alone is insufficient: inspect the android-runtime and
+experimental-app jobs separately. OpenVPN remains absent from the selectable
+connection methods until authenticated TUN/socket-protection and routing tests pass.

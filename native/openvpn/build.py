@@ -36,7 +36,7 @@ def checkout(name):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--abi", choices=["arm64-v8a", "armeabi-v7a"], required=True)
+    parser.add_argument("--abi", choices=["arm64-v8a", "armeabi-v7a", "x86_64"], required=True)
     parser.add_argument("--ndk", type=Path, required=True)
     args = parser.parse_args()
     ndk = args.ndk.resolve()
@@ -52,7 +52,8 @@ def main():
     env = os.environ.copy()
     env["ANDROID_NDK_ROOT"] = str(ndk)
     env["PATH"] = str(tools) + os.pathsep + env["PATH"]
-    target = "android-arm64" if args.abi == "arm64-v8a" else "android-arm"
+    target = {"arm64-v8a": "android-arm64", "armeabi-v7a": "android-arm",
+              "x86_64": "android-x86_64"}[args.abi]
     run(["perl", "Configure", target, "no-shared", "no-tests", "no-module",
          "--prefix=" + str(prefix), "--libdir=lib", "-D__ANDROID_API__=26", "-fPIC"], cwd=ssl, env=env)
     run(["make", "-j2", "build_libs"], cwd=ssl, env=env)

@@ -1,0 +1,5 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- No INTERNET permission: this probe must only parse local fixtures. -->
+    <application android:label="Molido OpenVPN native probe"
+        android:allowBackup="false" android:hasCode="true" />
+</manifest>
