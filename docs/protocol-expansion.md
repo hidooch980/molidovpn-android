@@ -1,6 +1,7 @@
 # OpenVPN and OpenConnect expansion — PHASE 0
 
-Status: design only. Neither protocol is implemented or selectable in the current APK.
+Status: profile preparation code is present on the development branch, pending CI validation.
+Neither new protocol can connect yet. No APK containing this work has been released.
 Approved scope: OpenVPN TCP/UDP, AnyConnect-compatible OpenConnect, and promotion of
 servers that actually work on the user's current Iranian network.
 Baseline inspected: Android main 0a5c15a53cb94e024f4f62b35e914c90290a96d9.
@@ -117,8 +118,35 @@ Do not publish shared provider credentials or scrape private accounts.
 
 ## Phase lock and current evidence
 
-PHASE 0: source integration review and acceptance plan prepared.
-PHASES 1–3: not implemented; native dependency selection/build and on-device
-authenticated tests remain outstanding. No new protocol or server was enabled.
-This documentation-only change needs no Android test run and must not trigger an
-APK publication. It is not evidence that the earlier media build succeeded.
+PHASE 0: source review and acceptance plan prepared.
+PHASE 1A: import preparation code added on the development branch:
+
+- Navigation opens a non-exported screen for importing self-contained OpenVPN
+  documents and saving HTTPS OpenConnect gateway addresses. The screen explicitly
+  says these protocols cannot connect yet and that profiles are untested.
+- Preflight checks preserve accepted payloads and reject unsupported options,
+  scripts/plugins, external files, malformed inline blocks, invalid ports and
+  unsafe gateway URLs. This is not the future native engine's parser.
+- Limits: 512 KB UTF-8 input, 64 remotes, 20 stored profiles, bounded encrypted
+  output. Duplicate profiles are rejected. Deletion is available from the list.
+- Original contents and gateway addresses use Keystore-backed AES-GCM in atomic
+  files under noBackupFilesDir. New strict SecureStore APIs never fall back to
+  plaintext. Existing legacy callers are unchanged.
+- No passwords/MFA are collected for OpenConnect yet. Payloads, document URLs and
+  underlying exceptions are not logged or displayed.
+- Profiles are not MethodRegistry candidates, subscription sources or part of the
+  settings export. They cannot disrupt the existing VPN session.
+
+Validation: the earlier local implementation passed 20 Java/JUnit preflight and
+encryption tests and an isolated Android API 26 Kotlin compilation. Sources were
+recovered after the execution environment became unavailable; those earlier
+results do not constitute validation of this exact recovered commit.
+The protocol-profiles workflow compiles Android sources and runs the 20 import
+and encryption tests without building Rust or publishing an APK. Its actual
+result must be checked before calling this phase verified.
+
+PHASE 1B (OpenVPN native), PHASE 2 (OpenConnect native), PHASE 3 (measured catalog):
+not implemented. Native dependency selection/build, engine integration and
+authenticated on-device routing tests remain outstanding. Full device UI and
+Keystore/storage tests are still needed even if CI passes.
+No production release is requested by this PR.

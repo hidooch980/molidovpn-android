@@ -1335,6 +1335,9 @@ class MainActivity : Activity() {
                 showCountryPicker { homeLocationCard?.text = locationCardText() }
             },
             item("Connection", "My configs") { openMyConfigs() },
+            item("Connection", "VPN profile preparation") {
+                startActivity(Intent(this, VpnProfilesActivity::class.java))
+            },
             item("Connection", "Refresh server list") {
                 toastShort(Strings.t("Refreshing server list…"))
                 V2raySubscription.refreshIfDue(this, force = true) { count ->
