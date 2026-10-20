@@ -2,6 +2,13 @@ plugins { id("com.android.application") version "8.13.2" }
 
 val probeAbi = providers.gradleProperty("probeAbi").getOrElse("x86_64")
 require(probeAbi in listOf("x86_64", "arm64-v8a", "armeabi-v7a"))
+val stageProductionJava by tasks.registering(Sync::class) {
+    from("../../../app/src/main/java") {
+        include("com/molido/vpn/OpenVpnCore.java", "com/molido/vpn/VpnProfilePreflight.java")
+    }
+    into(layout.buildDirectory.dir("generated/productionJava"))
+}
+
 android {
     namespace = "com.molido.vpn.nativeprobe"
     compileSdk = 36
@@ -17,8 +24,7 @@ android {
     }
     sourceSets {
         getByName("main") {
-            java.srcDir("../../../app/src/main/java")
-            java.include("com/molido/vpn/OpenVpnCore.java", "com/molido/vpn/VpnProfilePreflight.java")
+            java.srcDir(layout.buildDirectory.dir("generated/productionJava"))
             jniLibs.srcDir("jniLibs")
             assets.srcDir("assets")
         }
@@ -28,3 +34,5 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 }
+
+tasks.named("preBuild").configure { dependsOn(stageProductionJava) }
