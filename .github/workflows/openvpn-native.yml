@@ -1,0 +1,42 @@
+name: Build pinned OpenVPN native core
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'native/openvpn/**'
+      - '.github/workflows/openvpn-native.yml'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: openvpn-native-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cross-build:
+    strategy:
+      fail-fast: false
+      matrix:
+        abi: [arm64-v8a, armeabi-v7a]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: platform-tools
+      - name: Android NDK
+        run: sdkmanager "ndk;26.3.11579264"
+      - name: Build pinned dependencies and JNI library
+        env:
+          TARGET_ABI: ${{ matrix.abi }}
+        run: python3 native/openvpn/build.py --abi "$TARGET_ABI" --ndk "$ANDROID_HOME/ndk/26.3.11579264"
+      - name: Keep experimental native library and provenance
+        uses: actions/upload-artifact@v4
+        with:
+          name: openvpn-native-${{ matrix.abi }}
+          path: native/openvpn/dist/${{ matrix.abi }}/
+          if-no-files-found: error

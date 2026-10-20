@@ -1,0 +1,27 @@
+{
+  "schema": 1,
+  "openvpn": {
+    "repo": "OpenVPN/openvpn3",
+    "sha": "1b4db00849bfb27e05c226cd13f6985527b6bb79"
+  },
+  "openssl": {
+    "repo": "openssl/openssl",
+    "ref": "openssl-3.5",
+    "sha": "9dc049e97a1c745eba104ead081a7623d3ce8bd0"
+  },
+  "asio": {
+    "repo": "chriskohlhoff/asio",
+    "ref": "asio-1-36-0",
+    "sha": "231cb29bab30f82712fcd54faaea42424cc6e710"
+  },
+  "lz4": {
+    "repo": "lz4/lz4",
+    "ref": "v1.10.0",
+    "sha": "ebb370ca83af193212df4dcbadcc5d87bc0de2f0"
+  },
+  "fmt": {
+    "repo": "fmtlib/fmt",
+    "ref": "12.1.0",
+    "sha": "407c905e45ad75fc29bf0f9bb7c5c2fd3475976f"
+  }
+}
