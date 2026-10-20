@@ -2039,6 +2039,7 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        LiveCatalogSync.acquire(this, applicationContext)
         // The service can start before the activity ever runs (quick tile,
         // auto-reconnect after process death), so it seeds the language
         // resolver itself. Cheap: one field write per start.
@@ -2192,6 +2193,7 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
     }
 
     override fun onDestroy() {
+        LiveCatalogSync.release(this)
         cancelAutoSelection()
         cancelAutoReconnect()
         stopTorProgressPolling()
@@ -4299,8 +4301,7 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
             val methods = MethodRegistry.all(this).filter { m ->
                 val c = m.candidate
                 !AppRemote.isDisabled(this, c.coreName) &&
-                    (wantedCountry.isEmpty() || c.coreName == "v2ray" || c.coreName == MyConfigs.PROTOCOL) &&
-                    !(udpOff && c.coreName in MethodRegistry.UDP)
+                    (wantedCountry.isEmpty() || c.coreName == "v2ray" || c.coreName == MyConfigs.PROTOCOL)
             }
             if (wantedCountry.isNotEmpty()) ConnectionLog.record("Smart: country $wantedCountry — V2Ray/My configs from it only")
             val netKey = smartNetworkKey()
@@ -4319,7 +4320,7 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
             if (token != autoToken) return
             val shared = methods.mapNotNull { m -> ConnectionReports.modeScore(this, m.candidate.coreName)?.let { m.id to it } }.toMap()
             // Iranian user: WARP-family exits are in IR, so foreign exits are tried first.
-            val demote = if (autoHomeIsIran(prefs)) MethodRegistry.WARP_FAMILY else emptySet()
+            val demote = (if (autoHomeIsIran(prefs)) MethodRegistry.WARP_FAMILY else emptySet()) + (if (udpOff) MethodRegistry.UDP else emptySet())
             var order = SmartPlan.order(methods.map { it.candidate }, memory, pre, shared, demote)
             Log.i(autoLogTag, "smart net=$netKey order=${order.joinToString { it.label }} lowBattery=$lowBattery")
             ConnectionLog.record("Smart: ${order.size} methods, order ${order.joinToString(" → ") { it.label }}")

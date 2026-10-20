@@ -731,7 +731,7 @@ class MainActivity : Activity() {
         mainRoot.addView(consoleScroll, FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.MATCH_PARENT,
-        ).apply { topMargin = dp(52) })
+        ).apply { topMargin = dp(70) })
         fitConsoleToViewport(consoleScroll, console)
         mainRoot.addView(header, FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
@@ -747,7 +747,7 @@ class MainActivity : Activity() {
                 header.layoutParams = this
             }
             (consoleScroll.layoutParams as FrameLayout.LayoutParams).apply {
-                topMargin = insets.systemWindowInsetTop + dp(52)
+                topMargin = insets.systemWindowInsetTop + dp(70)
                 bottomMargin = insets.systemWindowInsetBottom
                 consoleScroll.layoutParams = this
             }
@@ -774,6 +774,7 @@ class MainActivity : Activity() {
     }
 
     override fun onStart() {
+        LiveCatalogSync.acquire(this, applicationContext) { onRemoteUpdated() }
         super.onStart()
         observeSmartConnect()
         val filter = IntentFilter(MolidoVpnService.ACTION_STATUS)
@@ -800,6 +801,7 @@ class MainActivity : Activity() {
     }
 
     override fun onStop() {
+        LiveCatalogSync.release(this)
         smartScope?.cancel()
         smartScope = null
         if (receiverRegistered) {
@@ -810,6 +812,8 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        navigationDrawer?.dismiss()
+        navigationDrawer = null
         // The session ticker is a Handler post, not tied to a view, so it has to
         // be cancelled by hand. The dial's own animators already stop in
         // onDetachedFromWindow.
@@ -1319,56 +1323,129 @@ class MainActivity : Activity() {
         showConnectionProgress(Strings.t("Verifying"), Strings.t("Checking that traffic really passes"))
     }
 
+    private var navigationDrawer: MolidoNavigationDrawer? = null
+
+    private fun openNavigationDrawer() {
+        if (navigationDrawer?.isShowing == true) return
+        fun item(group: String, title: String, action: () -> Unit) =
+            MolidoNavigationDrawer.Entry(Strings.t(group), Strings.t(title), "", action)
+        val drawer = MolidoNavigationDrawer(this, palette, appVersion(), listOf(
+            item("Connection", "Connection mode") { openModeScreen() },
+            item("Connection", "Country") {
+                showCountryPicker { homeLocationCard?.text = locationCardText() }
+            },
+            item("Connection", "My configs") { openMyConfigs() },
+            item("Connection", "Refresh server list") {
+                toastShort(Strings.t("Refreshing server list…"))
+                V2raySubscription.refreshIfDue(this, force = true) { count ->
+                    runOnUiThread {
+                        if (!isFinishing && !isDestroyed)
+                            toastShort(Strings.tf("Cached server list: %s nodes", count))
+                    }
+                }
+            },
+            item("Tools", "Traffic monitor") { openTrafficMonitorScreen() },
+            item("Tools", "Split tunneling") { openSplitTunnelScreen() },
+            item("Tools", "DNS") { openDnsPicker() },
+            item("Tools", "Connection check") { openConnectionCheck() },
+            item("Tools", "Connection logs") { openLogsScreen() },
+            item("Personalize", "Theme") { chooseTheme() },
+            item("Personalize", "Language") { chooseLanguage() },
+            item("Personalize", "Settings") { openSettingsScreen() },
+            item("Support", "Check for updates") { appUpdater.checkForUpdate() },
+            item("Support", "Report a problem") { reportProblem() },
+            item("Support", "Tell your friends") { showShareSheet() },
+            item("Support", "Donate") { showDonateSheet() },
+            item("Support", "Open-source licenses") { showLicensesSheet() }
+        ))
+        navigationDrawer = drawer
+        drawer.setOnDismissListener { navigationDrawer = null }
+        drawer.show()
+    }
+
+    private fun openConnectionCheck() {
+        val cm = getSystemService(CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+        val online = cm.activeNetwork?.let { cm.getNetworkCapabilities(it) }
+            ?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+        val finding = ConnectionDiagnosis.inspect(
+            online,
+            visualState == OrbitDialView.State.CONNECTED,
+            CountryFilter.selected(this),
+            V2raySubscription.cachedCount(this),
+            ConnectionLog.snapshot().takeLast(80)
+        )
+        val key = when (finding) {
+            ConnectionDiagnosis.Finding.OFFLINE -> "CHECK_OFFLINE"
+            ConnectionDiagnosis.Finding.ACTIVE -> "CHECK_ACTIVE"
+            ConnectionDiagnosis.Finding.COUNTRY -> "CHECK_COUNTRY"
+            ConnectionDiagnosis.Finding.EMPTY_POOL -> "CHECK_EMPTY"
+            ConnectionDiagnosis.Finding.DNS -> "CHECK_DNS"
+            ConnectionDiagnosis.Finding.TIMEOUT -> "CHECK_TIMEOUT"
+            else -> "CHECK_UNKNOWN"
+        }
+        val dialog = android.app.AlertDialog.Builder(this)
+            .setTitle(Strings.t("Connection check"))
+            .setMessage(Strings.t(key))
+            .setNegativeButton(Strings.t("Close"), null)
+            .setNeutralButton(Strings.t("Report a problem")) { _, _ ->
+                reportProblem()
+            }
+        when (finding) {
+            ConnectionDiagnosis.Finding.COUNTRY ->
+                dialog.setPositiveButton(Strings.t("Country")) { _, _ ->
+                    showCountryPicker {
+                        homeLocationCard?.text = locationCardText()
+                    }
+                }
+            ConnectionDiagnosis.Finding.EMPTY_POOL ->
+                dialog.setPositiveButton(Strings.t("Refresh server list")) { _, _ ->
+                    V2raySubscription.refreshIfDue(this, force = true)
+                    toastShort(Strings.t("Refreshing server list…"))
+                }
+            ConnectionDiagnosis.Finding.DNS ->
+                dialog.setPositiveButton(Strings.t("DNS")) { _, _ -> openDnsPicker() }
+            ConnectionDiagnosis.Finding.TIMEOUT,
+            ConnectionDiagnosis.Finding.UNKNOWN ->
+                dialog.setPositiveButton(Strings.t("Connection mode")) { _, _ ->
+                    openModeScreen()
+                }
+            else -> Unit
+        }
+        dialog.show()
+    }
+
     private fun createHeader(): LinearLayout = LinearLayout(this).apply {
         gravity = Gravity.CENTER_VERTICAL
-        // MolidoVPN identity row: logo + wordmark on one side; the live status
-        // pill (LED + state text) and the settings entry on the other.
-        addView(ImageView(this@MainActivity).apply {
-            setImageResource(R.mipmap.ic_launcher)
-            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-        }, LinearLayout.LayoutParams(dp(30), dp(30)).apply { marginEnd = dp(10) })
-        addView(label(Strings.t("MolidoVPN"), 17f, INK, TypefaceStyle.MEDIUM).apply {
+        minimumHeight = dp(48)
+        addView(label("☰", 25f, INK, TypefaceStyle.MEDIUM).apply {
+            gravity = Gravity.CENTER
+            contentDescription = Strings.t("Menu")
+            isFocusable = true
+            background = roundedBackground(SURFACE, 16, palette.divider)
+            setOnClickListener { openNavigationDrawer() }
+        }, LinearLayout.LayoutParams(dp(48), dp(48)))
+        addView(label("MOLIDO VPN", 17f, INK, TypefaceStyle.MEDIUM).apply {
             maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
+        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+            marginStart = dp(12)
+            marginEnd = dp(8)
         })
-        addView(View(this@MainActivity), LinearLayout.LayoutParams(0, 1, 1f))
-        statusPillText = label(Strings.t("Not connected"), 12f, MUTED, TypefaceStyle.MEDIUM).apply {
+        statusPillText = label(Strings.t("Not connected"), 11.5f, MUTED, TypefaceStyle.MEDIUM).apply {
             maxLines = 1
+            maxWidth = dp(100)
+            ellipsize = android.text.TextUtils.TruncateAt.END
         }
         statusPill = LinearLayout(this@MainActivity).apply {
-            orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(12), dp(6), dp(12), dp(6))
-            background = Sculpt.sculptedBackground(resources.displayMetrics.density, palette.surface, 16)
-            addView(statusLed, LinearLayout.LayoutParams(dp(8), dp(8)).apply { marginEnd = dp(8) })
+            setPadding(dp(10), dp(8), dp(10), dp(8))
+            background = roundedBackground(SURFACE, 16, palette.divider)
+            addView(statusLed, LinearLayout.LayoutParams(dp(7), dp(7)).apply {
+                marginEnd = dp(6)
+            })
             addView(statusPillText)
         }
-        addView(statusPill, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT,
-        ))
-        addView(label("♥", 20f, palette.danger, TypefaceStyle.MEDIUM).apply {
-            gravity = Gravity.CENTER
-            contentDescription = Strings.t("Donate")
-            isClickable = true
-            isFocusable = true
-            val outValue = android.util.TypedValue()
-            context.theme.resolveAttribute(android.R.attr.selectableItemBackgroundBorderless, outValue, true)
-            setBackgroundResource(outValue.resourceId)
-            setOnClickListener { showDonateSheet() }
-        }, LinearLayout.LayoutParams(dp(40), dp(44)).apply { marginStart = dp(4) })
-        addView(ImageView(this@MainActivity).apply {
-            setImageResource(R.drawable.ic_settings)
-            contentDescription = "تنظیمات"
-            isClickable = true
-            isFocusable = true
-            val p = dp(12)
-            setPadding(p, p, p, p)
-            setColorFilter(INK)
-            val outValue = android.util.TypedValue()
-            context.theme.resolveAttribute(android.R.attr.selectableItemBackgroundBorderless, outValue, true)
-            setBackgroundResource(outValue.resourceId)
-            setOnClickListener { openSettingsScreen() }
-        }, LinearLayout.LayoutParams(dp(44), dp(44)))
+        addView(statusPill)
     }
 
     private fun railLabel(protocol: Protocol): String = when (protocol) {
@@ -3575,6 +3652,11 @@ class MainActivity : Activity() {
         ).apply { topMargin = dp(top) }
         content.addView(sectionLabel(Strings.t("Main settings")), mainParams(0))
         content.addView(navRow(Strings.t("Language"), AppLanguage.label(currentLanguagePref())) { chooseLanguage() }, mainParams(10))
+        content.addView(createToggleRow(
+            Strings.t("Live updates (5 s)"),
+            Strings.t("Refresh lists without interrupting the tunnel"),
+            preferences().getBoolean(LiveCatalogSync.PREF, true),
+        ) { preferences().edit().putBoolean(LiveCatalogSync.PREF, it).apply() }, mainParams())
         content.addView(createToggleRow(
             Strings.t("Auto-connect"),
             Strings.t("Connect automatically after the phone restarts"),

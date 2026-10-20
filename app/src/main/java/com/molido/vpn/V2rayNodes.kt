@@ -9,8 +9,6 @@ import java.net.URL
 import java.net.URLDecoder
 import java.util.Locale
 import java.util.concurrent.Callable
-import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -645,33 +643,8 @@ object V2raySubscription {
 
     /** Fetch all sources in parallel, merge, dedupe; fallback when they yield nothing. */
     private fun refreshBlocking(context: Context): Int {
-        val executor = Executors.newFixedThreadPool(SOURCES.size)
-        val lines = ArrayList<String>()
-        try {
-            val futures = executor.invokeAll(
-                SOURCES.map { url -> Callable<List<String>> { fetchLines(url) } },
-                READ_TIMEOUT_MS.toLong() + CONNECT_TIMEOUT_MS,
-                TimeUnit.MILLISECONDS,
-            )
-            futures.forEach { f ->
-                try {
-                    if (!f.isCancelled) lines.addAll(f.get())
-                } catch (_: Exception) {
-                }
-            }
-        } finally {
-            executor.shutdownNow()
-        }
-        var parsed = V2rayNodes.parse(lines)
-        if (parsed.isEmpty()) {
-            parsed = V2rayNodes.parse(fetchLines(FALLBACK))
-        }
-        // workers.dev is often filtered in Iran: the aggregator's GitHub copy has the same flags.
-        // Then the owner's extra mirrors (remote/resilience.json: Pages, R2, a domestic bucket...).
-        for (mirror in subscriptionMirrors(ResilienceConfig.subMirrors(context))) {
-            if (parsed.isNotEmpty()) break
-            parsed = V2rayNodes.parse(fetchLines(mirror))
-        }
+        val sources = (SOURCES + FALLBACK + subscriptionMirrors(ResilienceConfig.subMirrors(context))).distinct()
+        val parsed = SubscriptionRace.fetch(sources.map { url -> Callable { V2rayNodes.parse(fetchLines(url)) } }, (READ_TIMEOUT_MS + CONNECT_TIMEOUT_MS).toLong()).distinctBy { it.uri }
         if (parsed.isEmpty()) {
             ConnectionLog.record("$TAG no usable nodes — keeping previous cache")
             return cachedCount(context)
@@ -690,22 +663,6 @@ object V2raySubscription {
     /** Built-in mirrors first, then configured ones; deduped, empty-safe. */
     fun subscriptionMirrors(extra: List<String>): List<String> = (MIRRORS + extra).distinct()
 
-    private fun fetchLines(url: String): List<String> = try {
-        val connection = URL(url).openConnection() as HttpURLConnection
-        try {
-            connection.connectTimeout = CONNECT_TIMEOUT_MS
-            connection.readTimeout = READ_TIMEOUT_MS
-            connection.instanceFollowRedirects = true
-            connection.setRequestProperty("User-Agent", "Mozilla/5.0")
-            if (connection.responseCode != HttpURLConnection.HTTP_OK) {
-                emptyList()
-            } else {
-                V2rayNodes.decodeBody(connection.inputStream.bufferedReader().use { it.readText() })
-            }
-        } finally {
-            connection.disconnect()
-        }
-    } catch (_: Exception) {
-        emptyList()
-    }
+    private fun fetchLines(url: String): List<String> =
+        ConditionalCatalogFetch.get(url)?.let { V2rayNodes.decodeBody(it) } ?: emptyList()
 }

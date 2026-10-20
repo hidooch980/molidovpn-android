@@ -267,18 +267,5 @@ object ResilienceConfig {
         }, "resilience-refresh").apply { isDaemon = true }.start()
     }
 
-    private fun fetch(url: String): String? = try {
-        val c = URL(url).openConnection() as HttpURLConnection
-        try {
-            c.connectTimeout = 10_000
-            c.readTimeout = 15_000
-            c.setRequestProperty("User-Agent", "MolidoVPN-Android")
-            if (c.responseCode != 200) null
-            else c.inputStream.bufferedReader().use { it.readText() }.takeIf { it.isNotBlank() && it.length <= MAX_BODY_CHARS }
-        } finally {
-            c.disconnect()
-        }
-    } catch (_: Exception) {
-        null
-    }
+    private fun fetch(url: String): String? = ConditionalCatalogFetch.get(url, MAX_BODY_CHARS)
 }

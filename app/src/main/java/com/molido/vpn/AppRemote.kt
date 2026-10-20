@@ -161,18 +161,5 @@ object AppRemote {
         editor.apply()
     }
 
-    private fun get(file: String): String? = try {
-        val connection = URL(BASE + file).openConnection() as HttpURLConnection
-        try {
-            connection.connectTimeout = TIMEOUT_MS
-            connection.readTimeout = TIMEOUT_MS
-            connection.setRequestProperty("User-Agent", "MolidoVPN-Android")
-            if (connection.responseCode != 200) null
-            else connection.inputStream.bufferedReader().use { it.readText() }.takeIf { it.length < 16_000 }
-        } finally {
-            connection.disconnect()
-        }
-    } catch (_: Exception) {
-        null
-    }
+    private fun get(file: String): String? = ConditionalCatalogFetch.get(BASE + file, 16_000)
 }

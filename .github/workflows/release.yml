@@ -16,7 +16,7 @@ concurrency:
 env:
   # Higher than every Flutter-era build (split APK codes were ~2000+run), so this installs as an update.
   VERSION_CODE: ${{ github.run_number }}
-  VERSION: 2.0.${{ github.run_number }}
+  VERSION: 3.1.${{ github.run_number }}
 
 jobs:
   android:
@@ -65,7 +65,7 @@ jobs:
           ./gradlew testReleaseUnitTest assembleRelease --no-daemon \
             -PtargetAbi=arm64-v8a,armeabi-v7a \
             -PaetheryKeystore=release.keystore \
-            -PmolidoVersionCode=$((20000 + VERSION_CODE)) \
+            -PmolidoVersionCode=$((31000 + VERSION_CODE)) \
             -PmolidoVersionName=$VERSION
           mkdir dist
           for f in app/build/outputs/apk/release/*.apk; do
