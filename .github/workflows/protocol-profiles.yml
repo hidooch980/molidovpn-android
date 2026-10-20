@@ -1,0 +1,52 @@
+name: Validate imported VPN profiles
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - '.github/workflows/protocol-profiles.yml'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: profile-validation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  imports:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: platform-tools
+      - name: Install Android build dependencies
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;26.3.11579264" "cmake;3.22.1"
+      - name: Fetch existing verified engine dependencies
+        run: bash tools/fetch-binaries.sh
+      - name: Compile Android sources and run import and encryption tests
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:testReleaseUnitTest --no-daemon \
+            -PtargetAbi=arm64-v8a \
+            -x buildRustCoreArm64V8a \
+            -x externalNativeBuildRelease \
+            --tests com.molido.vpn.VpnProfilePreflightTest \
+            --tests com.molido.vpn.ProfileCipherTest
+      - name: Keep test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vpn-profile-test-results
+          path: |
+            app/build/reports/tests/testReleaseUnitTest/
+            app/build/test-results/testReleaseUnitTest/
+          if-no-files-found: ignore

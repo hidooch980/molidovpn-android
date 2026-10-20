@@ -46,6 +46,11 @@ object SecureStore {
         return keyGenerator.generateKey()
     }
 
+    // Imported private keys must never be stored in plaintext when encryption fails.
+    fun encryptProfile(plainText: String): String = ProfileCipher.encrypt(getOrCreateKey(), plainText)
+
+    fun decryptProfile(cipherText: String): String = ProfileCipher.decrypt(getOrCreateKey(), cipherText)
+
     fun encrypt(plainText: String): String {
         if (plainText.isEmpty()) return ""
         return try {
