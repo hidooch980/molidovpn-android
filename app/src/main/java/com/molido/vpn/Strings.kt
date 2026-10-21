@@ -20,18 +20,23 @@ object Strings {
         "Add AnyConnect address" to Triple("Add AnyConnect address", "ثبت آدرس AnyConnect", "Add AnyConnect address"),
         "Profile name" to Triple("Profile name", "نام پروفایل", "Profile name"),
         "Delete profile?" to Triple("Delete profile?", "پروفایل حذف شود؟", "Delete profile?"),
-        "VPN_PROFILES_PREPARATION" to Triple("Save OpenVPN files and AnyConnect addresses here. Connection with these protocols is not available in this version yet.", "فایل OpenVPN و آدرس AnyConnect را اینجا نگه دار. اتصال با این پروتکل‌ها هنوز در این نسخه فعال نیست.", "Save OpenVPN files and AnyConnect addresses here. Connection with these protocols is not available in this version yet."),
+        "Import Proton / WireGuard file" to Triple("Import Proton / WireGuard file", "واردکردن فایل پروتون / WireGuard", "Import Proton / WireGuard file"),
+        "WIREGUARD_IMPORT_HELP" to Triple("Download your personal .conf from Proton account → Downloads → WireGuard. Standard WireGuard only; Stealth is not included. One full-tunnel peer, numeric endpoint and DNS required. VPN mode, MTU 1280. IPv4-only exports block IPv6. Unsupported settings are rejected.", "فایل شخصی .conf را از حساب پروتون ← Downloads ← WireGuard بگیر. فقط WireGuard معمولی؛ Stealth فعال نمی‌شود. یک سرور، مسیر کامل، آدرس عددی سرور و DNS لازم است. حالت VPN با MTU برابر ۱۲۸۰؛ در فایل بدون IPv6، این خانواده مسدود می‌شود. گزینه‌های ناسازگار رد می‌شوند.", "Standard WireGuard only; Stealth is not included. One full-tunnel peer, numeric endpoint and DNS required. VPN mode, MTU 1280. IPv4-only exports block IPv6."),
+        "WIREGUARD_DISCONNECT_FIRST" to Triple("Disconnect the active tunnel before starting this profile.", "قبل از اتصال این پروفایل، اتصال فعلی را قطع کن.", "Disconnect the active tunnel first."),
+        "WIREGUARD_VPN_MODE" to Triple("Select VPN tunnel type before connecting this profile.", "ابتدا نوع تونل را روی VPN بگذار.", "Select VPN tunnel type first."),
+        "WIREGUARD_STARTING" to Triple("Preparing personal WireGuard…", "در حال آماده‌سازی WireGuard شخصی…", "Preparing personal WireGuard…"),
+        "VPN_PROFILES_PREPARATION" to Triple("Personal WireGuard profiles can connect. OpenVPN files and AnyConnect addresses are preparation only; their connection engines are not available in this version.", "پروفایل شخصی WireGuard قابل اتصال است. فایل OpenVPN و آدرس AnyConnect فقط ذخیره می‌شوند؛ موتور اتصال آن‌ها هنوز در این نسخه فعال نیست.", "WireGuard profiles can connect. OpenVPN and AnyConnect are preparation only."),
         "VPN_PROFILES_LOADING" to Triple("Reading encrypted profiles…", "در حال خواندن پروفایل‌های رمز‌شده…", "Reading encrypted profiles…"),
         "VPN_PROFILES_SIZE" to Triple("The file is empty or too large (maximum 512 KB).", "فایل خالی یا بیش از حد بزرگ است؛ حداکثر ۵۱۲ کیلوبایت.", "The file is empty or too large (maximum 512 KB)."),
         "VPN_PROFILES_EXTERNAL" to Triple("Use a self-contained file with embedded certificates and keys. External files are not supported yet.", "از فایل دارای گواهی و کلید داخلی استفاده کن؛ فایل‌های وابسته هنوز پشتیبانی نمی‌شوند.", "Use a self-contained file with embedded certificates and keys. External files are not supported yet."),
         "VPN_PROFILES_UNSUPPORTED" to Triple("The file contains options or blocks that this importer does not support.", "فایل گزینه یا بخشی دارد که واردکننده فعلی پشتیبانی نمی‌کند.", "The file contains options or blocks that this importer does not support."),
         "VPN_PROFILES_GATEWAY" to Triple("Enter a valid HTTPS server address without username, password or query parameters.", "آدرس معتبر HTTPS سرور را بدون نام کاربری، رمز و پارامترهای پرس‌وجو وارد کن.", "Enter a valid HTTPS server address without username, password or query parameters."),
         "VPN_PROFILES_STORAGE_ERROR" to Triple("Could not read or save the encrypted profile. Nothing was saved as plaintext.", "خواندن یا ذخیره پروفایل رمز‌شده ممکن نشد. اطلاعات به‌صورت متن ساده ذخیره نشد.", "Could not read or save the encrypted profile. Nothing was saved as plaintext."),
-        "VPN_PROFILES_INVALID" to Triple("The OpenVPN file is malformed or is not a supported client profile.", "فایل OpenVPN ناقص است یا پروفایل کلاینت پشتیبانی‌شده نیست.", "The OpenVPN file is malformed or is not a supported client profile."),
+        "VPN_PROFILES_INVALID" to Triple("The profile is malformed or contains settings this version does not support.", "پروفایل ناقص است یا تنظیماتی دارد که این نسخه پشتیبانی نمی‌کند.", "The profile is malformed or contains settings this version does not support."),
         "VPN_PROFILES_LIMIT" to Triple("The limit is 20 profiles. Delete an old profile before adding another.", "حداکثر ۲۰ پروفایل؛ برای افزودن مورد جدید یکی از قبلی‌ها را حذف کن.", "The limit is 20 profiles. Delete an old profile before adding another."),
         "VPN_PROFILES_DUPLICATE" to Triple("This profile is already saved.", "این پروفایل قبلاً ذخیره شده است.", "This profile is already saved."),
         "VPN_PROFILES_EMPTY" to Triple("No profiles saved.", "پروفایلی ثبت نشده است.", "No profiles saved."),
-        "VPN_PROFILES_SAVED" to Triple("Saved locally and encrypted. Tap a profile to delete it.", "به‌صورت رمز‌شده در گوشی ذخیره شد. برای حذف، روی پروفایل بزن.", "Saved locally and encrypted. Tap a profile to delete it."),
+        "VPN_PROFILES_SAVED" to Triple("Saved locally and encrypted. Tap WireGuard to connect or delete; other profiles can be deleted.", "رمز‌شده در گوشی ذخیره شد؛ با لمس WireGuard متصل یا حذف کن. سایر پروفایل‌ها فقط قابل حذف‌اند.", "Saved locally and encrypted. Tap WireGuard to connect or delete; other profiles can be deleted."),
         "VPN_PROFILES_NOT_TESTED" to Triple("Not connected or tested", "متصل یا تست نشده", "Not connected or tested"),
         "Live updates (5 s)" to Triple("Live updates (5 s)", "به‌روزرسانی زنده (۵ ثانیه)", "Live updates (5 s)"),
         "Refresh lists without interrupting the tunnel" to Triple("Refresh lists without interrupting the tunnel", "تازه‌سازی سرورها و تنظیمات پروتکل، بدون قطع اتصال", "Refresh lists without interrupting the tunnel"),
@@ -859,3 +864,4 @@ object Strings {
         return sb.toString()
     }
 }
+

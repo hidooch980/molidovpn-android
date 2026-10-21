@@ -32,6 +32,8 @@ pub struct StartOptions {
     pub listen: SocketAddr,
     pub config_path: String,
     pub wireguard_config_path: Option<String>,
+    /// Imported provider keys must never trigger WARP registration or endpoint discovery.
+    pub wireguard_import_only: bool,
     pub masque_config_path: Option<String>,
     pub protocol: Protocol,
     pub forced_peer: Option<SocketAddr>,
@@ -143,6 +145,7 @@ impl StartOptions {
             listen: "127.0.0.1:1819".parse().unwrap(),
             config_path: config_path.into(),
             wireguard_config_path: None,
+            wireguard_import_only: false,
             masque_config_path: None,
             protocol,
             forced_peer: None,
@@ -274,7 +277,7 @@ pub async fn start(options: StartOptions) -> Result<()> {
         }
         Protocol::WireGuard => {
             let config_path = warp_config_path(&options);
-            let identity = load_or_provision_warp(&config_path).await?;
+            let identity = load_wireguard_identity(&options).await?;
             log::info!(
                 "[+] identity ready: device={} ipv4={} ipv6={}",
                 identity.device_id,
@@ -388,7 +391,7 @@ pub async fn prepare(options: &StartOptions) -> Result<TunnelAddresses> {
             };
             load_or_provision_masque(&path).await?
         }
-        Protocol::WireGuard => load_or_provision_warp(&warp_config_path(options)).await?,
+        Protocol::WireGuard => load_wireguard_identity(options).await?,
         Protocol::WarpInWarp => {
             let primary_path = warp_config_path(options);
             let secondary_path = derive_sibling_path(&primary_path, "secondary");
@@ -693,6 +696,20 @@ fn keep_saved_identity() -> bool {
         std::env::var("AETHER_REPROVISION").as_deref(),
         Ok("0") | Ok("off") | Ok("false")
     )
+}
+
+async fn load_wireguard_identity(options: &StartOptions) -> Result<account::Identity> {
+    if options.wireguard_import_only {
+        if options.forced_peers.is_empty() || options.forced_peers_scan_fallback ||
+            options.retry_obfuscation_profiles || options.obfuscation_profile.as_deref() != Some("off") {
+            return Err(AetherError::Other("invalid imported WireGuard settings".into()));
+        }
+        let path = options.wireguard_config_path.as_deref()
+            .ok_or_else(|| AetherError::Other("imported WireGuard identity path missing".into()))?;
+        return config::load(path)?.ok_or_else(||
+            AetherError::Other("imported WireGuard identity unavailable".into()));
+    }
+    load_or_provision_warp(&warp_config_path(options)).await
 }
 
 async fn load_or_provision_warp(config_path: &str) -> Result<account::Identity> {
@@ -2462,10 +2479,12 @@ async fn run_wireguard_tunnel(
     .await
     .map_err(|e| AetherError::Other(format!("tunnel failed validation: {e}")))?;
 
-    let ipv6: std::net::Ipv6Addr = identity
-        .ipv6
-        .parse()
-        .map_err(|_| AetherError::Other("invalid ipv6".into()))?;
+    // Provider exports may be IPv4-only. Android blocks the unconfigured family;
+    // do not invent an IPv6 address or reject a working IPv4 WireGuard session.
+    if !identity.ipv6.is_empty() {
+        identity.ipv6.parse::<std::net::Ipv6Addr>()
+            .map_err(|_| AetherError::Other("invalid ipv6".into()))?;
+    }
 
     let (outbound_tx, outbound_rx) = tokio::sync::mpsc::channel(sysprofile::channel_capacity());
     let (inbound_tx, inbound_rx) = tokio::sync::mpsc::channel(sysprofile::channel_capacity());
@@ -2480,7 +2499,6 @@ async fn run_wireguard_tunnel(
         inbound_tx,
         ipv4,
     );
-    let _ = ipv6;
     log::info!("[+] WireGuard endpoint validated in {validation_rtt:?}; live transport ready");
 
     let mut http_task = None;
@@ -3993,6 +4011,38 @@ fn spawn_masque_cache_refresh(probe: prober::MasqueProbe, cache_path: Option<Str
 mod tests {
     use super::*;
 
+    fn personal_wireguard_options() -> StartOptions {
+        let mut options = StartOptions::new(Protocol::WireGuard, "unused-warp.toml");
+        options.wireguard_import_only = true;
+        options.wireguard_config_path = Some(std::env::temp_dir().join(format!(
+            "molido-nonexistent-provider-{}.toml", std::process::id())).to_string_lossy().into_owned());
+        options.forced_peers = vec!["198.51.100.8:51820".parse().unwrap()];
+        options.obfuscation_profile = Some("off".into());
+        options.retry_obfuscation_profiles = false;
+        options
+    }
+
+    #[tokio::test]
+    async fn personal_wireguard_missing_identity_never_provisions_warp() {
+        let options = personal_wireguard_options();
+        let result = load_wireguard_identity(&options).await;
+        assert!(matches!(result, Err(AetherError::Other(ref msg)) if msg == "imported WireGuard identity unavailable"));
+    }
+
+    #[tokio::test]
+    async fn personal_wireguard_rejects_discovery_and_obfuscation_fallback() {
+        for mode in 0..3 {
+            let mut options = personal_wireguard_options();
+            match mode {
+                0 => options.forced_peers.clear(),
+                1 => options.forced_peers_scan_fallback = true,
+                _ => options.retry_obfuscation_profiles = true,
+            }
+            let result = load_wireguard_identity(&options).await;
+            assert!(matches!(result, Err(AetherError::Other(ref msg)) if msg == "invalid imported WireGuard settings"));
+        }
+    }
+
     #[test]
     fn start_options_have_app_safe_defaults() {
         let options = StartOptions::new(Protocol::Masque, "/data/user/0/app/files/aether.toml");
@@ -4478,3 +4528,4 @@ mod tests {
         );
     }
 }
+
