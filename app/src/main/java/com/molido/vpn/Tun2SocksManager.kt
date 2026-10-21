@@ -1,9 +1,11 @@
 package com.molido.vpn
 
+import android.net.VpnService
 import android.os.ParcelFileDescriptor
 import ca.psiphon.Tun2SocksJniLoader
 import java.io.IOException
 import java.net.Inet4Address
+import java.net.InetAddress
 import java.net.NetworkInterface
 import java.net.SocketException
 
@@ -41,6 +43,25 @@ object Tun2SocksManager {
     @Volatile
     var sessionMtu: Int = VPN_INTERFACE_MTU
     const val VPN_INTERFACE_IPV4_NETMASK = "255.255.255.0"
+    // Local addresses only: public IPv6 connectivity is supplied by the exit,
+    // even when the carrier reaches that exit over an IPv4-only connection.
+    const val VPN_INTERFACE_IPV6 = "fd42:6d6f:6c69::1"
+    const val VPN_ROUTER_IPV6 = "fd42:6d6f:6c69::2"
+
+    /**
+     * Both families must be routed to the same TUN that lwIP reads. Merely
+     * allowing AF_INET6 would send unmatched IPv6 outside the VPN instead.
+     * DNS may use the IPv4 router and still carry both A and AAAA questions.
+     */
+    fun configureInterface(
+        builder: VpnService.Builder,
+        address: PrivateAddress,
+    ): VpnService.Builder = builder
+        .addAddress(InetAddress.getByName(address.ipAddress), address.prefixLength)
+        .addRoute(InetAddress.getByName("0.0.0.0"), 0)
+        .addRoute(InetAddress.getByName(address.subnet), address.prefixLength)
+        .addAddress(InetAddress.getByName(VPN_INTERFACE_IPV6), 128)
+        .addRoute(InetAddress.getByName("::"), 0)
 
     /**
      * How long to wait for a previous native run() to unwind.
@@ -218,7 +239,7 @@ object Tun2SocksManager {
                     sessionMtu,
                     address.router,
                     VPN_INTERFACE_IPV4_NETMASK,
-                    null, // IPv4-only routing
+                    VPN_ROUTER_IPV6, // enable lwIP IPv6 TCP and udpgw forwarding
                     socksServerAddress,
                     udpgwServerAddress,
                     1, // transparent DNS through udpgw
@@ -233,7 +254,7 @@ object Tun2SocksManager {
         thread.start()
         tun2SocksThread = thread
         lastThread = thread
-        ConnectionLog.record("tun2socks started → SOCKS $socksServerAddress, udpgw $udpgwServerAddress")
+        ConnectionLog.record("tun2socks IPv4+IPv6 started → SOCKS $socksServerAddress, udpgw $udpgwServerAddress")
         return true
     }
 

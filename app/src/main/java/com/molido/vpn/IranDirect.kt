@@ -1,6 +1,7 @@
 package com.molido.vpn
 
 import android.content.Context
+import java.net.InetAddress
 
 /**
  * "Iranian sites direct" (سایت‌های ایرانی مستقیم): a lightweight bypass that is
@@ -9,7 +10,7 @@ import android.content.Context
  *  - SHARD / V2Ray: xray routes `domain:ir` + `geosite:category-ir` + `geoip:ir`
  *    to a plain freedom outbound ([ShardConfigs.tunnelConfig]). If the bundled geo
  *    files cannot be unpacked it degrades to the `domain:ir` rule only.
- *  - TUN (tun2socks transports) on Android 13+: Iranian IPv4 ranges are excluded
+ *  - TUN (tun2socks transports) on Android 13+: Iranian IPv4 and IPv6 ranges are excluded
  *    from the VPN with `excludeRoute`. Older Android keeps only the xray rule.
  *
  * Default ON for new installs only; an existing install keeps its current
@@ -22,6 +23,9 @@ object IranDirect {
     /** Cap on excluded routes: the aggregated /8../20 blocks, not every /24. */
     private const val MAX_ROUTES = 400
     private const val MAX_PREFIX = 20
+    // Bundled IR data currently contains 707 IPv6 allocations. Keep these
+    // exact rather than widening country routes or cutting them to the IPv4 cap.
+    private const val MAX_IPV6_ROUTES = 1024
 
     fun enabled(context: Context): Boolean {
         val prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
@@ -42,10 +46,15 @@ object IranDirect {
     private var cached: List<Pair<String, Int>>? = null
 
     /**
-     * Iranian IPv4 CIDRs as (address, prefix), read from the bundled trimmed
+     * Iranian CIDRs as (address, prefix), read from the bundled trimmed
      * geoip.dat (protobuf GeoIPList). Empty on any parse problem.
      */
-    fun ipv4Cidrs(context: Context): List<Pair<String, Int>> {
+    fun ipv4Cidrs(context: Context): List<Pair<String, Int>> = cidrs(context).filter { ':' !in it.first }
+
+    /** Exact IPv6 allocations from the same country dataset; never widened. */
+    fun ipv6Cidrs(context: Context): List<Pair<String, Int>> = cidrs(context).filter { ':' in it.first }
+
+    private fun cidrs(context: Context): List<Pair<String, Int>> {
         cached?.let { return it }
         val result = runCatching {
             val bytes = context.assets.open("geoip.dat").use { it.readBytes() }
@@ -80,7 +89,7 @@ object IranDirect {
         }
     }
 
-    private fun parse(bytes: ByteArray): List<Pair<String, Int>> {
+    internal fun parse(bytes: ByteArray): List<Pair<String, Int>> {
         val out = ArrayList<Pair<String, Int>>()
         val top = Reader(bytes, 0, bytes.size)
         while (top.pos < top.end) {
@@ -119,6 +128,10 @@ object IranDirect {
                     val a = ip
                     if (a != null && a.size == 4 && prefix in 1..MAX_PREFIX) {
                         cidrs.add(a.joinToString(".") { (it.toInt() and 0xff).toString() } to prefix)
+                    } else if (a != null && a.size == 16 && prefix in 3..128 &&
+                        (a[0].toInt() and 0xe0) == 0x20) {
+                        // Only globally allocated unicast, never default/ULA/LAN.
+                        cidrs.add(InetAddress.getByAddress(a).hostAddress!! to prefix)
                     }
                     entry.pos += l
                 } else {
@@ -126,7 +139,9 @@ object IranDirect {
                 }
             }
             if (code.equals("IR", ignoreCase = true)) {
-                out.addAll(cidrs.sortedBy { it.second }.take(MAX_ROUTES))
+                // Bound each family separately so IPv6 cannot evict IPv4 routes.
+                out.addAll(cidrs.filter { ':' !in it.first }.sortedBy { it.second }.take(MAX_ROUTES))
+                out.addAll(cidrs.filter { ':' in it.first }.sortedBy { it.second }.take(MAX_IPV6_ROUTES))
                 break
             }
             top.pos = entryEnd

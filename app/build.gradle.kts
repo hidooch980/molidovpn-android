@@ -172,3 +172,8 @@ targetAbis.forEach { abi ->
     }
     tasks.named("preBuild").configure { dependsOn(taskName) }
 }
+
+// Keep exact Android/Robolectric failures visible in Actions job logs.
+tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
+    testLogging.exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+}
