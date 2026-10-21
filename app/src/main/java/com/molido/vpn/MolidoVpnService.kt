@@ -2422,9 +2422,7 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
                     tun = Builder()
                         .setSession("MolidoVPN")
                         .setMtu(tun2socksMtu())
-                        .addAddress(address.ipAddress, address.prefixLength)
-                        .addRoute("0.0.0.0", 0)
-                        .addRoute(address.subnet, address.prefixLength)
+                        .let { Tun2SocksManager.configureInterface(it, address) }
                         // Same reasoning as the plain Psiphon path: public resolvers
                         // plus our own exclusion, so both legs can resolve names
                         // over the carrier link before any tunnel exists.
@@ -2524,9 +2522,7 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
                 tun = Builder()
                     .setSession("MolidoVPN")
                     .setMtu(tun2socksMtu())
-                    .addAddress(address.ipAddress, address.prefixLength)
-                    .addRoute("0.0.0.0", 0)
-                    .addRoute(address.subnet, address.prefixLength)
+                    .let { Tun2SocksManager.configureInterface(it, address) }
                     // The ONLY resolver, on purpose — and the opposite of the
                     // Psiphon path, which also lists 1.1.1.1 and 8.8.8.8.
                     //
@@ -2702,9 +2698,7 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
                 tun = Builder()
                     .setSession("MolidoVPN")
                     .setMtu(tun2socksMtu())
-                    .addAddress(address.ipAddress, address.prefixLength)
-                    .addRoute("0.0.0.0", 0)
-                    .addRoute(address.subnet, address.prefixLength)
+                    .let { Tun2SocksManager.configureInterface(it, address) }
                     // lwIP's resolver is the only one listed, exactly as on the Tor
                     // path and for the same reason: every DNS query must go through
                     // the node. Adding 1.1.1.1 here would send app DNS out over the
@@ -4853,9 +4847,7 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
                     tun = Builder()
                         .setSession("MolidoVPN")
                         .setMtu(tun2socksMtu())
-                        .addAddress(address.ipAddress, address.prefixLength)
-                        .addRoute("0.0.0.0", 0)
-                        .addRoute(address.subnet, address.prefixLength)
+                        .let { Tun2SocksManager.configureInterface(it, address) }
                         .applyUdpgwDns(address.router, "psiphon")
                         // --- Strategy A: break the DNS bootstrap deadlock ---
                         // With only address.router as a resolver, every DNS
