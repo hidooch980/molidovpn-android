@@ -34,12 +34,12 @@ class DualStackTunTest {
                 val config: Any = ReflectionHelpers.getField(builder, "mConfig")
                 val addresses: List<LinkAddress> = ReflectionHelpers.getField(config, "addresses")
                 val routes: List<RouteInfo> = ReflectionHelpers.getField(config, "routes")
-                assertTrue(addresses.contains(LinkAddress(plan.ipAddress + "/" + plan.prefixLength)))
-                assertTrue(addresses.contains(LinkAddress(Tun2SocksManager.VPN_INTERFACE_IPV6 + "/128")))
+                assertTrue(addresses.contains(LinkAddress(java.net.InetAddress.getByName(plan.ipAddress), plan.prefixLength)))
+                assertTrue(addresses.contains(LinkAddress(java.net.InetAddress.getByName(Tun2SocksManager.VPN_INTERFACE_IPV6), 128)))
                 val destinations = routes.map { it.destination }.toSet()
-                assertTrue(destinations.contains(IpPrefix("0.0.0.0/0")))
-                assertTrue(destinations.contains(IpPrefix("::/0")))
-                assertTrue(destinations.contains(IpPrefix(plan.subnet + "/" + plan.prefixLength)))
+                assertTrue(destinations.contains(IpPrefix(java.net.InetAddress.getByName("0.0.0.0"), 0)))
+                assertTrue(destinations.contains(IpPrefix(java.net.InetAddress.getByName("::"), 0)))
+                assertTrue(destinations.contains(IpPrefix(java.net.InetAddress.getByName(plan.subnet), plan.prefixLength)))
                 assertEquals(2, addresses.size)
             }
         } finally {
