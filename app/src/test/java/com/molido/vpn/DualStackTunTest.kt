@@ -52,7 +52,7 @@ class DualStackTunTest {
         try {
             val plan = plans.first()
             val builder = Tun2SocksManager.configureInterface(controller.get().Builder(), plan)
-                .addDnsServer(plan.router)
+                .addDnsServer(java.net.InetAddress.getByName(plan.router))
             val config: Any = ReflectionHelpers.getField(builder, "mConfig")
             val dns: List<String> = ReflectionHelpers.getField(config, "dnsServers")
             assertEquals(listOf(plan.router), dns)
