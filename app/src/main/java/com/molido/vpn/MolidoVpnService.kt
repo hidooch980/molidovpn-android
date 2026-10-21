@@ -6026,7 +6026,7 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
      * range no live interface is using — never the user's actual LAN.
      */
     /**
-     * "Iranian sites direct" on a tun2socks TUN: Iranian IPv4 ranges (from the
+     * "Iranian sites direct" on a tun2socks TUN: Iranian IPv4 and IPv6 ranges (from the
      * bundled geoip.dat) bypass the VPN. Android 13+ only; older versions keep the
      * xray domain rule (SHARD/V2Ray) and route everything else as before.
      */
@@ -6072,7 +6072,7 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
             return this
         }
         var added = 0
-        IranDirect.ipv4Cidrs(this@MolidoVpnService).forEach { (address, prefix) ->
+        (IranDirect.ipv4Cidrs(this@MolidoVpnService) + IranDirect.ipv6Cidrs(this@MolidoVpnService)).forEach { (address, prefix) ->
             runCatching {
                 excludeRoute(IpPrefix(InetAddress.getByName(address), prefix))
                 added++
