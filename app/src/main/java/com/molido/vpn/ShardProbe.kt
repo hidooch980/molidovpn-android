@@ -4,6 +4,8 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.net.InetSocketAddress
 import java.net.Socket
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 /**
  * One probe: does a real request survive this SOCKS5 port?
@@ -28,14 +30,14 @@ object ShardProbe {
     /**
      * Probe targets, tried in order.
      *
-     * Three different operators, because a single endpoint conflates "node is
+     * Three hostnames across independent operators, because one endpoint conflates "node is
      * broken" with "this one site is unreachable from this exit". The 20-of-28
      * live-pool measurement used exactly this ladder.
      */
     private val TARGETS = listOf(
         Triple("cp.cloudflare.com", "/generate_204", 80),
         Triple("www.gstatic.com", "/generate_204", 80),
-        Triple("captive.apple.com", "/hotspot-detect.html", 80),
+        Triple("connectivitycheck.gstatic.com", "/generate_204", 80),
     )
 
     /**
@@ -65,11 +67,13 @@ object ShardProbe {
      * @return true if any target answered as expected.
      */
     fun check(socksPort: Int, timeoutMs: Int): Boolean {
+        if (timeoutMs <= 0) return false
+        val deadline = System.nanoTime() + timeoutMs.toLong() * 1_000_000L
         // First target only, in the common case: the race is latency-sensitive and
         // trying all three per node would triple its cost. The others exist as
         // fallbacks so one unreachable endpoint does not condemn a good node.
         for ((host, path, port) in TARGETS) {
-            when (probeOnce(socksPort, host, path, port, timeoutMs)) {
+            when (probeOnce(socksPort, host, path, port, deadline)) {
                 Result.PASS -> return true
                 // The node itself is unreachable — trying another endpoint through
                 // the same dead node is wasted time.
@@ -81,6 +85,14 @@ object ShardProbe {
         return false
     }
 
+    // A read timeout alone can be defeated by a peer trickling one byte at a time.
+    private val deadlineTimer = Executors.newSingleThreadScheduledExecutor { task ->
+        Thread(task, "probe-deadline").apply { isDaemon = true }
+    }
+    private fun remainingMs(deadline: Long): Int =
+        ((deadline - System.nanoTime() + 999_999L) / 1_000_000L)
+            .coerceIn(0, Int.MAX_VALUE.toLong()).toInt()
+
     private enum class Result { PASS, NODE_DEAD, ENDPOINT_BAD }
 
     private fun probeOnce(
@@ -88,9 +100,12 @@ object ShardProbe {
         host: String,
         path: String,
         port: Int,
-        timeoutMs: Int,
+        deadline: Long,
     ): Result {
+        val timeoutMs = remainingMs(deadline)
+        if (timeoutMs <= 0) return Result.NODE_DEAD
         Socket().use { socket ->
+            val stop = deadlineTimer.schedule(Runnable { runCatching { socket.close() } }, timeoutMs.toLong(), TimeUnit.MILLISECONDS)
             try {
                 socket.tcpNoDelay = true
                 socket.soTimeout = timeoutMs
@@ -121,7 +136,7 @@ object ShardProbe {
                 output.flush()
 
                 val reply = readExactly(input, 4) ?: return Result.NODE_DEAD
-                if (reply[1] != 0x00.toByte()) {
+                if (reply[0] != 0x05.toByte() || reply[1] != 0x00.toByte() || reply[2] != 0x00.toByte()) {
                     // A non-zero SOCKS reply means the far side refused to open the
                     // stream: that is the node failing, not the endpoint.
                     return Result.NODE_DEAD
@@ -138,11 +153,12 @@ object ShardProbe {
 
                 sendRequest(output, host, path)
                 val statusLine = readStatusLine(input) ?: return Result.ENDPOINT_BAD
-                val passed = statusLine.contains(" 204") ||
-                    (host == "captive.apple.com" && statusLine.contains(" 200"))
+                val passed = Regex("""HTTP/1\.[01] 204(?: .*)?""").matches(statusLine)
                 return if (passed) Result.PASS else Result.ENDPOINT_BAD
             } catch (_: Exception) {
                 return Result.NODE_DEAD
+            } finally {
+                stop.cancel(false)
             }
         }
     }
@@ -168,11 +184,11 @@ object ShardProbe {
         val builder = StringBuilder(64)
         while (builder.length < 128) {
             val byte = input.read()
-            if (byte < 0) return builder.takeIf { it.isNotEmpty() }?.toString()
+            if (byte < 0) return null
             if (byte == '\n'.code) return builder.toString()
             if (byte != '\r'.code) builder.append(byte.toChar())
         }
-        return builder.toString()
+        return null
     }
 
     /** Read exactly [count] bytes or give up; short reads are a dead stream. */
