@@ -556,8 +556,13 @@ void run()
         goto fail1;
     }
     
-    // init time
-    BTime_Init();
+    // The JNI entry point can run repeatedly in one process. BTime has no free
+    // operation; resetting its global origin also invalidates surviving lwIP timers.
+    static int time_initialized = 0;
+    if (!time_initialized) {
+        BTime_Init();
+        time_initialized = 1;
+    }
     
     // init reactor
     if (!BReactor_Init(&ss)) {

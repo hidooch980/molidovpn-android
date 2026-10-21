@@ -1,0 +1,85 @@
+name: Android IPv4 IPv6 native packet regressions
+on:
+  pull_request:
+    branches: [main]
+    paths: ['app/**', 'native/network/**', '.github/workflows/network-packets.yml']
+  workflow_dispatch: {}
+permissions:
+  contents: read
+concurrency:
+  group: network-packets-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: platform-tools
+      - run: sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;26.3.11579264" "cmake;3.22.1"
+      - name: Build production native stack and probe APKs
+        run: |
+          chmod +x gradlew
+          ./gradlew -p native/network/probe assembleDebug assembleDebugAndroidTest --no-daemon
+          mkdir -p network-artifacts
+          cp native/network/probe/build/outputs/apk/debug/*-debug.apk network-artifacts/probe-app.apk
+          cp native/network/probe/build/outputs/apk/androidTest/debug/*-androidTest.apk network-artifacts/probe-test.apk
+          git rev-parse HEAD > network-artifacts/provenance.txt
+          sha256sum app/src/main/cpp/badvpn/tun2socks/tun2socks.c app/src/main/java/ca/psiphon/Tun2SocksJniLoader.java native/network/probe/src/androidTest/java/com/molido/vpn/networkprobe/NetworkProbe.java network-artifacts/*.apk >> network-artifacts/provenance.txt
+          python3 - <<'PY' >> network-artifacts/provenance.txt
+          import hashlib, zipfile
+          with zipfile.ZipFile("network-artifacts/probe-app.apk") as apk:
+              library = apk.read("lib/x86_64/libtun2socks.so")
+              print(hashlib.sha256(library).hexdigest(), "APK/lib/x86_64/libtun2socks.so")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: network-probe-apks
+          path: network-artifacts/
+          if-no-files-found: error
+  runtime:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        api: [28, 35]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/download-artifact@v4
+        with:
+          name: network-probe-apks
+          path: network-artifacts
+      - name: Enable emulator acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Exercise TCP UDP DNS and controlled delay through JNI
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api }}
+          arch: x86_64
+          target: default
+          disable-animations: true
+          script: bash native/network/run-probe.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: network-runtime-api-${{ matrix.api }}
+          path: |
+            network-runtime.txt
+            network-logcat.txt
+            network-artifacts/provenance.txt
+          if-no-files-found: warn
