@@ -95,6 +95,7 @@ struct NativeStartOptions {
     protocol: String,
     listen: String,
     wireguard_config_path: Option<String>,
+    wireguard_import_only: bool,
     masque_config_path: Option<String>,
     forced_peer: Option<String>,
     /// Comma-separated `ip:port` list tried in order (an imported WireGuard /
@@ -143,6 +144,7 @@ impl Default for NativeStartOptions {
             protocol: "masque".into(),
             listen: "127.0.0.1:1819".into(),
             wireguard_config_path: None,
+            wireguard_import_only: false,
             masque_config_path: None,
             forced_peer: None,
             forced_peers: None,
@@ -187,6 +189,7 @@ impl TryFrom<NativeStartOptions> for StartOptions {
         let mut options = StartOptions::new(Protocol::parse(&value.protocol), value.config_path);
         options.listen = parse_address("listen", &value.listen)?;
         options.wireguard_config_path = value.wireguard_config_path;
+        options.wireguard_import_only = value.wireguard_import_only;
         options.masque_config_path = value.masque_config_path;
         options.forced_peer = value
             .forced_peer
@@ -641,6 +644,17 @@ mod tests {
     use super::*;
 
     #[test]
+    fn personal_wireguard_import_flag_crosses_android_ffi() {
+        let native: NativeStartOptions = serde_json::from_str(
+            r#"{"config_path":"provider.toml","wireguard_config_path":"provider.toml","protocol":"wireguard","wireguard_import_only":true}"#,
+        ).unwrap();
+        let options = StartOptions::try_from(native).unwrap();
+        assert!(options.wireguard_import_only);
+        assert_eq!(options.wireguard_config_path.as_deref(), Some("provider.toml"));
+        assert_eq!(options.protocol, Protocol::WireGuard);
+    }
+
+    #[test]
     fn parses_android_start_options() {
         let native: NativeStartOptions = serde_json::from_str(
             r#"{"config_path":"/data/user/0/app/files/aether.toml","protocol":"masque","masque_transport":"h2"}"#,
@@ -681,3 +695,4 @@ mod tests {
         assert!(StartOptions::try_from(native).is_err());
     }
 }
+
