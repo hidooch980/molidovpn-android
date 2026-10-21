@@ -187,7 +187,21 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
     private var attemptStartedAt = 0L
     private val stopRequested = AtomicBoolean(false)
     private val vpnModeActive = AtomicBoolean(false)
-    private var tun: ParcelFileDescriptor? = null
+    private val tunLease = TunnelLease<ParcelFileDescriptor>()
+    private var tun: ParcelFileDescriptor?
+        get() = tunLease.current()
+        set(value) {
+            if (value == null) tunLease.clear() else {
+                if (userInitiatedStop.get()) {
+                    value.close()
+                    error("VPN setup cancelled by the user")
+                }
+                // New interface exists before the previous descriptor is closed.
+                tunLease.install(value)
+                retainTunForRecovery = false
+            }
+        }
+    @Volatile private var retainTunForRecovery = false
     private var lastTrafficSampleMs = 0L
     private var currentTx = 0L
     private var currentRx = 0L
@@ -1955,7 +1969,7 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
         // Keeping the service alive is a precondition of the seal: stopSelf()
         // releases the blocking TUN's fd and the OS restores carrier networking,
         // which is the leak the switch exists to prevent.
-        stopTunnel(notify = false, teardownService = !sealing)
+        stopTunnel(notify = false, teardownService = !sealing, preserveTun = sealing)
         // A quick reconnect owns the service: Psiphon, Tor, SHARD and the chain all
         // report a mid-teardown failure through here, and killing the service would
         // strand the restart the user just asked for — the same defect the native
@@ -2050,10 +2064,9 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
                 // off" latch and the backoff counter, so a manual retry always
                 // starts from the first, shortest delay.
                 userInitiatedStop.set(false)
-                // The seal is over too: this connect either replaces the blocking TUN
-                // with a working tunnel or fails on its own terms. Left set, a failed
-                // manual retry would be treated as "still sealed from the old drop".
-                killSwitchSealed.set(false)
+                // Preserve a previous seal through retries until CONNECTED.
+                // Only an explicit opt-out ends protection before then.
+                if (!killSwitchArmed()) killSwitchSealed.set(false)
                 reconnectAttempts = 0
                 // A concrete transport picked by the user ends any Auto session:
                 // retries must redial what they chose, not re-run the selection.
@@ -2067,7 +2080,7 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
                 if (!connected.get()) {
                     try {
                         userInitiatedStop.set(false)
-                        killSwitchSealed.set(false)
+                        if (!killSwitchArmed()) killSwitchSealed.set(false)
                         reconnectAttempts = 0
                         startTunnel(AutoConnect.configJson(this))
                     } catch (e: Exception) {
@@ -2105,7 +2118,7 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
                     reconnectRequested.set(true)
                     // NOT userInitiatedStop: that latch means "stay off", and it
                     // would make the restart's own auto-reconnect refuse to fire.
-                    stopTunnel(notify = false, teardownService = false)
+                    stopTunnel(notify = false, teardownService = false, preserveTun = killSwitchArmed())
                     // Off the worker on purpose. `worker` is single-threaded and the
                     // native core occupies it for the whole session, so a task queued
                     // here would not run until the core had exited — which is the
@@ -2197,7 +2210,8 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
         cancelAutoSelection()
         cancelAutoReconnect()
         stopTorProgressPolling()
-        stopTunnel(notify = false)
+        stopTunnel(notify = false, preserveTun = false)
+        tun = null
         cancelLadderTimer()
         autoExecutor.shutdownNow()
         freezeExecutor.shutdownNow()
@@ -3461,7 +3475,7 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
             ConnectionLog.record("Auto reconnect is off — leaving the tunnel down")
             sendStatus(STATUS_FAILED, reason)
             connected.set(false)
-            stopTunnel(notify = false)
+            stopTunnel(notify = false, teardownService = !armed, preserveTun = armed)
             // Auto-reconnect being off must not seal the device when the user asked
             // for the tunnel to stay up. The kill switch is exactly that request, so
             // this path has to honour it the same way the native core's finally does
@@ -3484,7 +3498,7 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
         }
         stopWatchdog()
         connected.set(false)
-        stopTunnel(notify = false, teardownService = false)
+        stopTunnel(notify = false, teardownService = false, preserveTun = armed)
         // The backoff window is the leak the switch exists for: between the drop and
         // the next attempt there is no TUN at all, and on the 120s rung that is two
         // minutes of carrier-visible traffic. Sealing first means the retry replaces
@@ -4901,6 +4915,7 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
         }
 
         worker.execute {
+            var ownedTun: ParcelFileDescriptor? = null
             try {
                 ConnectionLog.record("Preparing $currentProtocol identity")
                 NativeCore.attach(this)
@@ -4982,7 +4997,7 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
                     ConnectionLog.record("Zero Trust organization ${addresses.organization}")
                 }
                 ConnectionLog.record("Creating Android VPN interface")
-                tun = Builder()
+                val establishedTun = Builder()
                     .setSession("MolidoVPN")
                     .setMtu(1280)
                     // applyTunnelAddresses replaces the hardcoded /32 + /128
@@ -4996,6 +5011,8 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
                     .applySplitTunneling()
                     // applySplitTunneling() handles app exclusion per mode.
                     .establish() ?: error("Android could not establish the VPN interface")
+                ownedTun = establishedTun
+                tun = establishedTun
                 ConnectionLog.record("Scanning gateways for VPN")
                 // The Rust core is about to bind this TUN fd directly, which
                 // means no local SOCKS listener will exist for this session.
@@ -5011,7 +5028,7 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
                 // settling tunnel; strikes need NATIVE_STRIKES_BEFORE_RECONNECT
                 // ticks of screen-on zero-rx after the baseline.
                 startWatchdog()
-                val result = NativeCore.start(config, tun!!.fd)
+                val result = NativeCore.start(config, establishedTun.fd)
 
                 // Did the tunnel end on its own, i.e. without the user asking?
                 // That is the case auto-reconnect exists for, and it has to be
@@ -5043,71 +5060,70 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
                 // would loop. Reported and left to the user.
                 nativeExitWasUnexpected = false
             } finally {
-                NativeCore.detach()
-                vpnModeActive.set(false)
-                TunnelStatus.isNativeTunMode = false
-                // Cleared for the SOCKS branch above, which is the only thing that
-                // sets it on this path. Left set, the UI would keep reporting an
-                // active proxy — TunnelStatus.isActive() ORs this in — after the
-                // core had already exited.
-                TunnelStatus.isProxyMode = false
-                // The native tunnel can end without stopTunnel() ever running —
-                // the core exiting on its own, or the kill-switch branch below,
-                // both land here instead. stopTunnel() is where the monthly
-                // counters are normally persisted, so without this the traffic
-                // since the last 60-second flush was lost on exactly the paths
-                // that end a session unexpectedly.
-                flushMonthlyTraffic()
-                // The kill switch is a VPN-mode concept: it works by establishing a
-                // TUN with no routes so nothing can leave the device. In SOCKS mode no
-                // TUN was ever created and nothing is routed implicitly, so there is
-                // no leak to seal — and building one here would put up a VPN the user
-                // never consented to in this session.
-                val killSwitch = killSwitchArmed()
-                tun?.close()
-                tun = null
-                connected.set(false)
                 if (generation != sessionGeneration) {
-                    // A newer session already owns the service. This is the shape a
-                    // Reconnect takes on MASQUE/WireGuard/WoW: the core we were
-                    // waiting on exits AFTER the restart has begun, so anything this
-                    // block does to the lifecycle lands on somebody else's session.
-                    // Before, it called stopSelf() here and the notification's
-                    // Reconnect read as Disconnect.
-                    //
-                    // Checked before the kill switch on purpose: arming a route-less
-                    // blocking TUN would break the session that is currently coming
-                    // up, which is the worse of the two failures.
+                    tunLease.release(ownedTun)
                     ConnectionLog.record("Previous core exited under a newer session; lifecycle untouched")
-                } else if (reconnectRequested.compareAndSet(true, false)) {
-                    // A restart is scheduled but has not run yet (the settle delay, or
-                    // still waiting for isRunning() to go false). Same conclusion as
-                    // above: leave the foreground service and the VPN consent alive
-                    // for it. Consumed, so a restart that never arrives cannot leave
-                    // the latch stuck on.
-                    ConnectionLog.record("Core exited for a quick reconnect; service kept alive")
-                } else if (killSwitch && !stopRequested.get()) {
-                    sendStatus(STATUS_FAILED, Strings.t("Kill switch active — tunnel dropped"))
-                    // `killSwitch` was read at the top of this block, before
-                    // proxyMode could be cleared — pass it rather than asking again.
-                    sealWithKillSwitch(killSwitch)
-                } else if (nativeExitWasUnexpected && willAutoReconnect()) {
-                    // The core died on its own and the user still wants to be
-                    // connected. Keep the foreground service alive so the retry
-                    // does not need a fresh VPN consent dialog.
-                    nativeExitWasUnexpected = false
-                    scheduleAutoReconnect("the tunnel dropped")
                 } else {
-                    nativeExitWasUnexpected = false
-                    stopForeground(STOP_FOREGROUND_REMOVE)
-                    stopSelf()
+                    NativeCore.detach()
+                    vpnModeActive.set(false)
+                    TunnelStatus.isNativeTunMode = false
+                    // Cleared for the SOCKS branch above, which is the only thing that
+                    // sets it on this path. Left set, the UI would keep reporting an
+                    // active proxy — TunnelStatus.isActive() ORs this in — after the
+                    // core had already exited.
+                    TunnelStatus.isProxyMode = false
+                    // The native tunnel can end without stopTunnel() ever running —
+                    // the core exiting on its own, or the kill-switch branch below,
+                    // both land here instead. stopTunnel() is where the monthly
+                    // counters are normally persisted, so without this the traffic
+                    // since the last 60-second flush was lost on exactly the paths
+                    // that end a session unexpectedly.
+                    flushMonthlyTraffic()
+                    // The kill switch is a VPN-mode concept: it works by establishing a
+                    // blocking TUN with both default routes and no data-plane reader. In SOCKS mode no
+                    // TUN was ever created and nothing is routed implicitly, so there is
+                    // no leak to seal — and building one here would put up a VPN the user
+                    // never consented to in this session.
+                    val killSwitch = killSwitchArmed()
+                    val holdTun = retainTunForRecovery ||
+                        (killSwitch && !userInitiatedStop.get() && !stopRequested.get())
+                    if (!holdTun) tunLease.release(ownedTun)
+                    connected.set(false)
+                    if (reconnectRequested.compareAndSet(true, false)) {
+                        // A restart is scheduled but has not run yet (the settle delay, or
+                        // still waiting for isRunning() to go false). Same conclusion as
+                        // above: leave the foreground service and the VPN consent alive
+                        // for it. Consumed, so a restart that never arrives cannot leave
+                        // the latch stuck on.
+                        ConnectionLog.record("Core exited for a quick reconnect; service kept alive")
+                    } else if (killSwitch && !stopRequested.get()) {
+                        sendStatus(STATUS_FAILED, Strings.t("Kill switch active — tunnel dropped"))
+                        // `killSwitch` was read at the top of this block, before
+                        // proxyMode could be cleared — pass it rather than asking again.
+                        sealWithKillSwitch(killSwitch)
+                    } else if (nativeExitWasUnexpected && willAutoReconnect()) {
+                        // The core died on its own and the user still wants to be
+                        // connected. Keep the foreground service alive so the retry
+                        // does not need a fresh VPN consent dialog.
+                        nativeExitWasUnexpected = false
+                        scheduleAutoReconnect("the tunnel dropped")
+                    } else {
+                        nativeExitWasUnexpected = false
+                        stopForeground(STOP_FOREGROUND_REMOVE)
+                        stopSelf()
+                    }
                 }
             }
         }
     }
 
 
-    private fun stopTunnel(notify: Boolean = true, teardownService: Boolean = true) {
+    private fun stopTunnel(
+        notify: Boolean = true,
+        teardownService: Boolean = true,
+        preserveTun: Boolean = killSwitchSealed.get() && !userInitiatedStop.get() && killSwitchArmed(),
+    ) {
+        retainTunForRecovery = preserveTun
         stopRequested.set(true)
         // The watchdog must go first: it is what turns a teardown into a
         // reconnect, and leaving it armed while we dismantle the data path would
@@ -5176,8 +5192,7 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
             // reality. startTunnel() latches it again from the preference on the way
             // in, so a reconnect still honours whatever the user has set now.
             proxyMode = false
-            tun?.close()
-            tun = null
+            if (!preserveTun) tun = null
             connected.set(false)
             if (notify) sendStatus(STATUS_DISCONNECTED)
             // A reconnect re-enters startTunnel() on the worker thread, so the
@@ -5194,8 +5209,7 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
             dnsForwarder = null
             TunnelStatus.isDnsOnlyMode = false
             vpnModeActive.set(false)
-            tun?.close()
-            tun = null
+            if (!preserveTun) tun = null
             connected.set(false)
             if (notify) sendStatus(STATUS_DISCONNECTED)
             if (teardownService) {
@@ -5223,8 +5237,7 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
             shardLastTx = -1L
             shardLastRx = -1L
             vpnModeActive.set(false)
-            tun?.close()
-            tun = null
+            if (!preserveTun) tun = null
             connected.set(false)
             if (notify) sendStatus(STATUS_DISCONNECTED)
             if (teardownService) {
@@ -5248,8 +5261,7 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
                 chainOuterCommitted = false
             }
             vpnModeActive.set(false)
-            tun?.close()
-            tun = null
+            if (!preserveTun) tun = null
             connected.set(false)
             if (notify) sendStatus(STATUS_DISCONNECTED)
             if (teardownService) {
@@ -5264,7 +5276,6 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
 
     private fun rebuildKillSwitchVpn() {
         try {
-            tun?.close()
             tun = Builder()
                 .setSession("MolidoVPN — Kill Switch")
                 .setMtu(1280)
@@ -5285,12 +5296,16 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
                 //    user deliberately kept off the tunnel were never protected by it,
                 //    so cutting them off would be a failure the switch never promised.
                 .applySplitTunneling()
-                .establish()
+                .establish() ?: error("Android could not establish the kill switch")
             ConnectionLog.record("Kill switch VPN active; all traffic blocked")
         } catch (e: Exception) {
             Log.e(LOG_TAG, "Kill switch rebuild failed: ${e.message}")
-            stopForeground(STOP_FOREGROUND_REMOVE)
-            stopSelf()
+            // Preserve the old unrouted interface when replacement fails.
+            if (tun == null) {
+                ConnectionLog.record("Kill switch could not seal: no TUN remains")
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                stopSelf()
+            }
         }
     }
 
@@ -5338,6 +5353,10 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
     }
 
     private fun sendStatus(status: String, detail: String? = null, progress: Int = -1) {
+        if (status == STATUS_CONNECTED && !autoTrialActive.get()) {
+            killSwitchSealed.set(false)
+            retainTunForRecovery = false
+        }
         Log.i(LOG_TAG, "status=$status${detail?.let { " detail=$it" } ?: ""}")
         if (status == STATUS_CONNECTED && !autoTrialActive.get() &&
             SmartConnectState.state.value.phase == SmartConnectState.Phase.CONNECTING
