@@ -5,6 +5,7 @@ import android.os.ParcelFileDescriptor
 import ca.psiphon.Tun2SocksJniLoader
 import java.io.IOException
 import java.net.Inet4Address
+import java.net.InetAddress
 import java.net.NetworkInterface
 import java.net.SocketException
 
@@ -56,11 +57,11 @@ object Tun2SocksManager {
         builder: VpnService.Builder,
         address: PrivateAddress,
     ): VpnService.Builder = builder
-        .addAddress(address.ipAddress, address.prefixLength)
-        .addRoute("0.0.0.0", 0)
-        .addRoute(address.subnet, address.prefixLength)
-        .addAddress(VPN_INTERFACE_IPV6, 128)
-        .addRoute("::", 0)
+        .addAddress(InetAddress.getByName(address.ipAddress), address.prefixLength)
+        .addRoute(InetAddress.getByName("0.0.0.0"), 0)
+        .addRoute(InetAddress.getByName(address.subnet), address.prefixLength)
+        .addAddress(InetAddress.getByName(VPN_INTERFACE_IPV6), 128)
+        .addRoute(InetAddress.getByName("::"), 0)
 
     /**
      * How long to wait for a previous native run() to unwind.
