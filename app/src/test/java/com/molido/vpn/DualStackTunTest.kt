@@ -16,7 +16,9 @@ import org.robolectric.util.ReflectionHelpers
  * permission or using any external network. Native packet/exit support is a
  * separate device integration check. */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [28], manifest = Config.NONE)
+// Android 9 RouteInfo calls libcore-only Inet4Address.ANY, absent on a JVM.
+// Use the modular Android 15 network stack for real Builder configuration tests.
+@Config(sdk = [35], manifest = Config.NONE)
 class DualStackTunTest {
     private val plans = listOf(
         Tun2SocksManager.PrivateAddress("10.0.0.1", "10.0.0.0", 8, "10.0.0.2"),
