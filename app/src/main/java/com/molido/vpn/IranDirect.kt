@@ -23,6 +23,9 @@ object IranDirect {
     /** Cap on excluded routes: the aggregated /8../20 blocks, not every /24. */
     private const val MAX_ROUTES = 400
     private const val MAX_PREFIX = 20
+    // Bundled IR data currently contains 707 IPv6 allocations. Keep these
+    // exact rather than widening country routes or cutting them to the IPv4 cap.
+    private const val MAX_IPV6_ROUTES = 1024
 
     fun enabled(context: Context): Boolean {
         val prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
@@ -138,7 +141,7 @@ object IranDirect {
             if (code.equals("IR", ignoreCase = true)) {
                 // Bound each family separately so IPv6 cannot evict IPv4 routes.
                 out.addAll(cidrs.filter { ':' !in it.first }.sortedBy { it.second }.take(MAX_ROUTES))
-                out.addAll(cidrs.filter { ':' in it.first }.sortedBy { it.second }.take(MAX_ROUTES))
+                out.addAll(cidrs.filter { ':' in it.first }.sortedBy { it.second }.take(MAX_IPV6_ROUTES))
                 break
             }
             top.pos = entryEnd
