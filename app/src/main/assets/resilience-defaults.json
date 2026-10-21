@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-10-18",
+  "updated": "2026-10-20",
   "mirrors": {
     "update": [],
     "sub": []
@@ -45,7 +45,7 @@
     "enabled": true,
     "total_budget_s": 240,
     "max_trials": 8,
-    "min_trials": 3,
+    "min_trials": 1,
     "good_enough": 80,
     "min_score": 15,
     "parallel_probes": 6,
