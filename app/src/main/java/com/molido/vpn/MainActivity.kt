@@ -628,7 +628,7 @@ class MainActivity : Activity() {
         chipLatency = label(Strings.t("Latency —"), 12f, MUTED, TypefaceStyle.MEDIUM).apply {
             typeface = Typefaces.numeric(this@MainActivity)
             gravity = Gravity.CENTER
-            contentDescription = "سنجش پینگ اتصال"
+            tooltipText = Strings.t("HTTP connection latency")
             isClickable = true
             isFocusable = true
             setOnClickListener { pingConnection() }
@@ -967,6 +967,21 @@ class MainActivity : Activity() {
         autoPingHandler.removeCallbacks(autoPingRunnable)
     }
 
+    private fun latencyReadout(milliseconds: Float?): String {
+        // This app is excluded from native TUNs: a direct HTTP probe there
+        // measures the carrier link, so never label it as the tunnel's latency.
+        val underlying = TunnelStatus.isNativeTunMode && !Tun2SocksManager.isRunning &&
+            !TunnelStatus.isProxyMode
+        chipLatency.tooltipText = Strings.t(
+            if (underlying) "Measured on the underlying internet connection" else "HTTP connection latency"
+        )
+        return if (milliseconds == null) {
+            Strings.t(if (underlying) "Internet latency n/a" else "Latency n/a")
+        } else {
+            Strings.tf(if (underlying) "Internet latency %s ms" else "Latency %s ms", milliseconds.toInt())
+        }
+    }
+
     private fun pingConnection() {
         if (!isTunnelActive() || pingInFlight) return
         // No tunnel to judge in DNS-only mode; a failure streak here would only
@@ -983,7 +998,7 @@ class MainActivity : Activity() {
                 if (isFinishing || isDestroyed) return@runOnUiThread
                 pingInFlight = false
                 if (request == latencyRequest && isTunnelActive()) {
-                    chipLatency.text = result.second?.let { Strings.tf("Latency %s ms", it.toInt()) } ?: Strings.t("Latency n/a")
+                    chipLatency.text = latencyReadout(result.second)
                     val reachable = result.second
                     // Bytes moved since the previous judgement, taken before the
                     // branches below because both of them need it.
@@ -1204,7 +1219,7 @@ class MainActivity : Activity() {
                             runOnUiThread {
                                 if (isFinishing || isDestroyed) return@runOnUiThread
                                 if (request != verifyRequest) return@runOnUiThread
-                                probe?.let { chipLatency.text = Strings.tf("Latency %s ms", it.second.toInt()) }
+                                probe?.let { chipLatency.text = latencyReadout(it.second) }
                             }
                         }.start()
                     } else {
@@ -1234,7 +1249,7 @@ class MainActivity : Activity() {
                 if (verified != null) {
                     ConnectionLog.record("Reachability probe passed in $attempts attempt(s) — ${verified.first}")
                     showConnected()
-                    chipLatency.text = Strings.tf("Latency %s ms", verified.second.toInt())
+                    chipLatency.text = latencyReadout(verified.second)
                     // Second opinion, from inside the tunnel. A probe that rode
                     // the carrier link proves nothing about the TUN, so if the
                     // core has still not moved a single byte after the settle
@@ -1461,6 +1476,10 @@ class MainActivity : Activity() {
 
     /** Status LED colour + glow for the header chip. */
     private fun renderStatusLed() {
+        if (::chipProtocol.isInitialized) {
+            chipProtocol.text = selectedProtocol.label.uppercase() +
+                if (isTunnelActive() && Tun2SocksManager.isRunning) " · MTU " + Tun2SocksManager.sessionMtu else ""
+        }
         // Every state change passes here: the big retry button is for FAILED only.
         val failedVisibility = if (visualState == OrbitDialView.State.FAILED) View.VISIBLE else View.GONE
         homeRetryButton?.visibility = failedVisibility
@@ -1788,12 +1807,10 @@ class MainActivity : Activity() {
             dp(44),
         ).apply { topMargin = dp(8) })
 
-        // Simple / Advanced home ([applyHomeMode]). Everything between the status
-        // text and the Telegram row (chips, exit card, mode rail, DNS chip, add-on
-        // cards, stats) moves into one container the toggle hides. A container,
-        // not per-view visibility: renderChainCard and friends set their own
-        // cards' visibility, and must keep working inside it.
-        val firstAdvanced = indexOfChild(connectionDetail) + 1
+        // IP, exit country and latency are connection readouts, visible in both
+        // home modes. Only the controls below the exit card belong to Advanced.
+        // Keep one container for controls whose own visibility changes independently.
+        val firstAdvanced = indexOfChild(exitNodeCard) + 1
         val advancedBox = LinearLayout(this@MainActivity).apply {
             orientation = LinearLayout.VERTICAL
             clipChildren = false
@@ -1919,8 +1936,8 @@ class MainActivity : Activity() {
     }
 
     /**
-     * Simple view (the default): dial, one plain status line, location card and
-     * support row; always Auto. Advanced shows every control as before.
+     * Both home modes show exit IP, country and connection latency. Simple keeps
+     * the dial, status and location picker; Advanced adds the transport controls.
      */
     private fun applyHomeMode() {
         val simple = homeSimple()

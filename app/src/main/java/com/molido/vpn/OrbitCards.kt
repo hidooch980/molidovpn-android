@@ -98,7 +98,10 @@ class ExitNodeCard(
             setSingleLine(true)
             ellipsize = TextUtils.TruncateAt.END
         }
-        locView = text(Strings.t("tap to refresh"), 10.5f, Sculpt.withAlpha(palette.faint, 0.9f))
+        locView = text(Strings.t("tap to refresh"), 11.5f, Sculpt.withAlpha(palette.faint, 0.9f)).apply {
+            setSingleLine(true)
+            ellipsize = TextUtils.TruncateAt.END
+        }
         column.addView(keyView)
         column.addView(ipView, LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
@@ -163,7 +166,12 @@ class ExitNodeCard(
             IpFormatter.Step.V6_LONG -> 11f
         }
         flagView.text = IpFormatter.flag(countryCode)
-        val country = countryCode?.trim()?.uppercase().orEmpty()
+        val code = countryCode?.trim()?.uppercase().orEmpty()
+            .takeIf { IpFormatter.isRealCountry(it) }.orEmpty()
+        val countryName = if (code.isBlank()) "" else java.util.Locale("", code)
+            .getDisplayCountry(java.util.Locale.forLanguageTag(AppLanguage.current()))
+            .ifBlank { code }
+        val country = if (countryName == code) code else "$countryName ($code)"
         // Country only — city was explicitly not wanted, and the trace endpoint
         // does not return one anyway.
         locView.text = when {
