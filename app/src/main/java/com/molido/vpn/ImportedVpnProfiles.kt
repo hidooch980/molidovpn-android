@@ -10,6 +10,7 @@ import java.util.UUID
 object ImportedVpnProfiles {
     const val OPENVPN = "openvpn"
     const val OPENCONNECT = "openconnect"
+    const val WIREGUARD = "wireguard"
     private const val MAX_PROFILES = 20
     private val idPattern = Regex("[0-9a-f-]{36}")
     // No generated toString/copy: the payload may contain private keys.
@@ -33,7 +34,7 @@ object ImportedVpnProfiles {
             val json = JSONObject(SecureStore.decryptProfile(encrypted))
             check(json.getInt("version") == 1)
             val kind = json.getString("kind")
-            check(kind == OPENVPN || kind == OPENCONNECT)
+            check(kind == OPENVPN || kind == OPENCONNECT || kind == WIREGUARD)
             Entry(file.nameWithoutExtension, json.getString("name"), kind, json.getString("payload"))
         }
 
@@ -42,6 +43,7 @@ object ImportedVpnProfiles {
         val content = when (kind) {
             OPENVPN -> VpnProfilePreflight.openVpn(payload.toByteArray(Charsets.UTF_8)).content
             OPENCONNECT -> VpnProfilePreflight.openConnect(payload)
+            WIREGUARD -> PersonalWireGuard.parse(payload.toByteArray(Charsets.UTF_8)).content
             else -> error("Unsupported profile type")
         }
         val existing = entries(context)
@@ -69,5 +71,8 @@ object ImportedVpnProfiles {
     fun delete(context: Context, id: String) {
         require(idPattern.matches(id))
         AtomicFile(File(directory(context), "$id.vault")).delete()
+        context.cacheDir.listFiles()?.filter { it.name.startsWith("personal-wireguard-$id.") }
+            ?.forEach { it.delete() }
     }
 }
+
