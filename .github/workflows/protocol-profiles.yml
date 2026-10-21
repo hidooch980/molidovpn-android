@@ -41,7 +41,8 @@ jobs:
             -x externalNativeBuildRelease \
             --tests com.molido.vpn.VpnProfilePreflightTest \
             --tests com.molido.vpn.ProfileCipherTest \
-            --tests com.molido.vpn.ConnectionTuningTest
+            --tests com.molido.vpn.ConnectionTuningTest \
+            --tests com.molido.vpn.DualStackTunTest
       - name: Keep test reports
         if: always()
         uses: actions/upload-artifact@v4
