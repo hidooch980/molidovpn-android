@@ -63,4 +63,49 @@ class DualStackTunTest {
             controller.destroy()
         }
     }
+
+    private fun varint(value: Int): ByteArray {
+        var n = value
+        val out = java.io.ByteArrayOutputStream()
+        do {
+            val b = n and 127
+            n = n ushr 7
+            out.write(b or if (n != 0) 128 else 0)
+        } while (n != 0)
+        return out.toByteArray()
+    }
+
+    private fun bytesField(tag: Int, value: ByteArray) =
+        varint((tag shl 3) or 2) + varint(value.size) + value
+
+    private fun country(code: String, vararg ranges: Pair<String, Int>): ByteArray {
+        var entry = bytesField(1, code.toByteArray())
+        for ((ip, prefix) in ranges) {
+            val cidr = bytesField(1, java.net.InetAddress.getByName(ip).address) +
+                varint(2 shl 3) + varint(prefix)
+            entry += bytesField(2, cidr)
+        }
+        return bytesField(1, entry)
+    }
+
+    @Test fun iranBypassKeepsExactIpv6AllocationsAndExistingIpv4Policy() {
+        val encoded = country("DE", "2001:db8:1::" to 48) +
+            country("IR", "5.160.0.0" to 16, "5.160.1.0" to 24, "2a00:1fa0::" to 32)
+        val routes = IranDirect.parse(encoded)
+        assertEquals(2, routes.size)
+        assertTrue(routes.contains("5.160.0.0" to 16))
+        val ipv6 = routes.single { ':' in it.first }
+        assertEquals(32, ipv6.second)
+        assertArrayEquals(java.net.InetAddress.getByName("2a00:1fa0::").address,
+            java.net.InetAddress.getByName(ipv6.first).address)
+    }
+
+    @Test fun countryDataCannotBypassIpv6DefaultOrLocalNetworks() {
+        val encoded = country("IR", "::" to 0, "fc00::" to 7, "fe80::" to 10,
+            "2001:db8::" to 2, "2001:db8::" to 129, "2a00:1fa0::" to 48)
+        val routes = IranDirect.parse(encoded)
+        assertEquals(1, routes.size)
+        assertEquals(48, routes.single().second)
+    }
+
 }
