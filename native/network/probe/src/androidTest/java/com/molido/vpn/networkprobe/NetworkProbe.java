@@ -18,6 +18,7 @@ import java.util.concurrent.atomic.*;
 /** Runs the production native packet stack against loopback-only SOCKS fixtures.
  * The socketpair replaces a TUN, so this is NOT an OS VPN/lockdown leak test. */
 public final class NetworkProbe extends Instrumentation {
+    public static void nativeLog(String level, String channel, String message) { android.util.Log.i("NetworkProbe",level+" "+channel+": "+message); }
     private static void need(boolean ok, String why) { if (!ok) throw new AssertionError(why); }
     private static byte[] ip(String value) throws Exception { return InetAddress.getByName(value).getAddress(); }
     private static int u16(byte[] b,int p) { return (b[p]&255)*256+(b[p+1]&255); }
@@ -60,6 +61,8 @@ public final class NetworkProbe extends Instrumentation {
             // Datagram boundaries model one packet per TUN read/write exactly.
             FileDescriptor a=new FileDescriptor(),b=new FileDescriptor();
             Os.socketpair(OsConstants.AF_UNIX,OsConstants.SOCK_DGRAM,0,a,b);
+            // Android TUN descriptors are nonblocking; BTap_InitWithFD relies on it.
+            Os.fcntlInt(a,OsConstants.F_SETFL,OsConstants.O_NONBLOCK);
             int fd=ParcelFileDescriptor.dup(a).detachFd();
             peer=ParcelFileDescriptor.dup(b); Os.close(a); Os.close(b);
             nativeThread=new Thread(()->{
@@ -188,10 +191,13 @@ public final class NetworkProbe extends Instrumentation {
     @Override public void onStart(){
         Bundle report=new Bundle();StringBuilder details=new StringBuilder();
         try {
+            Tun2SocksJniLoader.initializeLogger(NetworkProbe.class.getName(),"nativeLog");
             // Two genuine native restarts catch stale reactor/listener globals.
             for(int cycle=0;cycle<2;cycle++) {
                 try(ProxyFixture proxy=new ProxyFixture();Link link=new Link(proxy.server.getLocalPort(),false)) {
-                    tcp(link,false,40000);tcp(link,true,40001);
+                    details.append("cycle ").append(cycle).append(" starting TCP4\n");
+                    tcp(link,false,40000); details.append("TCP4 PASS; starting TCP6\n");
+                    tcp(link,true,40001); details.append("TCP6 PASS; starting UDP/DNS\n");
                     udp(link,false,41000,false);udp(link,true,41001,false);udp(link,false,41002,true);
                     proxy.delayMs=120;
                     long rtt=udp(link,true,41003,false);need(rtt>=90&&rtt<3000,"injected delay not measured");
@@ -210,7 +216,8 @@ public final class NetworkProbe extends Instrumentation {
             report.putString("stream","\nMOLIDO_NETWORK_PROBE_OK\n"+details+"Local packet fixtures only; no OS VPN leak or real-carrier quality claim.\n");
             finish(Activity.RESULT_OK,report);
         }catch(Throwable failure){
-            report.putString("stream","\nMOLIDO_NETWORK_PROBE_FAILED: "+failure+"\n"+details);
+            StringWriter stack=new StringWriter(); failure.printStackTrace(new PrintWriter(stack));
+            report.putString("stream","\nMOLIDO_NETWORK_PROBE_FAILED: "+failure+"\n"+details+stack);
             finish(Activity.RESULT_CANCELED,report);
         }
     }
