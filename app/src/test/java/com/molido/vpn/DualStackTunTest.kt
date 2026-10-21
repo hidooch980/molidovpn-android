@@ -108,4 +108,13 @@ class DualStackTunTest {
         assertEquals(48, routes.single().second)
     }
 
+
+    @Test fun ipv6CountryListIsNotTruncatedByTheOldIpv4RouteCap() {
+        val ranges = (0 until 707).map {
+            ("2a00:1fa0:" + it.toString(16) + "::") to 48
+        }.toTypedArray()
+        val routes = IranDirect.parse(country("IR", *ranges))
+        assertEquals(707, routes.size)
+        assertTrue(routes.all { ':' in it.first && it.second == 48 })
+    }
 }
