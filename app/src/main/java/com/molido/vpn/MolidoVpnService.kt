@@ -2937,13 +2937,14 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
             freezeExecutor.execute {
                 try {
                     val port = ShardManager.listenPort
-                    val firstOk = ShardProbe.check(port, 2_000)
-                    val dead = !firstOk && freezeLastRx == rx && !ShardProbe.check(port, 2_000)
+                    val dead = TrafficStall.confirm(rx, { freezeLastRx }) {
+                        ShardProbe.check(port, 2_000)
+                    }
                     if (dead && connected.get() && !stopRequested.get() && currentProtocol.contains("SHARD")) {
                         ConnectionLog.record("SHARD: traffic froze ~4 s — switching node")
                         ladderScheduler.execute {
                             try {
-                                if (connected.get() && !stopRequested.get() && currentProtocol.contains("SHARD")) {
+                                if (freezeLastRx == rx && connected.get() && !stopRequested.get() && currentProtocol.contains("SHARD")) {
                                     rotateShardNode("traffic froze")
                                 }
                             } catch (_: Exception) {
