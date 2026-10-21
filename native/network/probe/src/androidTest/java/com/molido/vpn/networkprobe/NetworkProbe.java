@@ -60,9 +60,9 @@ public final class NetworkProbe extends Instrumentation {
         Link(int socksPort,boolean dnsOnly) throws Exception {
             // Datagram boundaries model one packet per TUN read/write exactly.
             FileDescriptor a=new FileDescriptor(),b=new FileDescriptor();
-            Os.socketpair(OsConstants.AF_UNIX,OsConstants.SOCK_DGRAM,0,a,b);
-            // Android TUN descriptors are nonblocking; BTap_InitWithFD relies on it.
-            Os.fcntlInt(a,OsConstants.F_SETFL,OsConstants.O_NONBLOCK);
+            // O_NONBLOCK equals SOCK_NONBLOCK on Android and is public since API 21.
+            // Creating both ends nonblocking matches real TUN and avoids API-30 fcntlInt.
+            Os.socketpair(OsConstants.AF_UNIX,OsConstants.SOCK_DGRAM | OsConstants.O_NONBLOCK,0,a,b);
             int fd=ParcelFileDescriptor.dup(a).detachFd();
             peer=ParcelFileDescriptor.dup(b); Os.close(a); Os.close(b);
             nativeThread=new Thread(()->{
