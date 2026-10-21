@@ -5061,7 +5061,7 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
                 nativeExitWasUnexpected = false
             } finally {
                 if (generation != sessionGeneration) {
-                    tunLease.release(ownedTun)
+                    if (!killSwitchArmed() || userInitiatedStop.get()) tunLease.release(ownedTun)
                     ConnectionLog.record("Previous core exited under a newer session; lifecycle untouched")
                 } else {
                     NativeCore.detach()
@@ -5085,8 +5085,8 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
                     // no leak to seal — and building one here would put up a VPN the user
                     // never consented to in this session.
                     val killSwitch = killSwitchArmed()
-                    val holdTun = retainTunForRecovery ||
-                        (killSwitch && !userInitiatedStop.get() && !stopRequested.get())
+                    val holdTun = killSwitch && !userInitiatedStop.get() &&
+                        (retainTunForRecovery || !stopRequested.get())
                     if (!holdTun) tunLease.release(ownedTun)
                     connected.set(false)
                     if (reconnectRequested.compareAndSet(true, false)) {
@@ -5101,6 +5101,10 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
                         // `killSwitch` was read at the top of this block, before
                         // proxyMode could be cleared — pass it rather than asking again.
                         sealWithKillSwitch(killSwitch)
+                    } else if (holdTun && stopRequested.get()) {
+                        // The drop handler is replacing the blackhole. Its native
+                        // worker must not end the foreground service underneath it.
+                        ConnectionLog.record("Native core stopped for protected handover; TUN retained")
                     } else if (nativeExitWasUnexpected && willAutoReconnect()) {
                         // The core died on its own and the user still wants to be
                         // connected. Keep the foreground service alive so the retry
@@ -5197,7 +5201,7 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
             if (notify) sendStatus(STATUS_DISCONNECTED)
             // A reconnect re-enters startTunnel() on the worker thread, so the
             // service must survive; only a real disconnect stops it.
-            if (teardownService) {
+            if (teardownService && !preserveTun) {
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
             }
@@ -5212,7 +5216,7 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
             if (!preserveTun) tun = null
             connected.set(false)
             if (notify) sendStatus(STATUS_DISCONNECTED)
-            if (teardownService) {
+            if (teardownService && !preserveTun) {
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
             }
@@ -5240,7 +5244,7 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
             if (!preserveTun) tun = null
             connected.set(false)
             if (notify) sendStatus(STATUS_DISCONNECTED)
-            if (teardownService) {
+            if (teardownService && !preserveTun) {
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
             }
@@ -5264,7 +5268,7 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
             if (!preserveTun) tun = null
             connected.set(false)
             if (notify) sendStatus(STATUS_DISCONNECTED)
-            if (teardownService) {
+            if (teardownService && !preserveTun) {
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
             }
