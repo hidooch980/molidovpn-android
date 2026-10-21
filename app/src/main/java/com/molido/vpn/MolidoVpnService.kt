@@ -1962,6 +1962,10 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
         // and scheduleAutoReconnect's own CONNECTING is the honest report there. The
         // sealed branches below send their own terminal status when no retry is due.
         val sealing = armed || keepSeal
+        // Failed candidates belong to the selector, not the service lifecycle.
+        // Capture ownership before teardown: native cleanup may consume the latch.
+        val trialFailure = autoTrialActive.get() && !userInitiatedStop.get()
+        val quickReconnect = reconnectRequested.get() && !userInitiatedStop.get()
         if (!(sealing && willAutoReconnect())) {
             sendStatus(STATUS_FAILED, detail)
         }
@@ -1969,7 +1973,14 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
         // Keeping the service alive is a precondition of the seal: stopSelf()
         // releases the blocking TUN's fd and the OS restores carrier networking,
         // which is the leak the switch exists to prevent.
-        stopTunnel(notify = false, teardownService = !sealing, preserveTun = sealing)
+        stopTunnel(notify = false,
+            teardownService = !(sealing || trialFailure || quickReconnect), preserveTun = sealing)
+        if (trialFailure) {
+            autoTrialFailed = true
+            reconnectRequested.compareAndSet(true, false)
+            ConnectionLog.record("Auto candidate failed; selector keeps the service for the next method")
+            return
+        }
         // A quick reconnect owns the service: Psiphon, Tor, SHARD and the chain all
         // report a mid-teardown failure through here, and killing the service would
         // strand the restart the user just asked for — the same defect the native
@@ -1978,7 +1989,8 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
         // The latch is CONSUMED, not just read: if the restart itself is what failed,
         // a second failure must be free to end the service normally instead of
         // leaving a dead session behind a live notification.
-        if (reconnectRequested.compareAndSet(true, false)) {
+        if (quickReconnect) {
+            reconnectRequested.compareAndSet(true, false)
             ConnectionLog.record("Failure during a quick reconnect; service kept alive")
             return
         }
