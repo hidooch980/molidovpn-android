@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Downloads the prebuilt Psiphon AAR and the Tor / lyrebird / Xray executables into the app tree.
-# Source: our own release "binaries-4" (a mirror of the upstream core's prebuilt files), verified by SHA-256.
+# Source: our own release "binaries-5" (a mirror of the upstream core's prebuilt files), verified by SHA-256.
 # Falls back to the upstream repository only if our release is unreachable.
 # sing-box (hysteria2 / tuic / anytls) comes straight from SagerNet's release, pinned by SHA-256.
 set -euo pipefail
 
-TAG="${BINARIES_TAG:-binaries-4}"
+TAG="${BINARIES_TAG:-binaries-5}"
 OURS="https://github.com/hidooch980/molidovpn-android/releases/download/$TAG"
 UPSTREAM_CORE_APP="https://github.com/mbm110/MSN-GUARD/raw/master/app"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
