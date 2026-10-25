@@ -24,7 +24,7 @@ data class SmartConfig(
     /** Repeated checks per trial for the stability figure. */
     val stabilityProbes: Int = 3,
     /** Small download per trial when the method exposes a local proxy. */
-    val downloadBytes: Int = 200_000,
+    val downloadBytes: Int = 1_500_000,
     /** Remembered winners per network expire after this. */
     val memoryTtlDays: Int = 14,
     /** Below this battery % (not charging): half the trials, no background re-evaluation. */
@@ -66,7 +66,7 @@ data class SmartConfig(
                 minScore = json.optInt("min_score", d.minScore).coerceIn(0, 99),
                 parallelProbes = json.optInt("parallel_probes", d.parallelProbes).coerceIn(1, 16),
                 stabilityProbes = json.optInt("stability_probes", d.stabilityProbes).coerceIn(1, 5),
-                downloadBytes = json.optInt("download_bytes", d.downloadBytes).coerceIn(0, 2_000_000),
+                downloadBytes = json.optInt("download_bytes", d.downloadBytes).coerceIn(0, 4_000_000),
                 memoryTtlDays = json.optInt("memory_ttl_days", d.memoryTtlDays).coerceIn(1, 90),
                 batterySaverPct = json.optInt("battery_saver_pct", d.batterySaverPct).coerceIn(0, 100),
                 reeval = if (r == null) dr else Reeval(

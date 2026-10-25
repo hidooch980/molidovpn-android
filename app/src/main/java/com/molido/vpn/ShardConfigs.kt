@@ -1270,11 +1270,11 @@ object ShardConfigs {
      *   is not a browser: a default-deny would break every app whose protocol the
      *   sniffer does not recognise, and this config is carrying the whole device.
      */
-    /** Settings key for "data saver" (QUIC block on SHARD/V2Ray). Default off. */
+    /** Settings key for "data saver" (QUIC block on SHARD/V2Ray). Default on: Instagram/YouTube QUIC over the tunnel stalls; TCP is faster. */
     const val DATA_SAVER_PREF = "data_saver"
 
     fun dataSaverEnabled(context: Context): Boolean =
-        context.getSharedPreferences("settings", Context.MODE_PRIVATE).getBoolean(DATA_SAVER_PREF, false)
+        context.getSharedPreferences("settings", Context.MODE_PRIVATE).getBoolean(DATA_SAVER_PREF, true)
 
     /**
      * [IranDirect] rules for a node-only config: Iranian names (and, with the geo

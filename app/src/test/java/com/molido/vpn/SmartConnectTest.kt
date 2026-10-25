@@ -240,8 +240,10 @@ class SmartConnectTest {
     fun shippedResilienceHasSmartSection() {
         val c = ResilienceConfig.parse(File("../remote/resilience.json").readText())
         assertTrue(c.smart.enabled)
-        assertEquals(SmartConfig().copy(minTrials = 1), c.smart)
-        assertTrue(SmartPlan.shouldStop(mapOf("fast" to 90.0), 1, 1_000, c.smart))
+        assertEquals(SmartConfig(), c.smart)
+        // One good method is not a race: at least three methods compete before stopping.
+        assertFalse(SmartPlan.shouldStop(mapOf("fast" to 90.0), 1, 1_000, c.smart))
+        assertTrue(SmartPlan.shouldStop(mapOf("fast" to 90.0), 3, 1_000, c.smart))
         assertFalse(SmartPlan.shouldStop(mapOf("slow" to 79.0), 1, 1_000, c.smart))
         assertFalse(SmartPlan.shouldStop(mapOf("failed" to 0.0), 1, 1_000, c.smart))
     }

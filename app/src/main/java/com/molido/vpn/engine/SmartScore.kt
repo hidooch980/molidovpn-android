@@ -24,9 +24,9 @@ data class Measured(
 
 /** Relative weight of each quality; they need not sum to 1 (normalised). */
 data class Weights(
-    val stability: Double = 0.45,
-    val latency: Double = 0.20,
-    val throughput: Double = 0.25,
+    val stability: Double = 0.35,
+    val latency: Double = 0.15,
+    val throughput: Double = 0.40,
     val connect: Double = 0.10,
 )
 
@@ -44,6 +44,10 @@ data class Weights(
 object SmartScore {
 
     const val IRAN_EXIT_FACTOR = 0.5
+
+    /** Below this measured speed video stalls: the score is cut so the race keeps looking. */
+    const val MIN_VIDEO_KBPS = 3_000L
+    const val SLOW_FACTOR = 0.6
 
     private fun clamp01(v: Double) = v.coerceIn(0.0, 1.0)
 
@@ -82,7 +86,10 @@ object SmartScore {
             w.latency * latencyScore(lat) +
             w.throughput * throughputScore(tput) +
             w.connect * connectScore(m.connectMs)) / total
-        val s = 100.0 * raw
+        var s = 100.0 * raw
+        if (tput != null && tput < MIN_VIDEO_KBPS) s *= SLOW_FACTOR
+        // A route that dropped checks stalls mid-video however fast it was once.
+        if (stability < 1.0) s *= stability
         return if (m.iranExit) s * IRAN_EXIT_FACTOR else s
     }
 
