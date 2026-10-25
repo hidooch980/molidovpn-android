@@ -700,7 +700,7 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
     companion object {
         const val LOG_TAG = "MolidoVpnService"
         /** Heartbeat every N watchdog ticks (30 s each): 6 = ~3 min, inside the worker's 300 s online window. */
-        internal const val HEARTBEAT_EVERY_TICKS = 6
+        internal const val HEARTBEAT_EVERY_TICKS = 30
         /**
          * Ceiling on in-place SHARD node swaps per session.
          *
@@ -4591,10 +4591,14 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
 
     /** Called from the watchdog tick while connected: live figures + quality monitor. */
     private fun smartTick() {
-        val rx = currentRx
-        val tx = currentTx
-        val dRx = (rx - smartLastRx).coerceAtLeast(0)
-        val dTx = (tx - smartLastTx).coerceAtLeast(0)
+        // Some cores never emit "traffic" events; the app's own uid counters carry
+        // every tunnelled byte (the core's sockets), so use whichever is larger.
+        val uid = android.os.Process.myUid()
+        val rx = maxOf(currentRx, android.net.TrafficStats.getUidRxBytes(uid).coerceAtLeast(0))
+        val tx = maxOf(currentTx, android.net.TrafficStats.getUidTxBytes(uid).coerceAtLeast(0))
+        val first = smartLastRx == 0L && smartLastTx == 0L
+        val dRx = if (first) 0L else (rx - smartLastRx).coerceAtLeast(0)
+        val dTx = if (first) 0L else (tx - smartLastTx).coerceAtLeast(0)
         smartLastRx = rx
         smartLastTx = tx
         val interval = WATCHDOG_INTERVAL_S.coerceAtLeast(1)
