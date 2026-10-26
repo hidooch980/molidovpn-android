@@ -1,5 +1,7 @@
 package com.molido.vpn
 
+import java.net.URI
+
 /** Hysteria2 authority, without auth/query. No DNS lookup or port-range expansion. */
 internal data class Hysteria2Endpoint(
     val address: String,
@@ -18,6 +20,8 @@ internal data class Hysteria2Endpoint(
                 if (end < 2) return null
                 address = authority.substring(1, end)
                 if (!address.contains(':') || address.any { it !in "0123456789abcdefABCDEF:." }) return null
+                // URI validates IPv6 syntax without resolving the host.
+                if (runCatching { URI("http://[$address]").host }.getOrNull() == null) return null
                 val suffix = authority.substring(end + 1)
                 if (suffix.isNotEmpty() && !suffix.startsWith(':')) return null
                 portText = if (suffix.isEmpty()) "443" else suffix.drop(1)
@@ -42,7 +46,8 @@ internal data class Hysteria2Endpoint(
                 val high = bounds.last().toIntOrNull() ?: return null
                 if (low !in 1..65535 || high !in low..65535) return null
                 if (firstPort == 0) firstPort = low
-                normalized.add(if (low == high) "$low" else "$low:$high")
+                // The pinned engine requires start:end even for a singleton.
+                normalized.add("$low:$high")
             }
             val hopping = ',' in portText || '-' in portText
             return Hysteria2Endpoint(address, firstPort, if (hopping) normalized.distinct() else emptyList())

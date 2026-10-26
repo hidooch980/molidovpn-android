@@ -1,9 +1,36 @@
 package com.molido.vpn
 
 import org.junit.Assert.*
+import org.junit.Assume.assumeTrue
 import org.junit.Test
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.File
+import java.util.concurrent.TimeUnit
 
 class Hysteria2ImportTest {
+    @Test fun pinnedEngineAcceptsRenderedConfigs() {
+        val binary = System.getenv("MOLIDO_SINGBOX")
+        assumeTrue("Set MOLIDO_SINGBOX to run the real engine config check", !binary.isNullOrEmpty())
+        for (authority in listOf("192.0.2.1", "192.0.2.1:443,20000-30000,8443",
+            "[2001:db8::1]:20000-30000", "192.0.2.1:1-65535")) {
+            val node = V2rayNodes.parseOne("hy2://test@$authority?sni=vpn.example")!!
+            val config = JSONObject().put("outbounds", JSONArray().put(SingBox.outbound(node, "test")))
+            val file = File.createTempFile("hysteria2-engine-", ".json")
+            var process: Process? = null
+            try {
+                file.writeText(config.toString())
+                process = ProcessBuilder(binary!!, "check", "-c", file.absolutePath).redirectErrorStream(true).start()
+                assertTrue("Engine config check timed out", process.waitFor(15, TimeUnit.SECONDS))
+                val output = process.inputStream.bufferedReader().readText()
+                assertEquals(output, 0, process.exitValue())
+            } finally {
+                process?.destroyForcibly()
+                file.delete()
+            }
+        }
+    }
+
     @Test fun shareLinkRendersAllPortsThroughExistingSidecar() {
         val uri = "hy2://user%3Ap%40ss@vpn.example:443,20000-30000,8443/?sni=tls.example&obfs=salamander&obfs-password=secret#My%20VPN"
         val node = V2rayNodes.parseOne(uri)!!
@@ -13,7 +40,7 @@ class Hysteria2ImportTest {
         assertEquals(443, V2rayNodes.toShardNode(node).port)
         val outbound = SingBox.outbound(node, "test")
         assertFalse(outbound.has("server_port"))
-        assertEquals(listOf("443", "20000:30000", "8443"),
+        assertEquals(listOf("443:443", "20000:30000", "8443:8443"),
             outbound.getJSONArray("server_ports").let { a -> (0 until a.length()).map { a.getString(it) } })
         assertEquals("user:p@ss", outbound.getString("password"))
         assertEquals("secret", outbound.getJSONObject("obfs").getString("password"))

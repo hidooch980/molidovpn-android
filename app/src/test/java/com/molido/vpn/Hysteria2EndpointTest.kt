@@ -11,15 +11,15 @@ class Hysteria2EndpointTest {
     }
 
     @Test fun preservesAllPortsAndRangesWithoutExpandingThem() {
-        assertEquals(Hysteria2Endpoint("vpn.example", 443, listOf("443", "20000:30000", "8443")),
+        assertEquals(Hysteria2Endpoint("vpn.example", 443, listOf("443:443", "20000:30000", "8443:8443")),
             Hysteria2Endpoint.parse("vpn.example:443,20000-30000,8443"))
-        assertEquals(Hysteria2Endpoint("2001:db8::1", 20000, listOf("20000:30000", "443")),
+        assertEquals(Hysteria2Endpoint("2001:db8::1", 20000, listOf("20000:30000", "443:443")),
             Hysteria2Endpoint.parse("[2001:db8::1]:20000-30000,443"))
         assertEquals(listOf("1:65535"), Hysteria2Endpoint.parse("vpn.example:1-65535")!!.serverPorts)
     }
 
     @Test fun normalizesAndDeduplicates() {
-        assertEquals(listOf("443", "5000:6000"),
+        assertEquals(listOf("443:443", "5000:6000"),
             Hysteria2Endpoint.parse("vpn.example:00443,443-443,5000-6000,443")!!.serverPorts)
     }
 
@@ -33,7 +33,7 @@ class Hysteria2EndpointTest {
 
     @Test fun rejectsMalformedAndOversizedAuthorities() {
         for (authority in listOf("", ":443", "[2001:db8::1", "2001:db8::1", "[2001:db8::1]extra:443",
-            "[vpn.example]:443", "[2001:db8::1]:", "vpn.example/a", "x@y:443", "vpn.example:443#x",
+            "[vpn.example]:443", "[:::]:443", "[1:2:3]:443", "[2001:db8::99999]:443", "[2001:db8::1]:", "vpn.example/a", "x@y:443", "vpn.example:443#x",
             "vpn.example:" + List(65) { "443" }.joinToString(","), "x".repeat(2049))) {
             assertNull(authority, Hysteria2Endpoint.parse(authority))
         }

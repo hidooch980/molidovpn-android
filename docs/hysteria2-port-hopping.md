@@ -16,7 +16,8 @@ hy2://password@vpn.example
 
 Previously the importer silently discarded everything after the first comma,
 rejected range-only addresses, and required an explicit port. It now preserves
-the entire port list, translates ranges to sing-box's `start:end` syntax, and
+the entire port list, translates every entry to sing-box's `start:end` syntax
+(including `443:443` for a single port in a list), and
 uses port 443 when no port is supplied. An explicitly empty port is invalid.
 Single-port profiles still emit only `server_port`; hopping profiles emit only
 `server_ports`. The engine's default hopping interval is retained. The first
@@ -53,5 +54,10 @@ ports, ranges, deduplication, malformed entries and input bounds.
 `Hysteria2ImportTest` covers the actual URI importer → node → sing-box outbound,
 credentials/SNI/TLS preservation, mixed subscriptions, and TUIC/AnyTLS regression.
 The existing profile-validation PR workflow compiles the Android sources and
-runs the full unit-test suite. A passing parser/config test is not a phone or
+runs the full unit-test suite. It also fetches the SHA-256-verified Linux build
+of the same sing-box version and checks the actual rendered configurations with
+`sing-box check` (no connection is opened). This contract test catches differences
+between the documented format and what the pinned engine actually accepts.
+Locally it is skipped unless `MOLIDO_SINGBOX` points to the engine binary.
+A passing parser/config test is not a phone or
 operator connectivity test.
