@@ -17,6 +17,8 @@ import java.util.concurrent.ConcurrentHashMap
  * rotated: SHARD nodes carrying `cs`/`fm` or `fp=unsafe` (see [ShardNode]'s doc —
  * the fragment lengths only line up with that exact ClientHello). Early data is
  * only for V2Ray nodes that are not on SHARD-style Cloudflare workers.
+ * Imported VLESS XHTTP/WS profiles are never rewritten, even after failures:
+ * their fingerprint and early-data/path choices belong to the publisher.
  *
  * Memory only, keyed by network: a success, a new network or a process restart
  * resets everything to the subscription's own values.
@@ -58,16 +60,25 @@ object RetryTweaks {
     }
 
     /** Fingerprint to use instead of the node's own, or null for "unchanged". */
-    fun fingerprintFor(context: Context, node: ShardNode): String? {
-        val n = count(context, node)
-        if (n < FINGERPRINT_FROM || !fingerprintFree(node)) return null
-        return ROTATION[(n - FINGERPRINT_FROM) % ROTATION.size]
+    fun fingerprintFor(context: Context, node: ShardNode): String? =
+        fingerprintFor(node, count(context, node))
+
+    internal fun fingerprintFor(node: ShardNode, failures: Int): String? {
+        if (preserveVlessTransport(node) || failures < FINGERPRINT_FROM || !fingerprintFree(node)) return null
+        return ROTATION[(failures - FINGERPRINT_FROM) % ROTATION.size]
     }
 
+    private fun preserveVlessTransport(node: ShardNode): Boolean =
+        node.v2ray?.let { it.protocol == "vless" && it.network in setOf("xhttp", "ws") } == true
+
     /** ws path with early data for this retry, or null for "unchanged". */
-    fun earlyDataPath(context: Context, node: ShardNode): String? {
+    fun earlyDataPath(context: Context, node: ShardNode): String? =
+        earlyDataPath(node, count(context, node))
+
+    internal fun earlyDataPath(node: ShardNode, failures: Int): String? {
+        if (preserveVlessTransport(node)) return null
         val v2 = node.v2ray ?: return null
-        if (v2.network != "ws" || count(context, node) < EARLY_DATA_FROM) return null
+        if (v2.network != "ws" || failures < EARLY_DATA_FROM) return null
         if (isWorkerHost(v2.host) || isWorkerHost(v2.sni)) return null
         val path = v2.path.ifEmpty { "/" }
         if (path.contains("ed=")) return null

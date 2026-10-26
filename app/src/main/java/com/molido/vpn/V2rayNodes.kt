@@ -69,26 +69,40 @@ object V2rayNodes {
 
     private const val TAG = "V2rayNodes"
 
-    /** xhttp needs xray v24.9+; the bundled libxray.so is v26.3.27. */
+    /** xhttp needs xray v24.9+; current core version is recorded in .github/core-versions.json. */
     private val NETWORKS = setOf("tcp", "ws", "grpc", "httpupgrade", "xhttp")
 
     private val XHTTP_MODES = setOf("auto", "packet-up", "stream-up", "stream-one")
 
     /** `splithttp` is the old name of xhttp; `mode` is only valid in the set above. */
     private fun normalizeNetwork(raw: String): String =
-        raw.lowercase(Locale.US).let { if (it == "splithttp") "xhttp" else it }
+        when (val value = raw.lowercase(Locale.US)) {
+            "splithttp" -> "xhttp"
+            "websocket" -> "ws"
+            else -> value
+        }
 
     private fun xhttpMode(raw: String): String =
         raw.lowercase(Locale.US).takeIf { it in XHTTP_MODES } ?: "auto"
 
-    /** The `extra` value only when it is a JSON object (anything else is dropped). */
-    private fun xhttpExtra(raw: String): String =
-        raw.trim().takeIf { it.startsWith("{") }?.let { runCatching { JSONObject(it).toString() }.getOrNull() }.orEmpty()
-
-    /** uTLS names xray accepts; anything else would fail the whole config. */
+    /** Presets from Xray 26.10.21 tls.go, including explicit Go TLS (unsafe). */
     private val FINGERPRINTS = setOf(
-        "chrome", "firefox", "safari", "ios", "android", "edge", "360", "qq",
-        "random", "randomized",
+        "chrome", "firefox", "safari", "ios",
+        "android", "edge", "360", "qq",
+        "random", "randomized", "randomizednoalpn", "unsafe",
+        "hellofirefox_120", "hellofirefox_148", "hellochrome_120", "hellochrome_131",
+        "hellochrome_133", "helloios_13", "helloios_14", "helloedge_106",
+        "hellosafari_26_3", "hello360_11_0", "helloqq_11_1", "hellogolang",
+        "hellorandomized", "hellorandomizedalpn", "hellorandomizednoalpn", "hellofirefox_auto",
+        "hellofirefox_55", "hellofirefox_56", "hellofirefox_63", "hellofirefox_65",
+        "hellofirefox_99", "hellofirefox_102", "hellofirefox_105", "hellochrome_auto",
+        "hellochrome_58", "hellochrome_62", "hellochrome_70", "hellochrome_72",
+        "hellochrome_83", "hellochrome_87", "hellochrome_96", "hellochrome_100",
+        "hellochrome_102", "hellochrome_106_shuffle", "helloios_auto", "helloios_11_1",
+        "helloios_12_1", "helloandroid_11_okhttp", "helloedge_85", "helloedge_auto",
+        "hellosafari_16_0", "hellosafari_auto", "hello360_auto", "hello360_7_5",
+        "helloqq_auto", "hellochrome_100_psk", "hellochrome_112_psk_shuf", "hellochrome_114_padding_psk_shuf",
+        "hellochrome_115_pq", "hellochrome_115_pq_psk", "hellochrome_120_pq",
     )
 
     /** AEAD / 2022 ciphers only — stream ciphers are gone from current xray. */
@@ -166,6 +180,13 @@ object V2rayNodes {
         val q = parseQuery(hostPortQuery.substringAfter('?', ""))
         val network = normalizeNetwork(q["type"].orEmpty()).ifEmpty { "tcp" }
         if (network !in NETWORKS) return null
+        val xhttp = if (network == "xhttp") {
+            XhttpProfile.parse(q["mode"].orEmpty(), q["extra"].orEmpty()) ?: return null
+        } else null
+        if (scheme == "vless" && network in setOf("ws", "xhttp")) {
+            val fp = q["fp"].orEmpty().lowercase(Locale.US)
+            if (fp.isNotEmpty() && fp !in FINGERPRINTS) return null
+        }
         val headerType = q["headertype"].orEmpty().lowercase(Locale.US)
         if (network == "tcp" && headerType.isNotEmpty() && headerType != "none") return null
         val defaultSecurity = if (scheme == "trojan") "tls" else "none"
@@ -198,8 +219,8 @@ object V2rayNodes {
             path = q["path"].orEmpty(),
             serviceName = q["servicename"].orEmpty().ifEmpty { if (network == "grpc") q["path"].orEmpty() else "" },
             grpcMulti = q["mode"].orEmpty().lowercase(Locale.US) == "multi",
-            xhttpMode = if (network == "xhttp") xhttpMode(q["mode"].orEmpty()) else "auto",
-            xhttpExtra = if (network == "xhttp") xhttpExtra(q["extra"].orEmpty()) else "",
+            xhttpMode = xhttp?.mode ?: "auto",
+            xhttpExtra = xhttp?.extra.orEmpty(),
         )
         return node.takeIf { complete(it) }
     }
@@ -370,6 +391,7 @@ object V2rayNodes {
     private fun complete(node: V2rayNode): Boolean {
         if (node.address.isBlank() || node.port !in 1..65535 || node.credential.isBlank()) return false
         if (node.security == "reality") {
+            if (node.fingerprint == "unsafe" || node.fingerprint == "hellogolang") return false
             if (node.publicKey.isBlank()) return false
             if (node.sni.isBlank() && node.host.isBlank()) return false
             if (node.network != "tcp" && node.network != "grpc" && node.network != "xhttp") return false
