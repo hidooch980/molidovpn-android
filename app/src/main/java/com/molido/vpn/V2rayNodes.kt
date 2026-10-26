@@ -61,6 +61,8 @@ data class V2rayNode(
     val congestion: String = "",
     /** tuic UDP relay mode: native or quic. */
     val udpRelayMode: String = "",
+    /** Hysteria2 port list/ranges in sing-box syntax; empty for a single port. */
+    val serverPorts: List<String> = emptyList(),
     /** The share link's `#name` (vmess: `ps`); country detection and My configs only. */
     val name: String = "",
 )
@@ -314,9 +316,10 @@ object V2rayNodes {
         val auth = decode(rest.substringBefore('@', ""))
         if (auth.isEmpty()) return null
         val hostPortQuery = rest.substringAfter('@')
-        // Port hopping ("443,20000-30000") is not supported: the first port only.
-        val hostPortText = hostPortQuery.substringBefore('?').substringBefore('/').substringBefore(',')
-        val (address, port) = hostPort(hostPortText) ?: return null
+        val endpoint = Hysteria2Endpoint.parse(hostPortQuery.substringBefore('?').substringBefore('/'))
+            ?: return null
+        val address = endpoint.address
+        val port = endpoint.port
         val q = parseQuery(hostPortQuery.substringAfter('?', ""))
         val obfs = q["obfs"].orEmpty().lowercase(Locale.US)
         if (obfs.isNotEmpty() && obfs != "none" && obfs != "salamander") return null
@@ -332,6 +335,7 @@ object V2rayNodes {
             sni = q["sni"].orEmpty().ifEmpty { q["peer"].orEmpty() },
             alpn = q["alpn"].orEmpty(),
             obfsPassword = obfsPassword,
+            serverPorts = endpoint.serverPorts,
             insecure = flag(q["insecure"]) || flag(q["allowinsecure"]) || flag(q["allow_insecure"]),
         ).takeIf { complete(it) }
     }

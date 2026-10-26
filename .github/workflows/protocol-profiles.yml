@@ -49,6 +49,15 @@ jobs:
           unzip -q "$RUNNER_TEMP/molido-xray/engine.zip" -d "$RUNNER_TEMP/molido-xray"
           chmod +x "$RUNNER_TEMP/molido-xray/xray"
           echo "MOLIDO_XRAY=$RUNNER_TEMP/molido-xray/xray" >> "$GITHUB_ENV"
+      - name: Fetch pinned host engine for real Hysteria2 config validation
+        run: |
+          mkdir -p "$RUNNER_TEMP/molido-singbox"
+          curl -fsSL --retry 3 --max-time 120 \
+            https://github.com/SagerNet/sing-box/releases/download/v1.12.25/sing-box-1.12.25-linux-amd64.tar.gz \
+            -o "$RUNNER_TEMP/molido-singbox/engine.tar.gz"
+          echo "a1ec76e2b6b139eb747a1b1ebee7d14b8d4be5a833596cad8070a31ef960301f  $RUNNER_TEMP/molido-singbox/engine.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/molido-singbox/engine.tar.gz" -C "$RUNNER_TEMP/molido-singbox"
+          echo "MOLIDO_SINGBOX=$RUNNER_TEMP/molido-singbox/sing-box-1.12.25-linux-amd64/sing-box" >> "$GITHUB_ENV"
       - name: Compile Android sources and run the complete unit-test suite
         run: |
           chmod +x gradlew
