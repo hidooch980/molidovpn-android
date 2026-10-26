@@ -210,13 +210,18 @@ object SingBox {
         if (alpn.isNotEmpty()) put("alpn", JSONArray().apply { alpn.forEach { put(it) } })
     }
 
-    private fun outbound(n: V2rayNode, tag: String): JSONObject = JSONObject().apply {
+    internal fun outbound(n: V2rayNode, tag: String): JSONObject = JSONObject().apply {
         put("tag", tag)
         put("server", n.address)
         put("server_port", n.port)
         when (n.protocol) {
             "hysteria2" -> {
                 put("type", "hysteria2")
+                if (n.serverPorts.isNotEmpty()) {
+                    // sing-box 1.12.25 supports ranges since 1.11; never emit both fields.
+                    remove("server_port")
+                    put("server_ports", JSONArray(n.serverPorts))
+                }
                 put("password", n.credential)
                 if (n.obfsPassword.isNotEmpty()) {
                     put("obfs", JSONObject().put("type", "salamander").put("password", n.obfsPassword))
