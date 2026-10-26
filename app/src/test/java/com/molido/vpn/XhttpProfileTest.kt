@@ -27,7 +27,7 @@ class XhttpProfileTest {
         val raw = """{"downloadSettings":{"address":"192.0.2.2","port":443,"network":"xhttp"},
             "xmux":{"maxConnections":2},"xPaddingBytes":"100-1000","futureField":{"value":7}}"""
         val parsed = XhttpProfile.parse("stream-up", raw)!!
-        assertTrue(JSONObject(raw).similar(JSONObject(parsed.extra)))
+        assertJsonEquivalent(JSONObject(raw), JSONObject(parsed.extra))
     }
 
     @Test fun rejectsHostHeaderAndNonStringHeaders() {

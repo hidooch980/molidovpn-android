@@ -24,7 +24,7 @@ class VlessTransportTest {
         assertEquals("stream-up", xhttp.getString("mode"))
         assertEquals("/upload?token=a+b", xhttp.getString("path"))
         assertEquals("cdn.example", xhttp.getString("host"))
-        assertTrue(JSONObject(extra).similar(xhttp.getJSONObject("extra")))
+        assertJsonEquivalent(JSONObject(extra), xhttp.getJSONObject("extra"))
         assertEquals("tls.example", stream.getJSONObject("tlsSettings").getString("serverName"))
         assertEquals("firefox", stream.getJSONObject("tlsSettings").getString("fingerprint"))
         assertEquals("h2", stream.getJSONObject("tlsSettings").getJSONArray("alpn").getString(0))
@@ -86,7 +86,7 @@ class VlessTransportTest {
         val stream = render(node).getJSONObject("streamSettings")
         assertEquals("h3", stream.getJSONObject("tlsSettings").getJSONArray("alpn").getString(0))
         val download = stream.getJSONObject("xhttpSettings").getJSONObject("extra").getJSONObject("downloadSettings")
-        assertTrue(JSONObject(extra).getJSONObject("downloadSettings").similar(download))
+        assertJsonEquivalent(JSONObject(extra).getJSONObject("downloadSettings"), download)
     }
 
     @Test fun otherTransportRetryBehaviorIsUnchanged() {
