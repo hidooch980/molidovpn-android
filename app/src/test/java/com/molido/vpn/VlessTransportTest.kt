@@ -11,7 +11,7 @@ import java.util.concurrent.TimeUnit
 
 class VlessTransportTest {
     private val id = "11111111-1111-4111-8111-111111111111"
-    private fun encode(s: String) = URLEncoder.encode(s, "UTF-8")
+    private fun encode(s: String) = URLEncoder.encode(s, "UTF-8").replace("+", "%20")
     private fun uri(type: String, query: String = "") =
         "vless://$id@192.0.2.1:443?encryption=none&security=tls&type=$type&host=cdn.example&sni=tls.example&fp=firefox&$query"
     private fun render(node: V2rayNode) = V2rayNodes.outbound(node, node.address, node.port, "test")

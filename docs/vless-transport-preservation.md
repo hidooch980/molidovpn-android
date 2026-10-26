@@ -16,7 +16,7 @@ in `.github/core-versions.json`; it adds no Android dependency or protocol engin
   modes instead of silently replacing them with `auto`.
 - Preserve the entire valid XHTTP `extra` object, including XMUX, padding,
   custom headers and separate `downloadSettings`. Malformed/non-object/trailing
-  JSON is rejected instead of discarded. Input is limited to 64 KiB after URI
+  JSON is rejected instead of discarded. Input is limited to 65,536 characters after URI
   decoding. Unknown fields are preserved for the engine to interpret.
 - Reject XHTTP `headers.Host` (case insensitive), non-string header values,
   malformed downstream objects, and `stream-one` combined with downstream
