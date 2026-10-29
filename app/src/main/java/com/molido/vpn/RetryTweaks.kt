@@ -58,7 +58,11 @@ object RetryTweaks {
     internal fun prepare(key: String, node: ShardNode, now: Long = System.currentTimeMillis()): ShardNode {
         val state = current(key, now)
         val learned = state?.learned
-        val profile = if (learned != null && !preserveVlessTransport(node)) learned else Profile(
+        val profile = if (learned != null && !preserveVlessTransport(node)) Profile(
+            learned.fingerprint.takeIf { fingerprintFree(node) },
+            learned.path.takeIf { it != null && it == earlyDataPath(node, EARLY_DATA_FROM) },
+            key,
+        ) else Profile(
             fingerprintFor(node, state?.failures ?: 0), earlyDataPath(node, state?.failures ?: 0), key
         )
         return node.copy(retryProfile = profile)
