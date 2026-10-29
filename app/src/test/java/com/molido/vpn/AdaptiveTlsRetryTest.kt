@@ -88,4 +88,14 @@ class AdaptiveTlsRetryTest {
         assertEquals(candidate.retryProfile, RetryTweaks.prepare("trojan", original, 1003).retryProfile)
         assertEquals("/stream", original.v2ray!!.path)
     }
+
+    @Test fun publisherPinningTlsShapeInvalidatesPreviouslyLearnedFingerprint() {
+        val original = node().copy(v2ray = null)
+        repeat(2) { RetryTweaks.failed("publisher", original, 1000) }
+        val candidate = RetryTweaks.prepare("publisher", original, 1001)
+        assertEquals("chrome", candidate.retryProfile!!.fingerprint)
+        RetryTweaks.succeeded("publisher", candidate, 1002)
+        val changed = original.copy(cipherSuites = "publisher-pinned", fingerprint = "unsafe")
+        assertNull(RetryTweaks.prepare("publisher", changed, 1003).retryProfile!!.fingerprint)
+    }
 }
