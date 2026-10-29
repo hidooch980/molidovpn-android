@@ -108,7 +108,8 @@ object BackgroundScanner {
         val reports = ConnectionReports.enabled(app)
         val healthy = AtomicInteger(0)
         var tested = 0
-        for (batch in pool.chunked(BATCH)) {
+        for (unprepared in pool.chunked(BATCH)) {
+            val batch = unprepared.map { RetryTweaks.prepare(app, it) }
             if (cancelled || !canRun(app)) break
             if (healthy.get() >= 8) break
             if (System.currentTimeMillis() - started > RUNTIME_CAP_MS) break
