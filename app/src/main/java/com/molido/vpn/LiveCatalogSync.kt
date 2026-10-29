@@ -9,6 +9,8 @@ import java.util.IdentityHashMap
 
 object LiveCatalogSync {
     const val PREF = "live_catalog_sync"
+    internal const val REMOTE_INTERVAL_MS = 5 * 60 * 1000L
+    private const val LAST_ATTEMPT = "live_catalog_last_attempt"
     private val main = Handler(Looper.getMainLooper())
     private val owners = IdentityHashMap<Any, (() -> Unit)?>()
     private var app: Context? = null
@@ -23,12 +25,12 @@ object LiveCatalogSync {
                     ?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
                 val enabled = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
                     .getBoolean(PREF, true)
-                if (online && enabled) {
-                    V2raySubscription.refreshIfDue(context, force = true)
-                    ShardSubscription.refreshIfDue(context, force = true)
-                    RemotePolicy.refreshIfDue(context, force = true)
-                    ResilienceConfig.refreshIfDue(context, force = true)
-                    AppRemote.refreshIfDue(context, force = true) {
+                if (online && enabled && claimRefresh(context)) {
+                    V2raySubscription.refreshIfDue(context, maxAgeMs = REMOTE_INTERVAL_MS)
+                    ShardSubscription.refreshIfDue(context)
+                    RemotePolicy.refreshIfDue(context)
+                    ResilienceConfig.refreshIfDue(context)
+                    AppRemote.refreshIfDue(context) {
                         main.post { owners.values.toList().forEach { it?.invoke() } }
                     }
                 }
@@ -37,6 +39,16 @@ object LiveCatalogSync {
                 if (owners.isNotEmpty()) main.postDelayed(this, 5_000L)
             }
         }
+    }
+
+    /** Also gate failed attempts and activity/service restarts, not only successful fetches. */
+    @Synchronized
+    internal fun claimRefresh(context: Context, now: Long = System.currentTimeMillis()): Boolean {
+        val prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
+        val previous = prefs.getLong(LAST_ATTEMPT, -1L)
+        if (previous >= 0L && now - previous in 0 until REMOTE_INTERVAL_MS) return false
+        prefs.edit().putLong(LAST_ATTEMPT, now).apply()
+        return true
     }
 
     fun acquire(owner: Any, context: Context, onUpdated: (() -> Unit)? = null) {
