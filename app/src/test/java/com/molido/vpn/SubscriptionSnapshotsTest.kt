@@ -20,6 +20,7 @@ class SubscriptionSnapshotsTest {
         cache.replace("slow", line(1), 1000)
         cache.replace("fast", line(2), 1000)
         cache.replace("fast", line(3), 1100)
+        cache.replace("fast", line(2), 1050) // cancelled prior request completed late
         val merged = cache.read(listOf("fast", "slow"), 1200)
         assertEquals(setOf(line(1), line(3)), merged.toSet())
         assertEquals(2, V2rayNodes.parse(merged).size)
