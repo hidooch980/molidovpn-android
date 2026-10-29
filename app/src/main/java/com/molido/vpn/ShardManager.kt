@@ -306,12 +306,14 @@ object ShardManager {
             }
             // Null the field ONLY if it is still the process we killed: the
             // null must not race a fresh session that already launched.
-            if (process === proc) {
-                process = null
-                logThread = null
+            synchronized(this@ShardManager) {
+                if (process === proc) {
+                    process = null
+                    logThread = null
+                    running.set(false)
+                    activeNode = null
+                }
             }
-            running.set(false)
-            activeNode = null
         }, "shard-stop").start()
     }
 
@@ -1040,3 +1042,4 @@ object MultiPath {
         context.getSharedPreferences("settings", Context.MODE_PRIVATE).edit().putBoolean(PREF, on).apply()
     }
 }
+
