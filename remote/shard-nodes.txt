@@ -70,10 +70,7 @@ trojan://humanity@188.114.98.0:443?security=tls&type=ws&host=www.calmlunch.com&p
 trojan://humanity@127.0.0.1:40443?security=tls&type=ws&host=www.calmlunch.com&path=%2Fassignment&sni=www.calmlunch.com&alpn=http%2F1.1&fp=chrome&descriptions=%D0%A1%D0%B2%D0%BE%D0%B1%D0%BE%D0%B4%D1%83%D0%98%D0%BD%D1%82%D0%B5%D1%80%D0%BD%D0%B5%D1%82%D1%8313#Sni-Spoofing%20%40DeltaKroneckerGithub%20%7C%20f0c171
 trojan://humanity@[2a06:98c1:3101::6812:202f]:443?security=tls&type=ws&host=www.calmlunch.com&path=%2Fassignment&sni=www.calmlunch.com&alpn=http%2F1.1&fp=chrome&descriptions=%D0%A1%D0%B2%D0%BE%D0%B1%D0%BE%D0%B4%D1%83%D0%98%D0%BD%D1%82%D0%B5%D1%80%D0%BD%D0%B5%D1%82%D1%8313#IPv6%20%40DeltaKroneckerGithub%20%7C%20accc09
 # --- MolidoVPN servers ---
-trojan://humanity@104.18.8.83:443/?type=ws&host=www.calmlunch.com&path=/assignment&security=tls&sni=www.calmlunch.com#MolidoVPN
-trojan://humanity@165.215.250.14:443?type=ws&security=tls&path=/assignment&host=www.calmlunch.com&sni=www.calmlunch.com&fp=chrome&insecure=1&allowInsecure=1#MolidoVPN
-trojan://humanity@104.25.124.54:443?path=%2F%2Fassignment&security=tls&alpn=http%2F1.1&insecure=0&host=www.calmlunch.com&type=ws&allowInsecure=0&sni=www.calmlunch.com#MolidoVPN
-trojan://humanity@45.130.125.76:443/?type=ws&host=www.calmlunch.com&path=%2Fassignment&security=tls&sni=www.calmlunch.com&alpn=http%2F1.1#MolidoVPN
-trojan://humanity@172.67.200.219:443?security=tls&type=ws&host=www.calmlunch.com&path=%2Fassignment&sni=www.calmlunch.com#MolidoVPN
+trojan://humanity@104.27.203.207:443?host=www.pleadcourt.org&path=%2Fassignment&security=tls&sni=www.pleadcourt.org&type=ws#MolidoVPN
 vless://fc7d2cfe-f5ef-40c8-a848-a0bdc11f6349@104.21.91.49:443?security=tls&sni=vpn.cintaku.qzz.io&type=ws&host=vpn.cintaku.qzz.io&path=%2Fvlessws&fp=unsafe#MolidoVPN
+vless://8895be79-9817-4011-b81a-14a35a3d328e@epam.com:443?security=tls&type=ws&path=%2F&host=wallweb-boi.pages.dev&packetEncoding=xudp&sni=wallweb-boi.pages.dev&fp=chrome#MolidoVPN
 vless://e5833a75-2095-48bb-8bb5-ce17291efd13@fm3.pages.dev:443?encryption=none&security=tls&sni=fm3.pages.dev&fp=random&type=ws&host=fm3.pages.dev&path=%2F%3Fed%3D2560#MolidoVPN
