@@ -582,8 +582,9 @@ object V2raySubscription {
 
     private const val TAG = "V2raySubscription"
     private const val BASE = "https://molido-sub.hidooch980.workers.dev"
-    private val SOURCES = (1..5).map { "$BASE/sub/$it" }
-    private const val FALLBACK = "$BASE/ios"
+    // The complete catalog already contains all pools. Fetching five shards
+    // plus /ios multiplies account requests and repeats parsing on the phone.
+    private val SOURCES = listOf(BASE)
     private val MIRRORS = listOf(
         "https://raw.githubusercontent.com/hidooch980/vpn-sub/sub/sub.txt",
         "https://cdn.jsdelivr.net/gh/hidooch980/vpn-sub@sub/sub.txt",
@@ -669,7 +670,7 @@ object V2raySubscription {
 
     /** Fetch all sources in parallel, merge, dedupe; fallback when they yield nothing. */
     private fun refreshBlocking(context: Context): Int {
-        val sources = (SOURCES + FALLBACK + subscriptionMirrors(ResilienceConfig.subMirrors(context))).distinct()
+        val sources = (SOURCES + subscriptionMirrors(ResilienceConfig.subMirrors(context))).distinct()
         val snapshots = SubscriptionSnapshots(File(context.filesDir, "v2ray-source-snapshots"))
         val fresh = SubscriptionRace.fetch(sources.map { url -> Callable {
             val requestedAt = System.currentTimeMillis()
