@@ -41,7 +41,14 @@ internal class SubscriptionSnapshots(private val directory: File) {
         if (canonicalBody.isBlank() || canonicalBody.toByteArray(Charsets.UTF_8).size > MAX_BYTES) return
         synchronized(lock) {
             directory.mkdirs()
-            writeAtomically(file(source), "$now\n$canonicalBody")
+            val target = file(source)
+            val previous = runCatching { readAtomically(target) }.getOrNull()
+            val at = previous?.substringBefore('\n')?.toLongOrNull() ?: 0L
+            // Polling an unchanged source every five seconds must not rewrite
+            // megabytes to flash. Renew its timestamp at most once a minute.
+            if (previous?.substringAfter('\n', "") == canonicalBody && now - at in 0 until 60_000L)
+                return@synchronized
+            writeAtomically(target, "$now\n$canonicalBody")
         }
     }
 
