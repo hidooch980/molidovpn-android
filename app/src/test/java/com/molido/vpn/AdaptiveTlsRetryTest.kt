@@ -77,6 +77,11 @@ class AdaptiveTlsRetryTest {
         val pinned = node().copy(v2ray = null, fingerprint = "unsafe", cipherSuites = "pinned")
         repeat(10) { RetryTweaks.failed("pinned", pinned) }
         assertNull(RetryTweaks.prepare("pinned", pinned).retryProfile!!.fingerprint)
+        val quic = V2rayNodes.toShardNode(V2rayNodes.parseOne(
+            "hysteria2://fixture@192.0.2.1:443?sni=tls.example"
+        )!!)
+        repeat(10) { RetryTweaks.failed("quic", quic) }
+        assertNull(RetryTweaks.prepare("quic", quic).retryProfile!!.fingerprint)
     }
 
     @Test fun wsEarlyDataSnapshotIsAlsoRetainedAfterSuccess() {
