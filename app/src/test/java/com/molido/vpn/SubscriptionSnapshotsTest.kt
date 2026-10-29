@@ -58,4 +58,14 @@ class SubscriptionSnapshotsTest {
         SubscriptionSnapshots.writeAtomically(file, line(2))
         assertEquals(line(2), SubscriptionSnapshots.readAtomically(file))
     }
+
+    @Test fun unchangedPollsOnlyRenewDiskSnapshotOncePerMinute() {
+        val folder = temp.newFolder()
+        val cache = SubscriptionSnapshots(folder)
+        cache.replace("source", line(1), 1000)
+        cache.replace("source", line(1), 2000)
+        assertEquals("1000", SubscriptionSnapshots.readAtomically(folder.listFiles()!!.single()).substringBefore('\n'))
+        cache.replace("source", line(1), 61_000)
+        assertEquals("61000", SubscriptionSnapshots.readAtomically(folder.listFiles()!!.single()).substringBefore('\n'))
+    }
 }
