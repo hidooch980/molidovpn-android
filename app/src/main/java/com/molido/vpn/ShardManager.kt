@@ -746,7 +746,7 @@ object ShardManager {
      * real request; false leaves the caller to the ordinary re-race in [start].
      */
     private fun switchToStandby(context: Context, verboseLog: Boolean, port: Int, previous: ShardNode?): Boolean {
-        val standby = standbyNode ?: return false
+        val standby = RetryTweaks.prepare(context, standbyNode ?: return false)
         standbyNode = null
         if (previous != null && standby.key == previous.key) return false
         ConnectionLog.record("$TAG switching to standby ${LogRedactor.nodeTag(standby.key)}")
@@ -770,6 +770,7 @@ object ShardManager {
             killProcess()
             return false
         }
+        RetryTweaks.recordSuccess(context, standby)
         running.set(true)
         activeNode = standby
         ConnectionLog.record("$TAG up on $port via standby ${LogRedactor.nodeTag(standby.key)}")
@@ -887,7 +888,8 @@ object ShardManager {
         detached: Boolean = false,
     ): ShardNode? {
         if (candidates.isEmpty()) return null
-        val config = ShardConfigs.probeConfig(context, candidates, basePort)
+        val trials = candidates.map { RetryTweaks.prepare(context, it) }
+        val config = ShardConfigs.probeConfig(context, trials, basePort)
         val configFile = ShardConfigs.writeConfig(
             context, if (detached) "standby-probe.json" else "probe.json", config
         )
@@ -938,10 +940,10 @@ object ShardManager {
             val responders = java.util.concurrent.ConcurrentLinkedQueue<ShardNode>()
             val wanted = if (!detached && MultiPath.enabled(context)) 4 else 0
             val pool = java.util.concurrent.Executors.newFixedThreadPool(
-                candidates.size.coerceAtMost(RACE_WIDTH)
+                trials.size.coerceAtMost(RACE_WIDTH)
             )
 
-            candidates.forEachIndexed { index, node ->
+            trials.forEachIndexed { index, node ->
                 pool.execute {
                     // Once someone has won, the remaining probes are pointless
                     // work on a metered link — stop rather than finish politely.
@@ -1042,4 +1044,3 @@ object MultiPath {
         context.getSharedPreferences("settings", Context.MODE_PRIVATE).edit().putBoolean(PREF, on).apply()
     }
 }
-
