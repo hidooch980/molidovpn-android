@@ -77,6 +77,8 @@ data class ShardNode(
     val label: String,
     /** Set for "V2Ray servers" nodes; rendered by [V2rayNodes.outbound]. Null for SHARD. */
     val v2ray: V2rayNode? = null,
+    /** Exact compatible retry settings used by this candidate's successful probe. */
+    val retryProfile: RetryTweaks.Profile? = null,
 ) {
     /**
      * Stable identity, used as the health-memory key and for dedupe.
@@ -348,11 +350,12 @@ object ShardConfigs {
     fun outbound(context: Context, node: ShardNode, tag: String, mux: Boolean = true): JSONObject {
         // V2Ray servers: own renderer, no custom CF IP, no mux.
         // Retry-only rewrites (null on a node's first attempts): see [RetryTweaks].
-        val retryFp = RetryTweaks.fingerprintFor(context, node)
+        val retry = node.retryProfile ?: RetryTweaks.prepare(context, node).retryProfile!!
+        val retryFp = retry.fingerprint
         node.v2ray?.let {
             val tweaked = it.copy(
                 fingerprint = retryFp ?: it.fingerprint,
-                path = RetryTweaks.earlyDataPath(context, node) ?: it.path,
+                path = retry.path ?: it.path,
             )
             return withUpstream(V2rayNodes.outbound(tweaked, node.address, node.port, tag))
         }
