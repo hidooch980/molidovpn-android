@@ -632,7 +632,7 @@ object V2raySubscription {
     fun shardNodes(context: Context): List<ShardNode> = nodes(context).map { V2rayNodes.toShardNode(it) }
 
     private fun readCache(context: Context): List<V2rayNode> = try {
-        val text = cacheFile(context).takeIf { it.exists() }?.readText().orEmpty()
+        val text = SubscriptionSnapshots.readAtomically(cacheFile(context))
         if (text.isBlank()) emptyList() else V2rayNodes.parse(text.lines())
     } catch (_: Exception) {
         emptyList()
@@ -670,14 +670,27 @@ object V2raySubscription {
     /** Fetch all sources in parallel, merge, dedupe; fallback when they yield nothing. */
     private fun refreshBlocking(context: Context): Int {
         val sources = (SOURCES + FALLBACK + subscriptionMirrors(ResilienceConfig.subMirrors(context))).distinct()
-        val parsed = SubscriptionRace.fetch(sources.map { url -> Callable { V2rayNodes.parse(fetchLines(url)) } }, (READ_TIMEOUT_MS + CONNECT_TIMEOUT_MS).toLong()).distinctBy { it.uri }
+        val snapshots = SubscriptionSnapshots(File(context.filesDir, "v2ray-source-snapshots"))
+        val fresh = SubscriptionRace.fetch(sources.map { url -> Callable {
+            val nodes = V2rayNodes.parse(fetchLines(url))
+            if (nodes.isNotEmpty()) runCatching {
+                snapshots.replace(url, nodes.joinToString("\n") { V2rayNodes.shareLine(it) })
+            }
+            nodes
+        } }, (READ_TIMEOUT_MS + CONNECT_TIMEOUT_MS).toLong())
+        // The race intentionally returns soon after the first usable response.
+        // Other sources keep their last usable snapshot until THEY replace it
+        // or expire. Cancelled HTTP work may finish later; its atomic snapshot
+        // is then available to the next poll, without truncating this catalog.
+        val retained = V2rayNodes.parse(snapshots.read(sources))
+        val parsed = (fresh + retained).distinctBy { it.uri }
         if (parsed.isEmpty()) {
             ConnectionLog.record("$TAG no usable nodes — keeping previous cache")
             return cachedCount(context)
         }
         // Stored as one canonical URI per line; vmess keeps its payload form.
         // Names kept (#fragment) so the country filter can read them from the cache.
-        cacheFile(context).writeText(parsed.joinToString("\n") { V2rayNodes.shareLine(it) })
+        SubscriptionSnapshots.writeAtomically(cacheFile(context), parsed.joinToString("\n") { V2rayNodes.shareLine(it) })
         prefs(context).edit()
             .putLong(LAST_CHECK_PREF, System.currentTimeMillis())
             .putInt(LAST_COUNT_PREF, parsed.size)
