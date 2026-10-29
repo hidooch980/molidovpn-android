@@ -99,7 +99,8 @@ object RetryTweaks {
     /** Whether rewriting this node's fingerprint cannot break an interlocked shape. */
     private fun fingerprintFree(node: ShardNode): Boolean {
         val v2 = node.v2ray
-        if (v2 != null) return v2.security == "tls" || v2.security == "reality"
+        if (v2 != null) return v2.protocol in setOf("vless", "vmess", "trojan") &&
+            (v2.security == "tls" || v2.security == "reality")
         if (node.security != "tls") return false
         return node.cipherSuites.isEmpty() && node.finalMask.isEmpty() &&
             !node.fingerprint.equals("unsafe", ignoreCase = true)
@@ -129,6 +130,7 @@ object RetryTweaks {
     internal fun earlyDataPath(node: ShardNode, failures: Int): String? {
         if (preserveVlessTransport(node)) return null
         val v2 = node.v2ray ?: return null
+        if (v2.protocol !in setOf("vless", "vmess", "trojan")) return null
         if (v2.network != "ws" || failures < EARLY_DATA_FROM) return null
         if (isWorkerHost(v2.host) || isWorkerHost(v2.sni)) return null
         val path = v2.path.ifEmpty { "/" }
