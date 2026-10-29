@@ -672,9 +672,10 @@ object V2raySubscription {
         val sources = (SOURCES + FALLBACK + subscriptionMirrors(ResilienceConfig.subMirrors(context))).distinct()
         val snapshots = SubscriptionSnapshots(File(context.filesDir, "v2ray-source-snapshots"))
         val fresh = SubscriptionRace.fetch(sources.map { url -> Callable {
+            val requestedAt = System.currentTimeMillis()
             val nodes = V2rayNodes.parse(fetchLines(url))
             if (nodes.isNotEmpty()) runCatching {
-                snapshots.replace(url, nodes.joinToString("\n") { V2rayNodes.shareLine(it) })
+                snapshots.replace(url, nodes.joinToString("\n") { V2rayNodes.shareLine(it) }, requestedAt)
             }
             nodes
         } }, (READ_TIMEOUT_MS + CONNECT_TIMEOUT_MS).toLong())
