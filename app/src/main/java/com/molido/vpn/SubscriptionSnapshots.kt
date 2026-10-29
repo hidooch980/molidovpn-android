@@ -44,6 +44,9 @@ internal class SubscriptionSnapshots(private val directory: File) {
             val target = file(source)
             val previous = runCatching { readAtomically(target) }.getOrNull()
             val at = previous?.substringBefore('\n')?.toLongOrNull() ?: 0L
+            // A cancelled slow request can finish after the next poll. Its
+            // older generation must not overwrite a newer usable response.
+            if (at > now) return@synchronized
             // Polling an unchanged source every five seconds must not rewrite
             // megabytes to flash. Renew its timestamp at most once a minute.
             if (previous?.substringAfter('\n', "") == canonicalBody && now - at in 0 until 60_000L)
