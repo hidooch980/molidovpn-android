@@ -690,12 +690,14 @@ object V2raySubscription {
         }
         // Stored as one canonical URI per line; vmess keeps its payload form.
         // Names kept (#fragment) so the country filter can read them from the cache.
-        SubscriptionSnapshots.writeAtomically(cacheFile(context), parsed.joinToString("\n") { V2rayNodes.shareLine(it) })
+        val body = parsed.joinToString("\n") { V2rayNodes.shareLine(it) }
+        val changed = runCatching { SubscriptionSnapshots.readAtomically(cacheFile(context)) != body }.getOrDefault(true)
+        if (changed) SubscriptionSnapshots.writeAtomically(cacheFile(context), body)
         prefs(context).edit()
             .putLong(LAST_CHECK_PREF, System.currentTimeMillis())
             .putInt(LAST_COUNT_PREF, parsed.size)
             .apply()
-        ConnectionLog.record("$TAG updated — ${parsed.size} nodes")
+        if (changed) ConnectionLog.record("$TAG updated — ${parsed.size} nodes")
         return parsed.size
     }
 
