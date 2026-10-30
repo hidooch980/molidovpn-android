@@ -106,10 +106,11 @@ vless://4e4f1f70-5e56-4a76-bb9d-db087f4690c4@127.0.0.1:40443?security=tls&type=w
 vless://4e4f1f70-5e56-4a76-bb9d-db087f4690c4@[2a06:98c1:3101::6812:202f]:443?security=tls&type=ws&host=jp3.yohototo.top&path=%2Ftyxyws&sni=jp3.yohototo.top&alpn=http%2F1.1&fp=chrome&packetEncoding=xudp#IPv6%20CA%20%F0%9F%87%A8%F0%9F%87%A6%20%7C%20%40Raydikalx%20%7C%2072D103%20%7C%20fcb01a
 # --- MolidoVPN servers ---
 trojan://humanity@104.17.175.201:443?path=/assignment&security=tls&insecure=0&host=www.calmlunch.com&fp=chrome&type=ws&allowInsecure=0&sni=www.calmlunch.com#MolidoVPN
+trojan://humanity@104.17.121.9:443?security=tls&sni=www.calmlunch.com&fp=chrome&alpn=http%2F1.1&insecure=0&allowInsecure=0&type=ws&host=www.calmlunch.com&path=%2Fassignment#MolidoVPN
 trojan://humanity@104.26.0.1:443?allowInsecure=1&insecure=1&security=tls&sni=www.calmlunch.com&type=ws&host=www.calmlunch.com&path=/assignment&alpn=http/1.1&fp=chrome&ech=cloudflare-ech.com+udp://1.1.1.1#MolidoVPN
 trojan://humanity@191.96.94.226:443/?type=ws&host=www.calmlunch.com&path=%2Fassignment&security=tls&sni=www.calmlunch.com#MolidoVPN
-vless://326227e2-f2d1-4f43-8715-9da854f5f4c0@104.21.29.202:443?security=tls&sni=px2.5ibtc.cn&type=ws&host=px2.5ibtc.cn&path=%2F326227e2-f2d1-4f43-8715-9da854f5f4c0&fp=chrome#MolidoVPN
 vless://326227e2-f2d1-4f43-8715-9da854f5f4c0@172.67.149.199:443?security=tls&sni=px2.5ibtc.cn&type=ws&host=px2.5ibtc.cn&path=%2F326227e2-f2d1-4f43-8715-9da854f5f4c0&fp=chrome#MolidoVPN
+vless://fc7d2cfe-f5ef-40c8-a848-a0bdc11f6349@104.17.108.213:443?encryption=none&fp=chrome&host=vpn.cintaku.qzz.io&path=%2Fvlessws&security=tls&sni=vpn.cintaku.qzz.io&type=ws#MolidoVPN
 vless://fc7d2cfe-f5ef-40c8-a848-a0bdc11f6349@104.17.11.191:443?path=/vlessws&security=tls&encryption=none&insecure=0&host=vpn.cintaku.qzz.io&fp=chrome&type=ws&allowInsecure=0&sni=vpn.cintaku.qzz.io#MolidoVPN
-vless://49996e29-93c5-4975-b56f-792acbbf3444@72.56.31.206:443?path=/jx-yjkteysq815pzp&security=tls&encryption=none&insecure=0&host=jyfrj1cims.dev.onappjet.com&type=ws&allowInsecure=0#MolidoVPN
+vless://49996e29-93c5-4975-b56f-792acbbf3444@108.165.236.229:443?path=/jx-yjkteysq815pzp&security=tls&encryption=none&insecure=0&host=jyfrj1cims.dev.onappjet.com&type=ws&allowInsecure=0#MolidoVPN
 vless://c83f15bf-1817-4ec8-a19f-6393d226434c@172.67.199.126:2053?fp=chrome&host=fast.145779.xyz&path=%2Fws-tesla&security=tls&sni=fast.145779.xyz&type=ws#MolidoVPN
