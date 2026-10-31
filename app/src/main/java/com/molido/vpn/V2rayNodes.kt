@@ -584,7 +584,9 @@ object V2raySubscription {
     private const val BASE = "https://molido-sub.hidooch980.workers.dev"
     // The complete catalog already contains all pools. Fetching five shards
     // plus /ios multiplies account requests and repeats parsing on the phone.
-    private val SOURCES = listOf(BASE)
+    // Static copy of the Worker's ranked catalog (vpn-sub `meta/`), then the raw lists. The Worker
+    // itself is asked only when none of these yield anything (account quota: 100k requests/day).
+    private val SOURCES = listOf(StaticFirst.RAW + "catalog.txt", StaticFirst.CDN + "catalog.txt")
     private val MIRRORS = listOf(
         "https://raw.githubusercontent.com/hidooch980/vpn-sub/sub/sub.txt",
         "https://cdn.jsdelivr.net/gh/hidooch980/vpn-sub@sub/sub.txt",
@@ -611,7 +613,7 @@ object V2raySubscription {
     fun nodes(context: Context): List<V2rayNode> {
         val cached = readCache(context)
         // Servers that worked on this phone are always in the pool ([OfflineConfigs]).
-        if (cached.isNotEmpty()) return OfflineConfigs.withKnownGood(context, cached)
+        if (cached.isNotEmpty()) return withEdge(context, OfflineConfigs.withKnownGood(context, cached))
         if (refreshing.compareAndSet(false, true)) {
             try {
                 refreshBlocking(context)
@@ -622,11 +624,17 @@ object V2raySubscription {
             }
         }
         val fetched = readCache(context)
-        if (fetched.isNotEmpty()) return OfflineConfigs.withKnownGood(context, fetched)
+        if (fetched.isNotEmpty()) return withEdge(context, OfflineConfigs.withKnownGood(context, fetched))
         // No list and no source reachable: remembered servers, then the set bundled at build time.
         val offline = OfflineConfigs.offlineNodes(context)
         ConnectionLog.record("$TAG no source reachable — using ${offline.size} offline backup config(s)")
-        return offline
+        return withEdge(context, offline)
+    }
+
+    /** Edge routes last, only after a run where nothing connected ([EdgeFallback]). */
+    private fun withEdge(context: Context, pool: List<V2rayNode>): List<V2rayNode> {
+        val edge = V2rayNodes.parse(EdgeFallback.lines(context))
+        return if (edge.isEmpty()) pool else pool + edge.filter { e -> pool.none { it.uri == e.uri } }
     }
 
     /** The pool wrapped for [ShardManager]. */
@@ -672,7 +680,15 @@ object V2raySubscription {
     private fun refreshBlocking(context: Context): Int {
         val sources = (SOURCES + subscriptionMirrors(ResilienceConfig.subMirrors(context))).distinct()
         val snapshots = SubscriptionSnapshots(File(context.filesDir, "v2ray-source-snapshots"))
-        val fresh = SubscriptionRace.fetch(sources.map { url -> Callable {
+        var fresh = raceSources(sources, snapshots)
+        if (fresh.isEmpty()) fresh = raceSources(listOf(BASE), snapshots)
+        val retained = V2rayNodes.parse(snapshots.read(sources + BASE))
+        val parsed = (fresh + retained).distinctBy { it.uri }.filterNot { EdgeFallback.isEdge(V2rayNodes.shareLine(it)) }
+        return storeParsed(context, parsed)
+    }
+
+    private fun raceSources(sources: List<String>, snapshots: SubscriptionSnapshots): List<V2rayNode> =
+        SubscriptionRace.fetch(sources.map { url -> Callable {
             val requestedAt = System.currentTimeMillis()
             val nodes = V2rayNodes.parse(fetchLines(url))
             if (nodes.isNotEmpty()) runCatching {
@@ -684,8 +700,8 @@ object V2raySubscription {
         // Other sources keep their last usable snapshot until THEY replace it
         // or expire. Cancelled HTTP work may finish later; its atomic snapshot
         // is then available to the next poll, without truncating this catalog.
-        val retained = V2rayNodes.parse(snapshots.read(sources))
-        val parsed = (fresh + retained).distinctBy { it.uri }
+
+    private fun storeParsed(context: Context, parsed: List<V2rayNode>): Int {
         if (parsed.isEmpty()) {
             ConnectionLog.record("$TAG no usable nodes — keeping previous cache")
             return cachedCount(context)

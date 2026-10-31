@@ -38,7 +38,7 @@ class RankingTest {
     @Test
     fun heartbeatStaysInsideWorkerOnlineWindow() {
         val periodS = MolidoVpnService.HEARTBEAT_EVERY_TICKS * 30
-        assert(periodS >= 900) { "heartbeat >= 15 min: the free Worker plan is 100k requests/day" }
-        assert(periodS + 30 < 1200) { "must stay inside the worker's 1200 s online window" }
+        assert(periodS >= 1800) { "heartbeat >= 30 min: the free Worker plan is 100k requests/day" }
+        assert(periodS + 30 < 2400) { "must stay inside the worker's 2400 s online window" }
     }
 }

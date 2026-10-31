@@ -120,7 +120,7 @@ object OfflineConfigs {
     }
 
     fun knownGoodLines(context: Context, mode: String = "v2ray"): List<String> =
-        entries(context).filter { it.mode == mode }.map { it.uri }
+        entries(context).filter { it.mode == mode && !EdgeFallback.isEdge(it.uri) }.map { it.uri }
 
     fun emergency(context: Context): List<String> = try {
         context.assets.open(ASSET).bufferedReader().use { emergencyLines(it.readText()) }

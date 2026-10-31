@@ -700,7 +700,7 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
     companion object {
         const val LOG_TAG = "MolidoVpnService"
         /** Heartbeat every N watchdog ticks (30 s each): 6 = ~3 min, inside the worker's 300 s online window. */
-        internal const val HEARTBEAT_EVERY_TICKS = 30
+        internal const val HEARTBEAT_EVERY_TICKS = 60
         /**
          * Ceiling on in-place SHARD node swaps per session.
          *
@@ -4584,6 +4584,20 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
         var kbps: Long? = null
         if (port != null && cfg.downloadBytes > 0 && connected.get()) {
             kbps = SpeedTest.quickDownloadKbps(port, cfg.downloadBytes, 8_000)
+            // A pool method (SHARD/V2Ray) raced its servers on ping only: a slow or data-dead winner
+            // gets swapped for the next live node, up to twice, before the method is scored.
+            var swaps = 0
+            while (ShardManager.isRunning && (kbps ?: 0L) < SmartScore.MIN_VIDEO_KBPS && swaps < 2 &&
+                token == autoToken && !userInitiatedStop.get()
+            ) {
+                swaps++
+                if (!rotateShardNode("trial ${kbps ?: 0} kbit/s < ${SmartScore.MIN_VIDEO_KBPS}")) break
+                Thread.sleep(800L)
+                val next = ShardManager.listenPort.takeIf { connected.get() }?.let {
+                    SpeedTest.quickDownloadKbps(it, cfg.downloadBytes, 8_000)
+                }
+                kbps = next // the node now in use; the earlier one is gone
+            }
             if (kbps != null) probes[0] = probes[0].copy(throughputKbps = kbps)
         }
         return Measured(c.id, probes, connectMs = if (cheap) null else ms)
@@ -4629,6 +4643,7 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
         autoTrialActive.set(false)
         reconnectRequested.set(false)
         if (token != autoToken || userInitiatedStop.get()) return
+        EdgeFallback.arm(this)
         // Trials re-armed the watchdog, which zeroes the backoff counter; restore it
         // so repeated full failures back off instead of looping every 5 s.
         reconnectAttempts = attempts

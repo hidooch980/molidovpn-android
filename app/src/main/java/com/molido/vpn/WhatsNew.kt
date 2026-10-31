@@ -23,21 +23,18 @@ object WhatsNew {
     /** Blocking; call off the main thread. Falls back to a generic line. */
     fun items(version: String): List<String> {
         val fetched = try {
-            val c = URL("https://molido-sub.hidooch980.workers.dev/app/changelog.json?v=$version")
-                .openConnection() as HttpURLConnection
-            try {
-                c.connectTimeout = 8000
-                c.readTimeout = 8000
-                if (c.responseCode != 200) emptyList() else {
-                    val arr = JSONObject(c.inputStream.bufferedReader().use { it.readText() }).optJSONArray("items")
+            val body = StaticFirst.get(StaticFirst.urls("changelog.json", "/app/changelog.json?v=$version")) {
+                runCatching { JSONObject(it) }.isSuccess
+            }
+            run {
+                if (body == null) emptyList() else {
+                    val arr = JSONObject(body).optJSONArray("items")
                     (0 until (arr?.length() ?: 0)).mapNotNull { i ->
                         val o = arr!!.optJSONObject(i) ?: return@mapNotNull null
                         val p = o.optString("platform", "all")
                         if (p == "all" || p == "android" || p.isEmpty()) o.optString("text").takeIf { it.isNotBlank() } else null
                     }
                 }
-            } finally {
-                c.disconnect()
             }
         } catch (_: Exception) {
             emptyList()
