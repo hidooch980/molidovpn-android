@@ -111,6 +111,16 @@ class SmartLiveTest {
     }
 
     // ---- live updates
+    @Test fun staleCdnCopyNeverStepsBack() {
+        val now = LiveVersion("2", flags = "f2", release = "v3.2.158", at = 200)
+        val stale = LiveVersion("1", flags = "f1", release = "v3.2.156", at = 100)
+        assertTrue(LiveVersion.isOlder(now, stale))
+        assertTrue(LiveVersion.changes(now, stale).isEmpty())
+        assertFalse(LiveVersion.isOlder(stale, now))
+        assertFalse(LiveVersion.isOlder(null, stale))
+        assertFalse(LiveVersion.isOlder(now, LiveVersion("3", at = 0)))
+    }
+
     @Test fun liveVersionChangesOnlyMovedParts() {
         val a = LiveVersion("1", flags = "f1", notice = "n1", release = "v3.2.1", resilience = "r1", catalog = "c1")
         assertEquals(LiveVersion.Part.values().toSet(), LiveVersion.changes(null, a))

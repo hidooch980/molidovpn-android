@@ -68,6 +68,7 @@ object LiveSync {
         }
         val fresh = LiveVersion.parse(body) ?: return
         val old = current(context)
+        if (LiveVersion.isOlder(old, fresh)) return
         val parts = LiveVersion.changes(old, fresh)
         p.edit().putString("version", fresh.toJson()).apply()
         if (parts.isEmpty()) return
