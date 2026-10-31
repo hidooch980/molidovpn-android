@@ -357,7 +357,7 @@ object ShardConfigs {
                 fingerprint = retryFp ?: it.fingerprint,
                 path = retry.path ?: it.path,
             )
-            return withUpstream(V2rayNodes.outbound(tweaked, node.address, node.port, tag))
+            return withUpstream(DialTuning.apply(V2rayNodes.outbound(tweaked, node.address, node.port, tag)))
         }
         val customIp = getCustomCfIp(context)
         val effectiveAddress = if (customIp.isNotEmpty()) customIp else node.address

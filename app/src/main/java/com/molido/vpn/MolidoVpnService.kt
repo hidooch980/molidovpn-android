@@ -4239,6 +4239,9 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
             val warp = candidate.coreName == "wireguard" || candidate.coreName == "masque" ||
                 candidate.coreName == "gool"
             val scanOverride = if (warp && NetworkV6.hasGlobalIpv6(this)) "both" else null
+            val res = ResilienceConfig.get(this)
+            DialTuning.fragment = candidate.id == com.molido.vpn.methods.MethodRegistry.V2RAY_FRAGMENT && res.v2rayFragment != null
+            res.v2rayFragment?.let { DialTuning.fragmentSettings = it }
             if (scanOverride != null) ConnectionLog.record("Auto: ${candidate.label} scanning IPv4+IPv6")
             startTunnel(CoreConfig.json(this, candidate.coreName, null, scanOverride))
         } catch (e: Exception) {
@@ -4339,6 +4342,15 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
             // Probes cost ~3 s; skipped while the remembered winner may still be enough.
             var pre: Map<String, Probe> = if (fastAllowed) emptyMap() else smartPreProbe(methods, smart, token)
             if (token != autoToken) return
+            // Dual stack: the V2Ray pre-probe tried IPv4 and IPv6; remember the faster family per network.
+            if (ResilienceConfig.get(this).dualStack) {
+                val famKey = "dial_family_$netKey"
+                pre["v2ray"]?.family?.let { prefs.edit().putString(famKey, it).apply() }
+                DialTuning.family = if (NetworkV6.hasGlobalIpv6(this)) prefs.getString(famKey, null) else "v4"
+                ConnectionLog.record("Smart: dial family ${DialTuning.family ?: "default"}")
+            } else {
+                DialTuning.family = null
+            }
             val shared = methods.mapNotNull { m -> ConnectionReports.modeScore(this, m.candidate.coreName)?.let { m.id to it } }.toMap()
             // Iranian user: WARP-family exits are in IR, so foreign exits are tried first.
             val demote = (if (autoHomeIsIran(prefs)) MethodRegistry.WARP_FAMILY else emptySet()) + (if (udpOff) MethodRegistry.UDP else emptySet())
@@ -4454,6 +4466,8 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
             autoTrialActive.set(false)
             reconnectRequested.set(false)
             sendStatus(STATUS_CONNECTING, Strings.tf("Connecting with the best: %s…", chosen.label))
+            DialTuning.fragment = chosen.id == com.molido.vpn.methods.MethodRegistry.V2RAY_FRAGMENT &&
+                ResilienceConfig.get(this).v2rayFragment != null
             startTunnel(CoreConfig.json(this, chosen.coreName))
         } catch (_: InterruptedException) {
             // Service destroyed.
