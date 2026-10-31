@@ -161,7 +161,15 @@ object AppRemote {
         editor.apply()
     }
 
-    /** Static mirror first (GitHub raw, jsDelivr), the Worker last: see [StaticFirst]. */
+    /** Signed push from the owner panel ([LiveSync.applySigned]): stored like a fetch. */
+    fun applyLive(context: Context, flags: String?, notice: String?) {
+        val e = prefs(context).edit()
+        if (flags != null && runCatching { JSONObject(flags) }.isSuccess) e.putString("flags", flags)
+        if (notice != null && runCatching { JSONObject(notice) }.isSuccess) e.putString("notice", notice)
+        e.putLong("at", System.currentTimeMillis()).apply()
+    }
+
+    /** Live copy on GitHub (minutes old), then the 15-min mirror, the Worker last: see [StaticFirst]. */
     private fun get(file: String): String? =
-        StaticFirst.get(StaticFirst.urls(file, "/app/$file"), 8_000) { runCatching { JSONObject(it) }.isSuccess }
+        StaticFirst.get(StaticFirst.liveUrls(file, "/app/$file"), 8_000) { runCatching { JSONObject(it) }.isSuccess }
 }

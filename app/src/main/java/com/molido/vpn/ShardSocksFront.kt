@@ -259,12 +259,23 @@ object ShardSocksFront {
         get() = running.get()
 
     /**
+     * New flows go to xray on [socksPort] from now on; open ones stay on the old process
+     * ([ShardManager.seamlessSwitch]). DNS channels to the old one are dropped and reopen on use.
+     */
+    fun retarget(socksPort: Int) {
+        upstreamPort = socksPort
+        dnsChannels.keys.toList().forEach { k -> runCatching { dnsChannels.remove(k)?.close() } }
+    }
+
+    /**
      * @param socksPort xray's SOCKS listener, i.e. [ShardManager.SOCKS_PORT].
      */
     @Synchronized
     fun start(socksPort: Int): Boolean {
         if (running.get()) {
             ConnectionLog.record("$TAG already running")
+            // A seamless switch may have moved it; a fresh session's xray is on [socksPort].
+            if (upstreamPort != socksPort) retarget(socksPort)
             return true
         }
         upstreamPort = socksPort

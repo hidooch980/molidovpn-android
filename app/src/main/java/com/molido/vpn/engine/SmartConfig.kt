@@ -44,8 +44,8 @@ data class SmartConfig(
         /** …but only above this absolute floor. */
         val latencyFloorMs: Int = 1_500,
         /** Minimum gap between two re-evaluations. */
-        val cooldownS: Int = 600,
-        val maxPerHour: Int = 3,
+        val cooldownS: Int = 300,
+        val maxPerHour: Int = 4,
     )
 
     /** Trials allowed right now, halved on low battery. */

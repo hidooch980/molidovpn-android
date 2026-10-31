@@ -23,10 +23,17 @@ object UpdateSources {
     const val WORKER_RELEASE_URL = "https://molido-sub.hidooch980.workers.dev/app/latest.json"
     const val GITHUB_RELEASE_URL = "https://api.github.com/repos/hidooch980/molidovpn/releases/latest"
 
-    data class Release(val version: String, val assetName: String, val downloadUrl: String, val sha256: String?)
+    data class Release(
+        val version: String,
+        val assetName: String,
+        val downloadUrl: String,
+        val sha256: String?,
+        /** Owner marked the release "[critical]": prompt at once. */
+        val critical: Boolean = false,
+    )
 
     fun releaseJsonUrls(mirrors: List<String>): List<String> =
-        (listOf(StaticFirst.RAW + "latest.json", StaticFirst.CDN + "latest.json", GITHUB_RELEASE_URL, WORKER_RELEASE_URL) +
+        (listOf(LiveSync.RAW + "latest.json", LiveSync.CDN + "latest.json", StaticFirst.RAW + "latest.json", StaticFirst.CDN + "latest.json", GITHUB_RELEASE_URL, WORKER_RELEASE_URL) +
             mirrors.map { "${it.trimEnd('/')}/latest.json" }).distinct()
 
     /** The release's own URL first, then the same file name on every mirror. */
@@ -54,13 +61,14 @@ object UpdateSources {
         val json = JSONObject(text)
         val version = json.getString("tag_name").removePrefix("v")
         val assets: JSONArray = json.getJSONArray("assets")
+        val critical = json.optBoolean("critical", false) || json.optString("body").contains("[critical]", ignoreCase = true)
         for (abi in abis + "universal") {
             val token = abiToken(abi)
             for (i in 0 until assets.length()) {
                 val asset = assets.getJSONObject(i)
                 val name = asset.getString("name")
                 if (name.endsWith(".apk") && name.contains(token, ignoreCase = true)) {
-                    return Release(version, name, asset.getString("browser_download_url"), assetSha256(asset))
+                    return Release(version, name, asset.getString("browser_download_url"), assetSha256(asset), critical)
                 }
             }
         }

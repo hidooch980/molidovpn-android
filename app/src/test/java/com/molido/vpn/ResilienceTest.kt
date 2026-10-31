@@ -142,10 +142,25 @@ class UpdateSourcesTest {
     }
 
     @Test
+    fun livePushConfigAndCriticalRelease() {
+        assertEquals(LivePush.DEFAULT_URL, ResilienceConfig.parseLivePush(null))
+        assertNull(ResilienceConfig.parseLivePush(JSONObject().put("push", false)))
+        assertEquals("https://ntfy.example/t", ResilienceConfig.parseLivePush(JSONObject().put("url", "https://ntfy.example/t/")))
+        assertEquals(LivePush.DEFAULT_URL, ResilienceConfig.parseLivePush(JSONObject().put("url", "http://plain/t")))
+        val rel = """{"tag_name":"v3.2.200","body":"Fix [critical] leak","assets":[{"name":"MolidoVPN-android-arm64.apk","browser_download_url":"https://x/a.apk"}]}"""
+        assertTrue(UpdateSources.parseRelease(rel, listOf("arm64-v8a"))!!.critical)
+        val flagged = """{"tag_name":"v3.2.200","critical":true,"assets":[{"name":"MolidoVPN-android-universal.apk","browser_download_url":"https://x/a.apk"}]}"""
+        assertTrue(UpdateSources.parseRelease(flagged, listOf("x86"))!!.critical)
+        assertFalse(UpdateSources.parseRelease(flagged.replace("true", "false"), listOf("x86"))!!.critical)
+        assertTrue(StaticFirst.liveUrls("flags.json", "/app/flags.json").first().startsWith(LiveSync.RAW))
+    }
+
+    @Test
     fun sourceOrder() {
         val m = listOf("https://m1.example.com/", "https://m2.example.com")
         assertEquals(
-            listOf(StaticFirst.RAW + "latest.json", StaticFirst.CDN + "latest.json",
+            listOf(LiveSync.RAW + "latest.json", LiveSync.CDN + "latest.json",
+                StaticFirst.RAW + "latest.json", StaticFirst.CDN + "latest.json",
                 UpdateSources.GITHUB_RELEASE_URL, UpdateSources.WORKER_RELEASE_URL,
                 "https://m1.example.com/latest.json", "https://m2.example.com/latest.json"),
             UpdateSources.releaseJsonUrls(m),

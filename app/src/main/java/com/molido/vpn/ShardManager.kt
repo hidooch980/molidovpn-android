@@ -778,6 +778,82 @@ object ShardManager {
         return true
     }
 
+    /** Second listener for [seamlessSwitch]; alternates with [SOCKS_PORT]. Reserved in [CoreConfig]. */
+    const val ALT_SOCKS_PORT = 1828
+
+    /**
+     * Make-before-break node switch for a VPN-mode session behind [ShardSocksFront].
+     *
+     * The candidate (standby first, then other nodes that answered the last race) is started as a
+     * second xray on the other port and must carry a real request and at least [minKbps] before
+     * anything changes. Then the front-end sends new flows to it, and the old process keeps serving
+     * the flows it has for [DRAIN_MS] before it is stopped. The TUN and tun2socks never move.
+     * False (nothing changed) when there is no front-end, the session is chained or proxy-mode, or no
+     * candidate passed; the caller then takes the ordinary [rotate] path.
+     */
+    @Synchronized
+    fun seamlessSwitch(context: Context, verboseLog: Boolean, minKbps: Long): Boolean {
+        if (!isRunning || !ShardSocksFront.isRunning || ShardConfigs.upstreamSocksPort > 0) return false
+        val current = listenPort
+        if (current != SOCKS_PORT && current != ALT_SOCKS_PORT) return false
+        val alt = if (current == SOCKS_PORT) ALT_SOCKS_PORT else SOCKS_PORT
+        val active = activeNode
+        val candidates = (listOfNotNull(standbyNode) + lastResponders)
+            .filter { active == null || it.key != active.key }
+            .filterNot { SingBox.isSingBox(it) } // the sidecar's ports belong to the live session
+            .distinctBy { it.key }
+            .take(3)
+        if (candidates.isEmpty()) return false
+        val listenHost = if (CoreConfig.lanSharingEnabled(context)) "0.0.0.0" else "127.0.0.1"
+        val profile = if (!sessionV2ray && SmartSplit.enabled(context)) SmartSplit.cachedProfile(context) else null
+        val irDirect = IranDirect.enabled(context)
+        val irGeo = irDirect && unpackGeoAssets(context, File(context.filesDir, "shard").apply { mkdirs() })
+        // Anti-flap: a candidate must beat what the live node measures right now by the policy margin.
+        val policy = com.molido.vpn.engine.SwitchPolicy()
+        val currentKbps = if (ShardProbe.check(current, PROBE_TIMEOUT_MS)) SpeedTest.quickDownloadKbps(current, 500_000, 6_000) else null
+        for (raw in candidates) {
+            val node = RetryTweaks.prepare(context, raw)
+            val config = ShardConfigs.tunnelConfig(
+                context, node, listenHost, alt, if (verboseLog) "info" else "warning", smartSplit = profile,
+                irDirect = irDirect, irGeo = irGeo,
+            )
+            val next = launchDetached(context, ShardConfigs.writeConfig(context, "tunnel-$alt.json", config)) ?: continue
+            val deadline = System.currentTimeMillis() + 6_000
+            var up = false
+            while (System.currentTimeMillis() < deadline && next.isAlive) {
+                if (portAccepts(alt, 400)) { up = true; break }
+                Thread.sleep(120)
+            }
+            val kbps = if (up && ShardProbe.check(alt, PROBE_TIMEOUT_MS)) SpeedTest.quickDownloadKbps(alt, 500_000, 6_000) else null
+            if (kbps == null || kbps < minKbps || !policy.clearlyBetter(kbps.toDouble(), currentKbps?.toDouble())) {
+                ConnectionLog.record("$TAG seamless: ${LogRedactor.nodeTag(node.key)} not clearly better (${kbps ?: "fail"} vs ${currentKbps ?: "fail"} kbit/s)")
+                if (kbps == null) ShardHealth.recordFailure(context, node)
+                runCatching { next.destroy(); if (!next.waitFor(2, java.util.concurrent.TimeUnit.SECONDS)) next.destroyForcibly() }
+                continue
+            }
+            val old = process
+            process = next
+            listenPort = alt
+            activeNode = node
+            if (standbyNode?.key == node.key) standbyNode = null
+            ShardSocksFront.retarget(alt)
+            RetryTweaks.recordSuccess(context, node)
+            ConnectionLog.record("$TAG seamless switch to ${LogRedactor.nodeTag(node.key)} on $alt ($kbps kbit/s); old node drains")
+            Thread({
+                runCatching {
+                    Thread.sleep(DRAIN_MS)
+                    old?.destroy()
+                    if (old != null && !old.waitFor(3, java.util.concurrent.TimeUnit.SECONDS)) old.destroyForcibly()
+                }
+            }, "shard-drain").apply { isDaemon = true }.start()
+            refreshStandbyInBackground(context)
+            return true
+        }
+        return false
+    }
+
+    private const val DRAIN_MS = 20_000L
+
     /**
      * Find a new [standbyNode] while the tunnel stays up, on a private probe
      * process and port block. Never takes the [start]/[rotate] lock.

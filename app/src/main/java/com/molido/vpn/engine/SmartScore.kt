@@ -26,9 +26,10 @@ data class Measured(
 
 /** Relative weight of each quality; they need not sum to 1 (normalised). */
 data class Weights(
-    val stability: Double = 0.35,
+    // Owner: "one stable and strong connection". Stability first, then speed for video.
+    val stability: Double = 0.45,
     val latency: Double = 0.15,
-    val throughput: Double = 0.40,
+    val throughput: Double = 0.30,
     val connect: Double = 0.10,
 )
 
