@@ -3468,7 +3468,10 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
      * gap so the reconnect does not have to re-prompt the user.
      */
     private fun onTunnelLost(reason: String) {
-        if (!reconnectRequested.get()) stability.drop(SystemClock.elapsedRealtime())
+        if (!reconnectRequested.get()) {
+            stability.drop(SystemClock.elapsedRealtime())
+            Diagnostics.record(this, "drop", currentProtocol.lowercase().ifEmpty { null }, reason)
+        }
         // A quick reconnect tears the old tunnel down on purpose, and on Psiphon the
         // controller's own `onExiting` arrives a moment later — after the restart has
         // cleared stopRequested, so the usual guard no longer covers it. Treating
@@ -4446,6 +4449,7 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
                 (if (fullTest) " [full test]" else " [fast path]")
             Log.i(autoLogTag, summary)
             ConnectionLog.record("Smart $summary")
+            Diagnostics.record(this, "race", chosen?.id, "net=$netKey $summary")
             SmartConnectState.result(
                 pick.winner,
                 winnerMeasured?.let { smartReason(it) }.orEmpty(),
@@ -4701,6 +4705,7 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
             return
         }
         ConnectionLog.record("Smart: quality dropped ($why)")
+        Diagnostics.record(this, "degraded", smartMethodId, why)
         val prefs = getSharedPreferences("settings", MODE_PRIVATE)
         val key = smartBanditKey
         val id = smartMethodId
@@ -4829,6 +4834,8 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
         reconnectRequested.set(false)
         if (token != autoToken || userInitiatedStop.get()) return
         EdgeFallback.arm(this)
+        Diagnostics.record(this, "fail", "auto", "nothing connected after $attempts attempt(s)")
+        Diagnostics.upload(this)
         // Trials re-armed the watchdog, which zeroes the backoff counter; restore it
         // so repeated full failures back off instead of looping every 5 s.
         reconnectAttempts = attempts
@@ -5581,6 +5588,10 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
             LiveSync.check(this, "connect")
         }
         Log.i(LOG_TAG, "status=$status${detail?.let { " detail=$it" } ?: ""}")
+        if (status == STATUS_FAILED && !autoTrialActive.get()) {
+            Diagnostics.record(this, "error", currentProtocol.lowercase().ifEmpty { null }, detail ?: "failed")
+            Diagnostics.upload(this)
+        }
         if (status == STATUS_CONNECTED && !autoTrialActive.get() &&
             SmartConnectState.state.value.phase == SmartConnectState.Phase.CONNECTING
         ) {

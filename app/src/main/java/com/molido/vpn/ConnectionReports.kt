@@ -241,6 +241,12 @@ object ConnectionReports {
                 val body = JSONObject().apply {
                     put("session_id", sessionIdFor())
                     put("op", operator(app))
+                    // Per-install ID for the admin device list (no extra request: same sampled heartbeat).
+                    put("install_id", InstallId.get(app))
+                    put("platform", "android")
+                    runCatching { app.packageManager.getPackageInfo(app.packageName, 0).versionName }.getOrNull()?.let { put("ver", it.take(24)) }
+                    put("model", "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}".take(60))
+                    put("os", "Android ${android.os.Build.VERSION.RELEASE}")
                     mode?.lowercase()?.takeIf { Regex("[a-z0-9_-]{1,20}").matches(it) }?.let { put("mode", it) }
                 }.toString()
                 val connection = URL(HEARTBEAT_ENDPOINT).openConnection() as HttpURLConnection
@@ -266,7 +272,7 @@ object ConnectionReports {
 
     /** The underlying (non-VPN) network's type. */
     @Suppress("DEPRECATION")
-    private fun networkType(context: Context): String = try {
+    fun networkType(context: Context): String = try {
         val cm = context.getSystemService(ConnectivityManager::class.java)
         var result = "other"
         for (network in cm.allNetworks) {

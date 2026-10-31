@@ -1374,6 +1374,7 @@ class MainActivity : Activity() {
             item("Personalize", "Settings") { openSettingsScreen() },
             item("Support", "Check for updates") { appUpdater.checkForUpdate() },
             item("Support", "Report a problem") { reportProblem() },
+            item("Support", "Install ID") { showInstallId() },
             item("Support", "Tell your friends") { showShareSheet() },
             item("Support", "Donate") { showDonateSheet() },
             item("Support", "Open-source licenses") { showLicensesSheet() }
@@ -8557,6 +8558,21 @@ class MainActivity : Activity() {
     }
 
     /** Copies a support report (version, Android, operator, mode, last 200 log lines) and opens share. */
+    /** This install's ID for support: shown with a copy button. */
+    private fun showInstallId() {
+        val id = InstallId.get(this)
+        android.app.AlertDialog.Builder(this)
+            .setTitle(Strings.t("Install ID"))
+            .setMessage(id + "\n\n" + Strings.t("INSTALL_ID_BODY"))
+            .setPositiveButton(Strings.t("Copy")) { _, _ ->
+                getSystemService(android.content.ClipboardManager::class.java)
+                    ?.setPrimaryClip(android.content.ClipData.newPlainText("MolidoVPN install ID", id))
+                toastShort(Strings.t("Copied"))
+            }
+            .setNegativeButton(Strings.t("OK"), null)
+            .show()
+    }
+
     private fun reportProblem() {
         val version = runCatching {
             @Suppress("DEPRECATION")
@@ -8564,12 +8580,16 @@ class MainActivity : Activity() {
         }.getOrNull().orEmpty()
         val text = buildString {
             appendLine("MolidoVPN $version")
+            appendLine("Install ID: ${InstallId.get(this@MainActivity)}")
             appendLine("Android ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})")
             appendLine("Operator: ${ConnectionReports.operator(this@MainActivity)}")
             appendLine("Mode: ${selectedProtocol.coreName}")
             appendLine("---")
             ConnectionLog.snapshot().takeLast(200).forEach { appendLine(it) }
         }
+        // The same events go to the owner's panel under this install ID (once per hour at most).
+        Diagnostics.record(this, "report", selectedProtocol.coreName, "user report")
+        Diagnostics.upload(this, userAsked = true)
         try {
             getSystemService(android.content.ClipboardManager::class.java)
                 ?.setPrimaryClip(android.content.ClipData.newPlainText("MolidoVPN report", text))
