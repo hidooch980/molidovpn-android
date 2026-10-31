@@ -26,7 +26,8 @@ object UpdateSources {
     data class Release(val version: String, val assetName: String, val downloadUrl: String, val sha256: String?)
 
     fun releaseJsonUrls(mirrors: List<String>): List<String> =
-        (listOf(WORKER_RELEASE_URL, GITHUB_RELEASE_URL) + mirrors.map { "${it.trimEnd('/')}/latest.json" }).distinct()
+        (listOf(StaticFirst.RAW + "latest.json", StaticFirst.CDN + "latest.json", GITHUB_RELEASE_URL, WORKER_RELEASE_URL) +
+            mirrors.map { "${it.trimEnd('/')}/latest.json" }).distinct()
 
     /** The release's own URL first, then the same file name on every mirror. */
     fun downloadUrls(release: Release, mirrors: List<String>): List<String> =

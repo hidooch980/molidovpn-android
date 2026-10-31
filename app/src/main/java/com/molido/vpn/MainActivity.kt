@@ -572,7 +572,7 @@ class MainActivity : Activity() {
         ConnectionReports.refreshScoresIfDue(this)
         // Owner panel flags (disabled modes, default mode) and the home announcement.
         // The callback is posted, so it runs after onCreate has built every view.
-        AppRemote.refreshIfDue(this, force = true) { runOnUiThread { onRemoteUpdated() } }
+        AppRemote.refreshIfDue(this) { runOnUiThread { onRemoteUpdated() } }
         // And the Smart Split fragment profiles, on the same triggers and the
         // same floor — see [SmartSplitSub]. Same shape: a 304 costs nothing.
         SmartSplitSub.refreshIfDue(this)

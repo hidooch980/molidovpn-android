@@ -29,7 +29,7 @@ object AppRemote {
 
     private const val BASE = "https://molido-sub.hidooch980.workers.dev/app/"
     private const val PREFS = "app_remote"
-    private const val MIN_INTERVAL_MS = 5 * 60 * 1000L
+    private const val MIN_INTERVAL_MS = 30 * 60 * 1000L
     private const val TIMEOUT_MS = 8_000
 
     /** Flag keys the panel knows; Android core names map onto them in [flagKey]. */
@@ -161,5 +161,7 @@ object AppRemote {
         editor.apply()
     }
 
-    private fun get(file: String): String? = ConditionalCatalogFetch.get(BASE + file, 16_000)
+    /** Static mirror first (GitHub raw, jsDelivr), the Worker last: see [StaticFirst]. */
+    private fun get(file: String): String? =
+        StaticFirst.get(StaticFirst.urls(file, "/app/$file"), 8_000) { runCatching { JSONObject(it) }.isSuccess }
 }

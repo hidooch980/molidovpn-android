@@ -32,7 +32,7 @@ object ConnectionReports {
     private const val HEARTBEAT_ENDPOINT = "https://molido-sub.hidooch980.workers.dev/heartbeat"
     private const val SCORES_ENDPOINT = "https://molido-sub.hidooch980.workers.dev/scores?op="
     private const val SCORES_PREFS = "remote_scores"
-    private const val SCORES_MIN_INTERVAL_MS = 60 * 60 * 1000L
+    private const val SCORES_MIN_INTERVAL_MS = 3 * 60 * 60 * 1000L
     private const val TIMEOUT_MS = 10_000
 
     private val scoresRefreshing = java.util.concurrent.atomic.AtomicBoolean(false)
@@ -106,19 +106,8 @@ object ConnectionReports {
                 val editor = prefs.edit().putLong("at_$op", System.currentTimeMillis())
                 // This operator's scores, then the global ones (empty op) used when the operator has few reports.
                 for ((query, key) in listOf(op to "json_$op", "" to "json_all")) {
-                    val connection = URL(SCORES_ENDPOINT + query).openConnection() as HttpURLConnection
-                    try {
-                        connection.connectTimeout = TIMEOUT_MS
-                        connection.readTimeout = TIMEOUT_MS
-                        connection.requestMethod = "GET"
-                        if (connection.responseCode == 200) {
-                            val body = connection.inputStream.bufferedReader().use { it.readText() }
-                            if (parseScores(body).isNotEmpty()) editor.putString(key, body)
-                        }
-                    } catch (_: Exception) {
-                    } finally {
-                        connection.disconnect()
-                    }
+                    val urls = StaticFirst.urls(StaticFirst.opFile("scores", query), "/scores?op=$query")
+                    StaticFirst.get(urls, TIMEOUT_MS) { parseScores(it).isNotEmpty() }?.let { editor.putString(key, it) }
                 }
                 editor.apply()
                 scoresCacheOp = null
@@ -233,6 +222,11 @@ object ConnectionReports {
     }
 
     /** Call when the tunnel goes down so the next connection gets a fresh session id. */
+    /** 1 in [HEARTBEAT_SAMPLE] sessions heartbeat; the Worker scales the online count back up. */
+    const val HEARTBEAT_SAMPLE = 10
+
+    fun heartbeatSampled(sessionId: String): Boolean = Math.floorMod(sessionId.hashCode(), HEARTBEAT_SAMPLE) == 0
+
     fun endSession() {
         sessionId = null
     }
@@ -240,6 +234,7 @@ object ConnectionReports {
     /** Opt-in "still connected" ping; fire-and-forget on a daemon thread. Call every ~45-60s while connected. */
     fun heartbeat(context: Context, mode: String? = null) {
         if (!enabled(context)) return
+        if (!heartbeatSampled(sessionIdFor())) return
         val app = context.applicationContext
         Thread({
             try {

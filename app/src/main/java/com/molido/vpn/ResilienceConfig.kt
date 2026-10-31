@@ -88,6 +88,8 @@ object ResilienceConfig {
         val dnsTunnel: DnsTunnelSettings = DnsTunnelSettings(),
         val tor: TorSettings = TorSettings(),
         val smart: com.molido.vpn.engine.SmartConfig = com.molido.vpn.engine.SmartConfig(),
+        /** Owner's Cloudflare edge routes as a last resort when nothing else connects ([EdgeFallback]). */
+        val edgeLastResort: Boolean = true,
     )
 
     @Volatile private var cached: Config? = null
@@ -190,6 +192,7 @@ object ResilienceConfig {
             dnsTunnel = settings,
             tor = parseTor(json.optJSONObject("tor")),
             smart = com.molido.vpn.engine.SmartConfig.parse(json.optJSONObject("smart")),
+            edgeLastResort = json.optBoolean("edge_last_resort", true),
         )
     }
 
@@ -205,6 +208,7 @@ object ResilienceConfig {
             dnsTunnel = if (remote.dnsTunnel == DnsTunnelSettings()) bundled.dnsTunnel else remote.dnsTunnel,
             tor = if (remote.tor == TorSettings()) bundled.tor else remote.tor,
             smart = if (remote.smart == com.molido.vpn.engine.SmartConfig()) bundled.smart else remote.smart,
+            edgeLastResort = remote.edgeLastResort,
         )
     }
 

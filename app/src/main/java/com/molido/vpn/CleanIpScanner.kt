@@ -162,18 +162,10 @@ object CleanIpScanner {
         val prefs = prefs(context)
         var body: String? = null
         try {
-            val connection = java.net.URL("https://molido-sub.hidooch980.workers.dev/cfip?op=$op")
-                .openConnection() as java.net.HttpURLConnection
-            try {
-                connection.connectTimeout = 5_000
-                connection.readTimeout = 5_000
-                if (connection.responseCode == 200) {
-                    body = connection.inputStream.bufferedReader().use { it.readText() }
-                    prefs.edit().putString("shared_$op", body).apply()
-                }
-            } finally {
-                connection.disconnect()
+            body = StaticFirst.get(StaticFirst.urls(StaticFirst.opFile("cfip", op), "/cfip?op=$op"), 5_000) {
+                runCatching { org.json.JSONArray(it) }.isSuccess
             }
+            body?.let { prefs.edit().putString("shared_$op", it).apply() }
         } catch (_: Exception) {
         }
         return try {

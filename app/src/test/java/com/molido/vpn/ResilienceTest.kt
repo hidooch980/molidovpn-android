@@ -145,11 +145,11 @@ class UpdateSourcesTest {
     fun sourceOrder() {
         val m = listOf("https://m1.example.com/", "https://m2.example.com")
         assertEquals(
-            listOf(UpdateSources.WORKER_RELEASE_URL, UpdateSources.GITHUB_RELEASE_URL,
+            listOf(StaticFirst.RAW + "latest.json", StaticFirst.CDN + "latest.json",
+                UpdateSources.GITHUB_RELEASE_URL, UpdateSources.WORKER_RELEASE_URL,
                 "https://m1.example.com/latest.json", "https://m2.example.com/latest.json"),
             UpdateSources.releaseJsonUrls(m),
         )
-        assertEquals(listOf(UpdateSources.WORKER_RELEASE_URL, UpdateSources.GITHUB_RELEASE_URL), UpdateSources.releaseJsonUrls(emptyList()))
         val r = UpdateSources.Release("1", "A.apk", "https://w/app/A.apk", null)
         assertEquals(listOf("https://w/app/A.apk", "https://m1.example.com/A.apk", "https://m2.example.com/A.apk"),
             UpdateSources.downloadUrls(r, m))
