@@ -8557,7 +8557,6 @@ class MainActivity : Activity() {
         }
     }
 
-    /** Copies a support report (version, Android, operator, mode, last 200 log lines) and opens share. */
     /** This install's ID for support: shown with a copy button. */
     private fun showInstallId() {
         val id = InstallId.get(this)
@@ -8573,6 +8572,7 @@ class MainActivity : Activity() {
             .show()
     }
 
+    /** Copies a support report (version, Android, operator, mode, last 200 log lines) and opens share. */
     private fun reportProblem() {
         val version = runCatching {
             @Suppress("DEPRECATION")
