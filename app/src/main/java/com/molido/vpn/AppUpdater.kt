@@ -339,17 +339,9 @@ class AppUpdater(private val activity: Activity) {
     }
 
     /** Our Cloudflare worker first (reachable where GitHub is filtered), then GitHub, then mirrors. */
-    private fun latestRelease(): Release? {
-        var lastError: Exception? = null
-        for (url in UpdateSources.releaseJsonUrls(ResilienceConfig.updateMirrors(activity))) {
-            try {
-                return fetchRelease(url)
-            } catch (error: Exception) {
-                lastError = error
-            }
-        }
-        throw lastError ?: IllegalStateException("no release source")
-    }
+    private fun latestRelease(): Release? = UpdateSources.latest(
+        UpdateSources.releaseJsonUrls(ResilienceConfig.updateMirrors(activity)), appVersion(), ::isNewer, ::fetchRelease,
+    )
 
     private fun fetchRelease(url: String): Release? {
         val connection = (URL(url).openConnection() as HttpURLConnection).apply {

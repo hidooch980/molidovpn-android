@@ -36,6 +36,26 @@ object UpdateSources {
         (listOf(LiveSync.RAW + "latest.json", LiveSync.CDN + "latest.json", StaticFirst.RAW + "latest.json", StaticFirst.CDN + "latest.json", GITHUB_RELEASE_URL, WORKER_RELEASE_URL) +
             mirrors.map { "${it.trimEnd('/')}/latest.json" }).distinct()
 
+    /**
+     * The first source that answers wins, except that a static copy (live/sub branch, refreshed every few
+     * minutes by a cron job) saying "nothing newer" is double-checked once against GitHub's own API, so a
+     * just-published release is not hidden behind a stale copy. The Worker is never asked for that.
+     */
+    fun latest(urls: List<String>, installed: String, isNewer: (String, String) -> Boolean, fetch: (String) -> Release?): Release? {
+        var lastError: Exception? = null
+        for (url in urls) {
+            val release = try { fetch(url) } catch (e: Exception) { lastError = e; continue }
+            val static = url.startsWith(LiveSync.RAW) || url.startsWith(LiveSync.CDN) ||
+                url.startsWith(StaticFirst.RAW) || url.startsWith(StaticFirst.CDN)
+            if (static && (release == null || !isNewer(release.version, installed))) {
+                val fresh = runCatching { fetch(GITHUB_RELEASE_URL) }.getOrNull()
+                if (fresh != null && isNewer(fresh.version, installed)) return fresh
+            }
+            return release
+        }
+        throw lastError ?: IllegalStateException("no release source")
+    }
+
     /** The release's own URL first, then the same file name on every mirror. */
     fun downloadUrls(release: Release, mirrors: List<String>): List<String> =
         (listOf(release.downloadUrl) + mirrors.map { "${it.trimEnd('/')}/${release.assetName}" }).distinct()
