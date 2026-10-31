@@ -19,6 +19,7 @@ import com.molido.vpn.engine.Cost
 object MethodRegistry {
 
     /** Methods whose exit is a WARP account (an Iranian user's exit is then IR). */
+    const val V2RAY_FRAGMENT = "v2ray-frag"
     val WARP_FAMILY = setOf("wireguard", AmneziaConfig.PROTOCOL, "masque", "gool")
 
     /** UDP transports: useless when UDP is blocked on this network. */
@@ -46,6 +47,10 @@ object MethodRegistry {
                     .filter { it.protocol !in setOf("hysteria2", "tuic") }
                     .take(8).map { NetProbe.Target(it.address, it.port) }
             },
+            // MahsaNG-style: the same pool with the TLS ClientHello fragmented on the dial. A separate
+            // method so fast unfragmented routes are never slowed; remote "v2ray_fragment".
+            if (proxy || v2rayCount <= 0 || com.molido.vpn.ResilienceConfig.get(context).v2rayFragment == null) null
+            else PlainMethod(Candidate(V2RAY_FRAGMENT, "v2ray", "V2Ray + fragment", Cost.CHEAP, 16_000L)),
             if (proxy || !MyConfigs.hasProxyNodes(context)) null
             else PlainMethod(Candidate(MyConfigs.PROTOCOL, MyConfigs.PROTOCOL, "My configs", Cost.CHEAP, 16_000L)),
             PlainMethod(Candidate("gool", "gool", "WARP-on-WARP", Cost.CHEAP, 30_000L)),

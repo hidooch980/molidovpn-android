@@ -38,6 +38,6 @@ class HandshakeMethod(
     override fun preProbe(context: Context, timeoutMs: Int): Probe? {
         val list = targets(context)
         if (list.isEmpty()) return null
-        return NetProbe.best(list, timeoutMs)
+        return NetProbe.bestDual(list, timeoutMs, com.molido.vpn.NetworkV6.hasGlobalIpv6(context))
     }
 }

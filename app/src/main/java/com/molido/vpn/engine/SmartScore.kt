@@ -10,6 +10,8 @@ data class Probe(
     val ok: Boolean,
     val latencyMs: Long? = null,
     val throughputKbps: Long? = null,
+    /** Address family that answered fastest ("v4"/"v6"), when the probe tried both. */
+    val family: String? = null,
 )
 
 /** Everything measured for one method in one Smart Connect run. */

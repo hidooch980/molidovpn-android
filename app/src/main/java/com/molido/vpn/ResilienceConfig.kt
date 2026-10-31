@@ -90,6 +90,10 @@ object ResilienceConfig {
         val smart: com.molido.vpn.engine.SmartConfig = com.molido.vpn.engine.SmartConfig(),
         /** Owner's Cloudflare edge routes as a last resort when nothing else connects ([EdgeFallback]). */
         val edgeLastResort: Boolean = true,
+        /** Probe servers over IPv4 and IPv6 and dial the faster family ([DialTuning]). */
+        val dualStack: Boolean = true,
+        /** Smart Connect's "V2Ray + fragment" method; null = off. */
+        val v2rayFragment: DialTuning.Fragment? = DialTuning.Fragment(),
     )
 
     @Volatile private var cached: Config? = null
@@ -165,6 +169,19 @@ object ResilienceConfig {
     }
 
     /** Parses one file. Invalid entries are dropped; a missing section is the empty default. */
+    private val FRAG_RANGE = Regex("^[0-9]{1,4}(-[0-9]{1,4})?$")
+
+    /** `{"enabled":true,"packets":"tlshello","lengths":["10-20"],"delays":["10-20"]}`; absent = defaults on. */
+    fun parseFragment(o: JSONObject?): DialTuning.Fragment? {
+        val d = DialTuning.Fragment()
+        if (o == null) return d
+        if (!o.optBoolean("enabled", true)) return null
+        val packets = o.optString("packets", d.packets).takeIf { it == "tlshello" || FRAG_RANGE.matches(it) } ?: d.packets
+        fun ranges(key: String, def: List<String>): List<String> =
+            strings(o.optJSONArray(key), 4) { v -> v.trim().takeIf { FRAG_RANGE.matches(it) } }.ifEmpty { def }
+        return DialTuning.Fragment(packets, ranges("lengths", d.lengths), ranges("delays", d.delays))
+    }
+
     fun parse(text: String): Config {
         val json = JSONObject(text)
         val mirrors = json.optJSONObject("mirrors")
@@ -193,6 +210,8 @@ object ResilienceConfig {
             tor = parseTor(json.optJSONObject("tor")),
             smart = com.molido.vpn.engine.SmartConfig.parse(json.optJSONObject("smart")),
             edgeLastResort = json.optBoolean("edge_last_resort", true),
+            dualStack = json.optBoolean("dual_stack", true),
+            v2rayFragment = parseFragment(json.optJSONObject("v2ray_fragment")),
         )
     }
 
@@ -209,6 +228,8 @@ object ResilienceConfig {
             tor = if (remote.tor == TorSettings()) bundled.tor else remote.tor,
             smart = if (remote.smart == com.molido.vpn.engine.SmartConfig()) bundled.smart else remote.smart,
             edgeLastResort = remote.edgeLastResort,
+            dualStack = remote.dualStack,
+            v2rayFragment = remote.v2rayFragment,
         )
     }
 
