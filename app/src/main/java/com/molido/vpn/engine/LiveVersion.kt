@@ -41,9 +41,13 @@ data class LiveVersion(
             null
         }
 
+        /** A CDN edge still serving an earlier commit: never step back to it. */
+        fun isOlder(old: LiveVersion?, new: LiveVersion): Boolean = old != null && new.at in 1 until old.at
+
         /** Parts whose hash moved. No previous copy: everything known counts as changed once. */
         fun changes(old: LiveVersion?, new: LiveVersion): Set<Part> {
             if (old != null && old.v == new.v) return emptySet()
+            if (isOlder(old, new)) return emptySet()
             val out = LinkedHashSet<Part>()
             fun moved(o: String?, n: String) = n.isNotEmpty() && o != n
             if (moved(old?.flags, new.flags)) out += Part.FLAGS
