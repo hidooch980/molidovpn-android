@@ -31,12 +31,14 @@ import java.util.concurrent.atomic.AtomicBoolean
 import ca.psiphon.PsiphonTunnel
 import com.molido.vpn.engine.Cost
 import com.molido.vpn.engine.Measured
+import com.molido.vpn.engine.MethodBandit
 import com.molido.vpn.engine.NetworkMemory
 import com.molido.vpn.engine.Probe
 import com.molido.vpn.engine.QualityMonitor
 import com.molido.vpn.engine.SmartConfig
 import com.molido.vpn.engine.SmartPlan
 import com.molido.vpn.engine.SmartScore
+import com.molido.vpn.engine.StallDetector
 import com.molido.vpn.methods.MethodRegistry
 import com.molido.vpn.methods.TunnelMethod
 import com.molido.vpn.ui.state.SmartConnectState
@@ -701,6 +703,8 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
         const val LOG_TAG = "MolidoVpnService"
         /** Heartbeat every N watchdog ticks (30 s each): 6 = ~3 min, inside the worker's 300 s online window. */
         internal const val HEARTBEAT_EVERY_TICKS = 60
+        /** Stall-heuristic sample period (screen on only; counters, no network). */
+        internal const val QUALITY_SAMPLE_S = 5L
         /**
          * Ceiling on in-place SHARD node swaps per session.
          *
@@ -3139,6 +3143,9 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
         watchdogTask?.cancel(false)
         reconnectAttempts = 0
         watchdogTicks.set(0)
+        startQualitySampler()
+        startNetworkWatch()
+        stability.up(SystemClock.elapsedRealtime())
         watchdogTask = ladderScheduler.scheduleWithFixedDelay({
             try {
                 if (stopRequested.get() || userInitiatedStop.get()) return@scheduleWithFixedDelay
@@ -3221,6 +3228,14 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
     }
 
     private fun stopWatchdog() {
+        stopQualitySampler()
+        stopNetworkWatch()
+        stability.down(SystemClock.elapsedRealtime())
+        if (stability.hours(SystemClock.elapsedRealtime()) > 0) {
+            val sum = stability.summary(SystemClock.elapsedRealtime())
+            ConnectionLog.record("Stability: $sum")
+            getSharedPreferences("settings", MODE_PRIVATE).edit().putString("stability_summary", sum).apply()
+        }
         watchdogTask?.cancel(false)
         watchdogTask = null
         ConnectionReports.endSession()
@@ -3453,6 +3468,10 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
      * gap so the reconnect does not have to re-prompt the user.
      */
     private fun onTunnelLost(reason: String) {
+        if (!reconnectRequested.get()) {
+            stability.drop(SystemClock.elapsedRealtime())
+            Diagnostics.record(this, "drop", currentProtocol.lowercase().ifEmpty { null }, reason)
+        }
         // A quick reconnect tears the old tunnel down on purpose, and on Psiphon the
         // controller's own `onExiting` arrives a moment later — after the restart has
         // cleared stopRequested, so the usual guard no longer covers it. Treating
@@ -4354,7 +4373,10 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
             val shared = methods.mapNotNull { m -> ConnectionReports.modeScore(this, m.candidate.coreName)?.let { m.id to it } }.toMap()
             // Iranian user: WARP-family exits are in IR, so foreign exits are tried first.
             val demote = (if (autoHomeIsIran(prefs)) MethodRegistry.WARP_FAMILY else emptySet()) + (if (udpOff) MethodRegistry.UDP else emptySet())
-            var order = SmartPlan.order(methods.map { it.candidate }, memory, pre, shared, demote)
+            val banditKey = MethodBandit.key(netKey, java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY))
+            val learned = MethodBandit.rank(MethodBandit.arms(prefs.getString(smartPrefBandit, null), banditKey), methods.map { it.id })
+            smartBanditKey = banditKey
+            var order = SmartPlan.order(methods.map { it.candidate }, memory, pre, shared, demote, learned)
             Log.i(autoLogTag, "smart net=$netKey order=${order.joinToString { it.label }} lowBattery=$lowBattery")
             ConnectionLog.record("Smart: ${order.size} methods, order ${order.joinToString(" → ") { it.label }}")
             SmartConnectState.phase(SmartConnectState.Phase.TESTING)
@@ -4408,12 +4430,18 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
                     pre = smartPreProbe(methods.filter { it.id != c.id }, smart, token)
                     if (token != autoToken) return
                     order = listOf(c) + SmartPlan.order(methods.map { it.candidate }.filter { it.id != c.id },
-                        memory.copy(winner = memory.runnerUp ?: ""), pre, shared, demote)
+                        memory.copy(winner = memory.runnerUp ?: ""), pre, shared, demote, learned)
                     i = 1
                 }
             }
 
             val pick = SmartPlan.pick(scores, smart.minScore)
+            // Learn what works on this network at this time of day (on-device only).
+            if (scores.isNotEmpty()) {
+                var b = prefs.getString(smartPrefBandit, null)
+                scores.forEach { (id, sc) -> b = MethodBandit.record(b, banditKey, id, sc / 100.0, now) }
+                prefs.edit().putString(smartPrefBandit, b).apply()
+            }
             val chosen = order.firstOrNull { it.id == pick.winner }
             val winnerMeasured = pick.winner?.let { measuredBy[it] }
             val summary = "results: " + results.entries.joinToString(", ") { "${it.key}=${it.value}" } +
@@ -4421,6 +4449,7 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
                 (if (fullTest) " [full test]" else " [fast path]")
             Log.i(autoLogTag, summary)
             ConnectionLog.record("Smart $summary")
+            Diagnostics.record(this, "race", chosen?.id, "net=$netKey $summary")
             SmartConnectState.result(
                 pick.winner,
                 winnerMeasured?.let { smartReason(it) }.orEmpty(),
@@ -4444,8 +4473,11 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
                 .apply { if (fullTest) putLong(autoPrefLastFullTest, System.currentTimeMillis()) }
                 .apply()
             smartSession = true
+            smartLastSwitchAt = SystemClock.elapsedRealtime()
+            smartMethodId = chosen.id
             smartBaselineMs = winnerMs.takeIf { it > 0 }
             smartMonitor = null
+            smartStall.reset()
 
             val bestText = Strings.tf("Best: %s (%sms)", chosen.label, winnerMs) +
                 (if (iranExit) " · " + Strings.t("Exit is in Iran; some services (e.g. Gemini) won't work") else "")
@@ -4491,6 +4523,21 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
     private fun smartReason(m: Measured) = SmartScore.reason(m, Strings.t("stable"), Strings.t("IR exit"))
 
     private val smartPrefMemory = "smart_network_memory"
+    private val smartPrefBandit = "smart_method_bandit"
+    @Volatile private var smartBanditKey: String? = null
+    @Volatile private var smartMethodId: String? = null
+    /** Video-stall heuristic over the 5 s counter samples ([startQualitySampler]). */
+    private val smartStall = StallDetector()
+    private val switchPolicy = com.molido.vpn.engine.SwitchPolicy()
+    /** Elapsed-realtime of the last route switch (or connect): the dwell-time floor counts from here. */
+    @Volatile private var smartLastSwitchAt = 0L
+    /** Drops and switches per connected hour for this service's life; logged at each disconnect. */
+    private val stability = com.molido.vpn.engine.StabilityStats()
+    private var netWatch: ConnectivityManager.NetworkCallback? = null
+    private var qualityTask: java.util.concurrent.ScheduledFuture<*>? = null
+    private var qLastRx = -1L
+    private var qLastTx = -1L
+    private var qLastAt = 0L
     /** Set by the quality monitor: the next selection tries the runner-up first. */
     @Volatile private var smartPreferRunnerUp = false
     /** The current session was chosen by Smart Connect (quality monitor applies). */
@@ -4631,23 +4678,152 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
         smartLastTx = tx
         val interval = WATCHDOG_INTERVAL_S.coerceAtLeast(1)
         val port = smartSocksPort(if (currentProtocol.contains("TOR")) "tor" else "")
-        val sample = port?.let { smartTimedCheck(it) }
+        // Battery: screen off and nothing moving → no probe (nobody is waiting on this tunnel).
+        val idle = dRx == 0L && dTx == 0L
+        val sample = if (!first && idle && !isScreenInteractive()) null else port?.let { smartTimedCheck(it) }
         SmartConnectState.live(sample?.latencyMs, dRx * 8 / 1000 / interval, dTx * 8 / 1000 / interval)
         if (!smartSession || sample == null || autoTrialActive.get()) return
         val cfg = ResilienceConfig.smart(this)
         if (!cfg.enabled || !cfg.reeval.enabled || smartLowBattery(cfg)) return
         val monitor = smartMonitor ?: QualityMonitor(cfg.reeval, smartBaselineMs).also { smartMonitor = it }
         if (monitor.add(sample, System.currentTimeMillis()) == QualityMonitor.Verdict.DEGRADED) {
-            ConnectionLog.record("Smart: quality dropped (ping ${sample.latencyMs ?: "fail"}, baseline ${smartBaselineMs}ms) — re-evaluating, runner-up first")
-            if (currentProtocol.contains("SHARD") && rotateShardNode("quality degraded")) {
-                smartBaselineMs = port?.let { smartTimedCheck(it).latencyMs }
+            smartDegraded("ping ${sample.latencyMs ?: "fail"}, baseline ${smartBaselineMs}ms", port)
+        }
+    }
+
+    /**
+     * Quality dropped (ping monitor or video-stall heuristic). Pool methods (SHARD / V2Ray) switch node
+     * make-before-break: the new node is started and checked beside the live one, then new flows move
+     * over without touching the TUN. Other methods: the other methods are probed in the background
+     * first, and the tunnel is only rebuilt (runner-up first) when something else is reachable.
+     */
+    private fun smartDegraded(why: String, port: Int?) {
+        if (autoTrialActive.get() || !connected.get()) return
+        val nowEl = SystemClock.elapsedRealtime()
+        if (!switchPolicy.dwellOver(smartLastSwitchAt, nowEl)) {
+            ConnectionLog.record("Smart: quality dropped ($why) — staying, route is under ${switchPolicy.minDwellMs / 60_000} min old")
+            return
+        }
+        ConnectionLog.record("Smart: quality dropped ($why)")
+        Diagnostics.record(this, "degraded", smartMethodId, why)
+        val prefs = getSharedPreferences("settings", MODE_PRIVATE)
+        val key = smartBanditKey
+        val id = smartMethodId
+        if (key != null && id != null) {
+            prefs.edit().putString(smartPrefBandit, MethodBandit.record(prefs.getString(smartPrefBandit, null), key, id, 0.15, System.currentTimeMillis())).apply()
+        }
+        if (currentProtocol.contains("SHARD")) {
+            val cfg = ResilienceConfig.smart(this)
+            val switched = (ShardSocksFront.isRunning && ShardManager.seamlessSwitch(this, verboseShardLog(), SmartScore.MIN_VIDEO_KBPS / 2)) ||
+                rotateShardNode("quality degraded")
+            if (switched) {
+                smartLastSwitchAt = SystemClock.elapsedRealtime()
+                stability.switched()
+                smartBaselineMs = smartSocksPort("")?.let { smartTimedCheck(it).latencyMs }
                 smartMonitor = QualityMonitor(cfg.reeval, smartBaselineMs)
+                smartStall.reset()
+                sendStatus(STATUS_CONNECTED, shardConnectedText(ShardManager.activeNode?.displayName ?: "a public node"))
                 return
             }
-            smartPreferRunnerUp = true
-            smartSession = false
-            onTunnelLost(Strings.t("Quality dropped — finding a better route"))
         }
+        // Race in the background before breaking anything: is any other method reachable from here?
+        val methods = MethodRegistry.all(this).filter { it.id != id && !AppRemote.isDisabled(this, it.candidate.coreName) }
+        val token = autoToken
+        val pre = try { smartPreProbe(methods, ResilienceConfig.smart(this), token) } catch (_: Exception) { emptyMap() }
+        if (token != autoToken || !connected.get() || userInitiatedStop.get()) return
+        if (pre.values.none { it.ok }) {
+            ConnectionLog.record("Smart: nothing else reachable — staying on the current route")
+            smartStall.reset()
+            return
+        }
+        smartLastSwitchAt = SystemClock.elapsedRealtime()
+        smartPreferRunnerUp = true
+        smartSession = false
+        onTunnelLost(Strings.t("Quality dropped — finding a better route"))
+    }
+
+    /**
+     * Quick recovery after the phone changes network (Wi-Fi ↔ mobile) while connected: three
+     * seconds later one request goes through the tunnel; if it fails, pool methods switch node
+     * (make-before-break when possible) and others reconnect now instead of waiting for the
+     * watchdog's strikes.
+     */
+    private fun startNetworkWatch() {
+        if (netWatch != null) return
+        val cm = getSystemService(ConnectivityManager::class.java) ?: return
+        var last: Network? = null
+        val cb = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                val prev = last
+                last = network
+                if (prev == null || prev == network) return
+                ladderScheduler.schedule({
+                    try {
+                        if (!connected.get() || autoTrialActive.get() || userInitiatedStop.get()) return@schedule
+                        val port = smartSocksPort(if (currentProtocol.contains("TOR")) "tor" else "") ?: return@schedule
+                        if (ShardProbe.check(port, 6_000)) {
+                            ConnectionLog.record("Network changed; tunnel still carries traffic")
+                            return@schedule
+                        }
+                        ConnectionLog.record("Network changed and the tunnel stopped answering — recovering now")
+                        if (currentProtocol.contains("SHARD") &&
+                            ((ShardSocksFront.isRunning && ShardManager.seamlessSwitch(this@MolidoVpnService, verboseShardLog(), 0)) ||
+                                rotateShardNode("network changed"))
+                        ) {
+                            stability.switched()
+                            return@schedule
+                        }
+                        onTunnelLost(Strings.t("Network changed — reconnecting"))
+                    } catch (_: Exception) {
+                    }
+                }, 3, TimeUnit.SECONDS)
+            }
+        }
+        runCatching { cm.registerDefaultNetworkCallback(cb); netWatch = cb }
+    }
+
+    private fun stopNetworkWatch() {
+        val cb = netWatch ?: return
+        netWatch = null
+        runCatching { getSystemService(ConnectivityManager::class.java)?.unregisterNetworkCallback(cb) }
+    }
+
+    /**
+     * 5 s byte-counter sampler for the stall heuristic. Screen on only and no network I/O: it reads
+     * TrafficStats (the core's sockets carry every tunnelled byte) and feeds [StallDetector].
+     */
+    private fun startQualitySampler() {
+        qualityTask?.cancel(false)
+        qLastRx = -1L
+        qualityTask = ladderScheduler.scheduleWithFixedDelay({
+            try {
+                if (!connected.get() || !smartSession || autoTrialActive.get()) { qLastRx = -1L; return@scheduleWithFixedDelay }
+                if (!isScreenInteractive()) { qLastRx = -1L; smartStall.reset(); return@scheduleWithFixedDelay }
+                val uid = android.os.Process.myUid()
+                val rx = android.net.TrafficStats.getUidRxBytes(uid).coerceAtLeast(0)
+                val tx = android.net.TrafficStats.getUidTxBytes(uid).coerceAtLeast(0)
+                val now = SystemClock.elapsedRealtime()
+                if (qLastRx >= 0) {
+                    val v = smartStall.add((rx - qLastRx).coerceAtLeast(0), (tx - qLastTx).coerceAtLeast(0), now - qLastAt, now)
+                    if (v != StallDetector.Verdict.OK) {
+                        val cfg = ResilienceConfig.smart(this)
+                        if (cfg.enabled && cfg.reeval.enabled && !smartLowBattery(cfg)) {
+                            val monitor = smartMonitor ?: QualityMonitor(cfg.reeval, smartBaselineMs).also { smartMonitor = it }
+                            if (monitor.force(System.currentTimeMillis()) == QualityMonitor.Verdict.DEGRADED) {
+                                smartDegraded(if (v == StallDetector.Verdict.STALL) "video stall" else "sustained low throughput", null)
+                            }
+                        }
+                    }
+                }
+                qLastRx = rx; qLastTx = tx; qLastAt = now
+            } catch (_: Exception) {
+            }
+        }, QUALITY_SAMPLE_S, QUALITY_SAMPLE_S, TimeUnit.SECONDS)
+    }
+
+    private fun stopQualitySampler() {
+        qualityTask?.cancel(false)
+        qualityTask = null
     }
 
     /** Nothing worked: tear down, then retry later (drops keep "auto") or report. */
@@ -4658,6 +4834,8 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
         reconnectRequested.set(false)
         if (token != autoToken || userInitiatedStop.get()) return
         EdgeFallback.arm(this)
+        Diagnostics.record(this, "fail", "auto", "nothing connected after $attempts attempt(s)")
+        Diagnostics.upload(this)
         // Trials re-armed the watchdog, which zeroes the backoff counter; restore it
         // so repeated full failures back off instead of looping every 5 s.
         reconnectAttempts = attempts
@@ -5406,8 +5584,14 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
         if (status == STATUS_CONNECTED && !autoTrialActive.get()) {
             killSwitchSealed.set(false)
             retainTunForRecovery = false
+            // Owner changes / releases published while we were offline (a 304 when nothing moved).
+            LiveSync.check(this, "connect")
         }
         Log.i(LOG_TAG, "status=$status${detail?.let { " detail=$it" } ?: ""}")
+        if (status == STATUS_FAILED && !autoTrialActive.get()) {
+            Diagnostics.record(this, "error", currentProtocol.lowercase().ifEmpty { null }, detail ?: "failed")
+            Diagnostics.upload(this)
+        }
         if (status == STATUS_CONNECTED && !autoTrialActive.get() &&
             SmartConnectState.state.value.phase == SmartConnectState.Phase.CONNECTING
         ) {

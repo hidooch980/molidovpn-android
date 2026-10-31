@@ -1,6 +1,7 @@
 {
   "edge_last_resort": true,
   "dual_stack": true,
+  "live": { "push": true, "url": "https://ntfy.sh/molidovpn-live-971a1da8ec4af75c" },
   "v2ray_fragment": {"enabled": true, "packets": "tlshello", "lengths": ["10-20"], "delays": ["10-20"]},
   "version": 1,
   "updated": "2026-10-20",
@@ -63,8 +64,8 @@
       "fail_threshold": 3,
       "latency_factor": 3.0,
       "latency_floor_ms": 1500,
-      "cooldown_s": 600,
-      "max_per_hour": 3
+      "cooldown_s": 300,
+      "max_per_hour": 4
     }
   }
 }

@@ -94,6 +94,8 @@ object ResilienceConfig {
         val dualStack: Boolean = true,
         /** Smart Connect's "V2Ray + fragment" method; null = off. */
         val v2rayFragment: DialTuning.Fragment? = DialTuning.Fragment(),
+        /** Push channel the open app listens on ([LivePush]); null = off. */
+        val livePush: String? = LivePush.DEFAULT_URL,
     )
 
     @Volatile private var cached: Config? = null
@@ -212,7 +214,15 @@ object ResilienceConfig {
             edgeLastResort = json.optBoolean("edge_last_resort", true),
             dualStack = json.optBoolean("dual_stack", true),
             v2rayFragment = parseFragment(json.optJSONObject("v2ray_fragment")),
+            livePush = parseLivePush(json.optJSONObject("live")),
         )
+    }
+
+    /** `"live": {"push": true, "url": "https://ntfy.sh/<topic>"}`; missing = on with the default topic. */
+    fun parseLivePush(o: JSONObject?): String? {
+        if (o == null) return LivePush.DEFAULT_URL
+        if (!o.optBoolean("push", true)) return null
+        return httpsUrl(o.optString("url"))?.trimEnd('/') ?: LivePush.DEFAULT_URL
     }
 
     /**
@@ -230,6 +240,7 @@ object ResilienceConfig {
             edgeLastResort = remote.edgeLastResort,
             dualStack = remote.dualStack,
             v2rayFragment = remote.v2rayFragment,
+            livePush = remote.livePush,
         )
     }
 

@@ -25,7 +25,16 @@ class DialTuningTest {
         assertEquals("UseIPv6v4", v6.getJSONObject("streamSettings").getJSONObject("sockopt").getString("domainStrategy"))
         val v4 = DialTuning.apply(tls(), family = "v4", fragment = false)
         assertEquals("UseIPv4", v4.getJSONObject("streamSettings").getJSONObject("sockopt").getString("domainStrategy"))
-        assertFalse(DialTuning.apply(tls(), family = null, fragment = false).getJSONObject("streamSettings").has("sockopt"))
+        val none = DialTuning.apply(tls(), family = null, fragment = false, keepAlive = false)
+        assertFalse(none.getJSONObject("streamSettings").has("sockopt"))
+    }
+
+    @Test fun keepAliveOnTcpNotOnDialerHop() {
+        val so = DialTuning.apply(tls(), family = null, fragment = false).getJSONObject("streamSettings").getJSONObject("sockopt")
+        assertEquals(DialTuning.KEEPALIVE_IDLE_S, so.getInt("tcpKeepAliveIdle"))
+        assertEquals(DialTuning.KEEPALIVE_INTERVAL_S, so.getInt("tcpKeepAliveInterval"))
+        val hop = tls().also { it.getJSONObject("streamSettings").put("sockopt", JSONObject().put("dialerProxy", "up")) }
+        assertFalse(DialTuning.apply(hop, null, false).getJSONObject("streamSettings").getJSONObject("sockopt").has("tcpKeepAliveIdle"))
     }
 
     @Test fun upstreamHopKeepsItsDialer() {

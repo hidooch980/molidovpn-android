@@ -180,6 +180,7 @@ object SettingsBackup {
             put("version", version)
             put("created", System.currentTimeMillis())
             put("prefs", prefs)
+            put("install_id", InstallId.get(context))
         }.toString(2)
     }
 
@@ -245,6 +246,7 @@ object SettingsBackup {
             // this returns, and it must read the restored values, not the old ones.
             editor.commit()
         }
+        root.optString("install_id").takeIf { it.isNotEmpty() }?.let { InstallId.restore(context, it) }
         if (restored == 0) throw IllegalArgumentException("This backup carries no settings")
         return Outcome(restored, skipped, root.optString("version", "?"))
     }

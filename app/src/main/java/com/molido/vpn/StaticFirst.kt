@@ -19,6 +19,10 @@ object StaticFirst {
     /** Static copies of [file] first, then the Worker's [workerPath]. */
     fun urls(file: String, workerPath: String): List<String> = listOf(RAW + file, CDN + file, WORKER + workerPath)
 
+    /** The `live` branch copy ([LiveSync]) first, then [urls]. */
+    fun liveUrls(file: String, workerPath: String): List<String> =
+        listOf(LiveSync.RAW + file, LiveSync.CDN + file) + urls(file, workerPath)
+
     /** File name of the mirrored `/scores?op=` or `/cfip?op=` copy. */
     fun opFile(kind: String, op: String): String = "$kind-${op.ifEmpty { "all" }}.json"
 

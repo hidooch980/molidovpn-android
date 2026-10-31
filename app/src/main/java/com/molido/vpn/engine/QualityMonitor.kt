@@ -28,4 +28,15 @@ class QualityMonitor(private val cfg: SmartConfig.Reeval, private val baselineMs
         window.clear()
         return Verdict.DEGRADED
     }
+
+    /** An outside signal (video stall) says quality dropped: same cooldown and hourly cap. */
+    fun force(now: Long): Verdict {
+        if (!cfg.enabled) return Verdict.OK
+        while (fired.isNotEmpty() && now - fired.first() > 3_600_000L) fired.removeFirst()
+        if (now - lastFiredAt < cfg.cooldownS * 1_000L || fired.size >= cfg.maxPerHour) return Verdict.COOLDOWN
+        lastFiredAt = now
+        fired.addLast(now)
+        window.clear()
+        return Verdict.DEGRADED
+    }
 }

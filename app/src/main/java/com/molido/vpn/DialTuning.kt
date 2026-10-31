@@ -42,8 +42,11 @@ object DialTuning {
     ))
 
     /** Applies the session tweaks to [outbound] in place. Pure apart from the volatile inputs. */
+    const val KEEPALIVE_IDLE_S = 30
+    const val KEEPALIVE_INTERVAL_S = 15
+
     fun apply(outbound: JSONObject, family: String? = this.family, fragment: Boolean = this.fragment,
-              settings: Fragment = fragmentSettings): JSONObject {
+              settings: Fragment = fragmentSettings, keepAlive: Boolean = true): JSONObject {
         val proto = outbound.optString("protocol")
         if (proto == "socks" || proto == "freedom" || proto == "blackhole") return outbound
         val stream = outbound.optJSONObject("streamSettings")
@@ -51,6 +54,14 @@ object DialTuning {
             val s = stream ?: JSONObject().also { outbound.put("streamSettings", it) }
             val sockopt = s.optJSONObject("sockopt") ?: JSONObject().also { s.put("sockopt", it) }
             if (!sockopt.has("dialerProxy") && !sockopt.has("domainStrategy")) sockopt.put("domainStrategy", ds)
+        }
+        // Stability: carrier NATs drop idle TCP after a few minutes, which surfaces as a stall on the
+        // next request. Kernel keepalive (30 s idle, 15 s interval) keeps the mapping without app traffic.
+        if (keepAlive && stream != null && stream.optString("network", "tcp") !in setOf("kcp", "quic", "hysteria")) {
+            val sockopt = stream.optJSONObject("sockopt") ?: JSONObject().also { stream.put("sockopt", it) }
+            if (!sockopt.has("dialerProxy") && !sockopt.has("tcpKeepAliveIdle")) {
+                sockopt.put("tcpKeepAliveIdle", KEEPALIVE_IDLE_S).put("tcpKeepAliveInterval", KEEPALIVE_INTERVAL_S)
+            }
         }
         if (fragment && stream != null && stream.optString("security") == "tls" &&
             stream.optString("network", "tcp") != "kcp" && !stream.has("finalmask")

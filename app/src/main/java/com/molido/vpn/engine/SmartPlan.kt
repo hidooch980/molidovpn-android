@@ -42,6 +42,8 @@ object SmartPlan {
         shared: Map<String, Double> = emptyMap(),
         /** Cheap methods to try after the other cheap ones (e.g. WARP family for an Iranian user: IR exit). */
         demote: Set<String> = emptySet(),
+        /** On-device learned rank for this network and time of day ([MethodBandit.rank]); higher first. */
+        learned: Map<String, Double> = emptyMap(),
     ): List<Candidate> {
         fun probeRank(c: Candidate): Int = when (val p = preprobe[c.id]) {
             null -> 1
@@ -56,6 +58,8 @@ object SmartPlan {
             .sortedWith(
                 compareBy<IndexedValue<Candidate>> { if (it.value.id in demote) 1 else 0 }
                     .thenBy { probeRank(it.value) }
+                    // 0.1-wide bins: clear differences in what won here decide, near-ties fall to latency.
+                    .thenByDescending { learned[it.value.id]?.let { v -> (v * 10).toInt() } ?: 0 }
                     .thenBy { preprobe[it.value.id]?.takeIf { p -> p.ok }?.latencyMs ?: Long.MAX_VALUE }
                     .thenByDescending { shared[it.value.id] ?: 0.0 }
                     .thenBy { it.index },

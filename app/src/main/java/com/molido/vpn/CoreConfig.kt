@@ -391,7 +391,7 @@ object CoreConfig {
      * one the tunnel needs. 7300 is udpgw, and [HTTP_PROXY_PORT] is the LAN HTTP
      * listener.
      */
-    private val RESERVED_PORTS = setOf(CHAIN_SOCKS_PORT, 1822, 1823, 1824, 1825, 7300, HTTP_PROXY_PORT)
+    private val RESERVED_PORTS = setOf(CHAIN_SOCKS_PORT, 1822, 1823, 1824, 1825, 1828, 7300, HTTP_PROXY_PORT)
 
     /** The stored tunnel mode, defaulting to VPN. */
     fun tunnelMode(context: Context): String =

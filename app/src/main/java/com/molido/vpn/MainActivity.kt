@@ -837,6 +837,7 @@ class MainActivity : Activity() {
         maybeAskReportsConsent()
         renderNotice()
         AppRemote.refreshIfDue(this) { runOnUiThread { onRemoteUpdated() } }
+        startLiveUpdates()
         // Restart everything the pause stopped. Each of these is idempotent and
         // cheap; the point is that the screen is correct the instant it appears
         // rather than after one poll interval.
@@ -877,6 +878,7 @@ class MainActivity : Activity() {
      * stretches where a 1-second ticker and a 5-second HTTP probe cost the most.
      */
     override fun onPause() {
+        stopLiveUpdates()
         uiForeground = false
         statusHandler.removeCallbacks(statusPoll)
         sessionHandler.removeCallbacks(sessionTicker)
@@ -1372,6 +1374,7 @@ class MainActivity : Activity() {
             item("Personalize", "Settings") { openSettingsScreen() },
             item("Support", "Check for updates") { appUpdater.checkForUpdate() },
             item("Support", "Report a problem") { reportProblem() },
+            item("Support", "Install ID") { showInstallId() },
             item("Support", "Tell your friends") { showShareSheet() },
             item("Support", "Donate") { showDonateSheet() },
             item("Support", "Open-source licenses") { showLicensesSheet() }
@@ -8312,6 +8315,63 @@ class MainActivity : Activity() {
     }
 
     /** Fresh flags/notice arrived (UI thread): repaint the banner and move off a mode that was switched off. */
+    // ------------------------------------------------------------------ live updates ([LiveSync])
+
+    private val liveHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val liveTick = object : Runnable {
+        override fun run() {
+            LiveSync.check(this@MainActivity, "open")
+            liveHandler.postDelayed(this, LiveSync.OPEN_INTERVAL_MS)
+        }
+    }
+    private var liveNetCallback: android.net.ConnectivityManager.NetworkCallback? = null
+
+    /** Foreground: check now, every 10 min while open, on network change, and listen for pushes. */
+    private fun startLiveUpdates() {
+        LiveSync.listener = { parts, _ -> runOnUiThread { onLiveChange(parts) } }
+        LiveSync.check(this, "foreground")
+        LivePush.start(this)
+        liveHandler.removeCallbacks(liveTick)
+        liveHandler.postDelayed(liveTick, LiveSync.OPEN_INTERVAL_MS)
+        if (liveNetCallback == null) {
+            val cb = object : android.net.ConnectivityManager.NetworkCallback() {
+                override fun onAvailable(network: android.net.Network) {
+                    LiveSync.check(this@MainActivity, "network")
+                }
+            }
+            runCatching {
+                (getSystemService(CONNECTIVITY_SERVICE) as android.net.ConnectivityManager).registerDefaultNetworkCallback(cb)
+                liveNetCallback = cb
+            }
+        }
+        // A release seen by a check while this screen was closed (e.g. on connect).
+        val pending = LiveSync.pendingRelease(this)
+        if (pending != null && ::appUpdater.isInitialized) {
+            LiveSync.markReleaseHandled(this, pending)
+            appUpdater.onLiveRelease()
+        }
+    }
+
+    private fun stopLiveUpdates() {
+        LiveSync.listener = null
+        LivePush.stop()
+        liveHandler.removeCallbacks(liveTick)
+        liveNetCallback?.let { cb ->
+            runCatching { (getSystemService(CONNECTIVITY_SERVICE) as android.net.ConnectivityManager).unregisterNetworkCallback(cb) }
+        }
+        liveNetCallback = null
+    }
+
+    /** Applied without a reconnect: screen state for flags/notice, the updater for a release. */
+    private fun onLiveChange(parts: Set<com.molido.vpn.engine.LiveVersion.Part>) {
+        if (isFinishing) return
+        if (com.molido.vpn.engine.LiveVersion.Part.FLAGS in parts || com.molido.vpn.engine.LiveVersion.Part.NOTICE in parts) onRemoteUpdated()
+        if (com.molido.vpn.engine.LiveVersion.Part.RELEASE in parts && ::appUpdater.isInitialized) {
+            LiveSync.pendingRelease(this)?.let { LiveSync.markReleaseHandled(this, it) }
+            appUpdater.onLiveRelease()
+        }
+    }
+
     private fun onRemoteUpdated() {
         if (isFinishing) return
         renderNotice()
@@ -8498,6 +8558,21 @@ class MainActivity : Activity() {
     }
 
     /** Copies a support report (version, Android, operator, mode, last 200 log lines) and opens share. */
+    /** This install's ID for support: shown with a copy button. */
+    private fun showInstallId() {
+        val id = InstallId.get(this)
+        android.app.AlertDialog.Builder(this)
+            .setTitle(Strings.t("Install ID"))
+            .setMessage(id + "\n\n" + Strings.t("INSTALL_ID_BODY"))
+            .setPositiveButton(Strings.t("Copy")) { _, _ ->
+                getSystemService(android.content.ClipboardManager::class.java)
+                    ?.setPrimaryClip(android.content.ClipData.newPlainText("MolidoVPN install ID", id))
+                toastShort(Strings.t("Copied"))
+            }
+            .setNegativeButton(Strings.t("OK"), null)
+            .show()
+    }
+
     private fun reportProblem() {
         val version = runCatching {
             @Suppress("DEPRECATION")
@@ -8505,12 +8580,16 @@ class MainActivity : Activity() {
         }.getOrNull().orEmpty()
         val text = buildString {
             appendLine("MolidoVPN $version")
+            appendLine("Install ID: ${InstallId.get(this@MainActivity)}")
             appendLine("Android ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})")
             appendLine("Operator: ${ConnectionReports.operator(this@MainActivity)}")
             appendLine("Mode: ${selectedProtocol.coreName}")
             appendLine("---")
             ConnectionLog.snapshot().takeLast(200).forEach { appendLine(it) }
         }
+        // The same events go to the owner's panel under this install ID (once per hour at most).
+        Diagnostics.record(this, "report", selectedProtocol.coreName, "user report")
+        Diagnostics.upload(this, userAsked = true)
         try {
             getSystemService(android.content.ClipboardManager::class.java)
                 ?.setPrimaryClip(android.content.ClipData.newPlainText("MolidoVPN report", text))

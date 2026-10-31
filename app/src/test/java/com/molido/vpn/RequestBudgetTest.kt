@@ -18,7 +18,7 @@ class RequestBudgetTest {
 
     @Test fun releaseMetadataAsksTheWorkerLast() {
         val urls = UpdateSources.releaseJsonUrls(emptyList())
-        assertTrue(urls.first().startsWith(StaticFirst.RAW))
+        assertTrue(urls.first().startsWith(LiveSync.RAW))
         assertEquals(UpdateSources.WORKER_RELEASE_URL, urls.last())
     }
 

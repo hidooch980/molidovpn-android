@@ -59,10 +59,64 @@ class AppUpdater(private val activity: Activity) {
         }
     }
 
+    /**
+     * [LiveSync] saw a new release tag. Critical → the update prompt at once. Otherwise on an
+     * unmetered network the APK is fetched quietly and verified (hash, signature, newer build) and
+     * a one-tap "Install" appears when it is ready; on mobile data only the notice is shown.
+     */
+    fun onLiveRelease() {
+        if (busy) return
+        busy = true
+        worker.execute {
+            val release = runCatching(::latestRelease).getOrNull()
+            val newer = release != null && isNewer(release.version, appVersion())
+            if (!newer || release == null) { busy = false; return@execute }
+            val quiet = !release.critical && !isMetered()
+            val apk = if (quiet) runCatching { prefetch(release) }.getOrNull() else null
+            activity.runOnUiThread {
+                busy = false
+                if (activity.isFinishing || activity.isDestroyed) return@runOnUiThread
+                if (apk != null) announceReady(release, apk) else announceUpdate(release)
+            }
+        }
+    }
+
+    private fun isMetered(): Boolean = try {
+        (activity.getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager).isActiveNetworkMetered
+    } catch (_: Exception) {
+        true
+    }
+
+    /** Quiet download through the same verified path; null when every source failed. */
+    private fun prefetch(release: Release): File? {
+        val ready = File(File(activity.cacheDir, "updates"), "MolidoVPN-${release.version}.apk")
+        if (ready.exists() && runCatching { verify(ready, release) }.isSuccess) return ready
+        val url = release.downloadUrl + (if ('?' in release.downloadUrl) '&' else '?') + "v=${release.version}"
+        val urls = UpdateSources.downloadUrls(release, ResilienceConfig.updateMirrors(activity)).mapIndexed { i, u -> if (i == 0) url else u }
+        for (u in urls) {
+            try {
+                return downloadApk(u, release)
+            } catch (e: Exception) {
+                ConnectionLog.record("Update prefetch: ${runCatching { URL(u).host }.getOrDefault("?")} failed: ${e.message}")
+            }
+        }
+        return null
+    }
+
+    private fun announceReady(release: Release, apk: File) {
+        dialogBuilder()
+            .setTitle(Strings.t("Update ready"))
+            .setMessage(Strings.tf("MolidoVPN %s has been released. You are on %s.", release.version, appVersion()) + "\n\n" +
+                Strings.t("It is downloaded and verified. Install now?"))
+            .setNegativeButton(Strings.t("Later"), null)
+            .setPositiveButton(Strings.t("Install")) { _, _ -> install(apk) }
+            .show()
+    }
+
     /** The new-version notice. */
     private fun announceUpdate(release: Release) {
         dialogBuilder()
-            .setTitle(Strings.t("Update available"))
+            .setTitle(Strings.t(if (release.critical) "Important update" else "Update available"))
             .setMessage(
                 Strings.tf("MolidoVPN %s has been released. You are on %s.", release.version, appVersion()) + "\n\n" +
                     Strings.t("Tapping Update downloads and installs it inside the app.")
@@ -157,6 +211,12 @@ class AppUpdater(private val activity: Activity) {
         } finally {
             connection.disconnect()
         }
+        verify(target, release)
+        return target
+    }
+
+    /** Throws (and deletes [target]) unless it is a newer, same-signed build matching the listed hash. */
+    private fun verify(target: File, release: Release) {
         // Never install something that is not a newer build of this very app.
         val pm = activity.packageManager
         val archive = pm.getPackageArchiveInfo(target.path, 0)
@@ -180,7 +240,6 @@ class AppUpdater(private val activity: Activity) {
             target.delete()
             error(Strings.t("The downloaded file is damaged") + " (signature)")
         }
-        return target
     }
 
     /** True when [apk] carries exactly the signing certificate(s) of the installed app. */
