@@ -8,11 +8,9 @@
 #   https://raw.githubusercontent.com/itsyebekhe/PSG/main/subscriptions/xray/mix
 #   https://github.com/Delta-Kronecker/V2ray-Config/raw/refs/heads/main/config/all_configs.txt
 #   https://raw.githubusercontent.com/mahsanet/MahsaFreeConfig/refs/heads/main/mtn/sub_1.txt
-#   https://raw.githubusercontent.com/iampedii/whitedns-sub/refs/heads/main/base64.txt
 #   https://openproxylist.com/v2ray/rawlist/text
 #   https://raw.githubusercontent.com/4n0nymou3/multi-proxy-config-fetcher/refs/heads/main/configs/proxy_configs_tested.txt
 #   https://raw.githubusercontent.com/roosterkid/openproxylist/main/V2RAY_RAW.txt
-#   https://raw.githubusercontent.com/iampedii/whitedns-sub/refs/heads/main/cloudflare-base64.txt
 #   https://raw.githubusercontent.com/arshiacomplus/v2rayExtractor/refs/heads/main/mix/sub.html
 #   https://raw.githubusercontent.com/ShadowException/VPN/refs/heads/main/configs/VPN-cat
 #   https://raw.githubusercontent.com/zieng2/wl/main/vless_universal.txt
@@ -158,5 +156,18 @@ vless://f27b6f65-6e59-4f89-b929-afa397ca587f@127.0.0.1:40443?encryption=none&sec
 vless://f27b6f65-6e59-4f89-b929-afa397ca587f@[2a06:98c1:3101::6812:202f]:443?encryption=none&security=tls&type=ws&host=n.bitpulse.me&path=%2F019bcbad-3813-7cce-8786-3ac0e418f128%3Fed%3D2560&sni=n.bitpulse.me&alpn=http%2F1.1&fp=chrome&Telegram=%40GozargahAzad%2C%40GozargahAzad%2C%40GozargahAzad%2C%40GozargahAzad%2C%40GozargahAzad%2C%40GozargahAzad%2C%40GozargahAzad#IPv6%20CA%20%F0%9F%87%A8%F0%9F%87%A6%20%7C%20%40Raydikalx%20%7C%20342C62%20%7C%20e34f40
 # --- MolidoVPN servers ---
 trojan://humanity@104.25.10.54:443?path=/assignment&security=tls&alpn=http/1.1&insecure=0&host=www.pleadcourt.org&type=ws&allowInsecure=0&sni=www.pleadcourt.org#MolidoVPN
-trojan://humanity@108.162.194.134:443?allowInsecure=1&host=www.pleadcourt.org&path=%2Fassignment&security=tls&sni=www.pleadcourt.org&type=ws#MolidoVPN
-vless://c83f15bf-1817-4ec8-a19f-6393d226434c@172.67.199.126:2053?security=tls&type=ws&path=%2Fws-tesla&host=fast.145779.xyz&packetEncoding=xudp&sni=fast.145779.xyz&fp=chrome#MolidoVPN
+trojan://humanity@104.18.192.53:443?path=/assignment&security=tls&fm=tlshello-0-len&insecure=0&host=www.pleadcourt.org&fp=unsafe&type=ws&allowInsecure=0&sni=www.pleadcourt.org#MolidoVPN
+trojan://humanity@162.159.236.79:443?type=ws&path=/assignment&host=www.calmlunch.com&security=tls&sni=www.calmlunch.com#MolidoVPN
+trojan://humanity@104.17.175.201:443?host=www.calmlunch.com&path=%2Fassignment&security=tls&sni=www.calmlunch.com&type=ws#MolidoVPN
+trojan://humanity@45.130.125.126:443?path=/assignment&security=tls&host=www.calmlunch.com&type=ws&sni=www.calmlunch.com#MolidoVPN
+trojan://humanity@165.215.250.14:443?Telegram=@GozargahAzad,@GozargahAzad,@GozargahAzad,@GozargahAzad,@GozargahAzad,@GozargahAzad,@GozargahAzad&type=ws&security=tls&path=%2Fassignment&host=www.calmlunch.com&sni=www.calmlunch.com&fp=chrome&insecure=1&allowInsecure=1#MolidoVPN
+trojan://humanity@104.25.124.54:443?path=%2F%2Fassignment&security=tls&alpn=http%2F1.1&insecure=0&host=www.calmlunch.com&type=ws&allowInsecure=0&sni=www.calmlunch.com#MolidoVPN
+trojan://humanity@172.64.153.61:443/?type=ws&path=%2Fassignment&security=tls&sni=www.calmlunch.com&fp=unsafe&host=www.calmlunch.com&cs=TLS_AES_256_GCM_SHA384%3ATLS_CHACHA20_POLY1305_SHA256%3ATLS_AES_128_GCM_SHA256%3ATLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384%3ATLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384%3ATLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256%3ATLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256%3ATLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256%3ATLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256%3ATLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA%3ATLS_ECDHE_RSA_WITH_AES_256_CBC_SHA%3ATLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256%3ATLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256&fm=%7B%22tcp%22%3A%20%5B%7B%22type%22%3A%20%22fragment%22%2C%20%22settings%22%3A%20%7B%22packets%22%3A%20%22tlshello%22%2C%20%22lengths%22%3A%20%5B%220%22%2C%20%22104%22%2C%20%221%22%5D%2C%20%22delays%22%3A%20%5B%220%22%5D%2C%20%22maxSplit%22%3A%20%220%22%7D%7D%2C%7B%22type%22%3A%20%22fragment%22%2C%20%22settings%22%3A%20%7B%22packets%22%3A%20%221-1%22%2C%20%22lengths%22%3A%20%5B%22114%22%2C%20%221%22%5D%2C%20%22delays%22%3A%20%5B%221%22%5D%2C%20%22maxSplit%22%3A%20%2211%22%7D%7D%5D%7D#MolidoVPN
+trojan://humanity@45.130.125.75:443/?type=ws&host=www.calmlunch.com&path=%2Fassignment&security=tls&sni=www.calmlunch.com#MolidoVPN
+trojan://humanity@104.18.33.97:443?path=//assignment&security=tls&fm={"tcp": [{"type": "fragment", "settings": {"packets": "tlshello", "lengths": ["0", "104", "1"], "delays": ["0"], "maxSplit": "0"}},{"type": "fragment", "settings": {"packets": "1-1", "lengths": ["114", "1"], "delays": ["1"], "maxSplit": "11"}}]}&insecure=0&host=www.calmlunch.com&fp=unsafe&type=ws&allowInsecure=0&sni=www.calmlunch.com#MolidoVPN
+trojan://humanity@104.21.103.254:443?host=www.calmlunch.com&path=%2Fassignment&security=tls&sni=www.calmlunch.com&type=ws#MolidoVPN
+trojan://humanity@104.18.8.83:443?path=/assignment&security=tls&insecure=0&host=www.calmlunch.com&type=ws&allowInsecure=0&sni=www.calmlunch.com#MolidoVPN
+trojan://humanity@172.66.0.1:443?type=ws&security=tls&sni=www.calmlunch.com&alpn=http/1.1&host=www.calmlunch.com&path=/assignment&fp=chrome&ech=cloudflare-ech.com+udp://1.1.1.1#MolidoVPN
+trojan://humanity@212.183.88.136:443/?type=ws&host=www.calmlunch.com&path=%2Fassignment&security=tls&sni=www.calmlunch.com#MolidoVPN
+trojan://humanity@141.193.213.172:443?path=/assignment&security=tls&insecure=0&host=www.calmlunch.com&ech=ip.gs+udp://8.8.8.8&type=ws&allowInsecure=0&sni=www.calmlunch.com#MolidoVPN
+trojan://humanity@104.17.0.1:443?path=%2Fassignment&security=tls&insecure=0&host=www.calmlunch.com&type=ws&allowInsecure=0&sni=www.calmlunch.com&alpn=http/1.1&fp=chrome&ech=cloudflare-ech.com+udp://1.1.1.1#MolidoVPN
