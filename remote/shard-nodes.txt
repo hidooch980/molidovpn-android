@@ -74,19 +74,13 @@ vless://4e4f1f70-5e56-4a76-bb9d-db087f4690c4@127.0.0.1:40443?security=tls&type=w
 vless://4e4f1f70-5e56-4a76-bb9d-db087f4690c4@[2a06:98c1:3101::6812:202f]:443?security=tls&type=ws&host=jp3.yohototo.top&path=%2Ftyxyws&sni=jp3.yohototo.top&alpn=http%2F1.1&fp=hellochrome_120&fm=%7B%22tcp%22%3A%20%5B%7B%22type%22%3A%20%22merge%22%2C%20%22settings%22%3A%20%7B%22times%22%3A%20100%2C%20%22delayMs%22%3A%2030%2C%20%22maxBytes%22%3A%2016384%7D%7D%5D%7D&dialMode=oob.0#IPv6%20oob%20%40DeltaKroneckerGithub%20%7C%2065b722
 # --- MolidoVPN servers ---
 vless://2b181a3a-c001-4145-845a-5d43a43837d5@104.17.148.111:2053?&security=tls&fp=chrome&sni=vpn-1fj.pages.dev&type=ws&headerType=none&host=vpn-1fj.pages.dev&path=%2F#MolidoVPN
-vless://a4a951b9-901d-4db8-8a7d-6df82c4b5c23@172.67.79.160:2087?fp=chrome&host=cvhpyn.pages.dev&path=%2F&security=tls&sni=cvhpyn.pages.dev&type=ws#MolidoVPN
-vless://5d7b401c-78fa-4254-872e-6d42bf7e75ec@saas.sin.fan:2096?encryption=none&security=tls&sni=vp8.1145678.xyz&fp=chrome&type=ws&host=vp8.1145678.xyz&path=/p#MolidoVPN
-vless://8895be79-9817-4011-b81a-14a35a3d328e@104.18.40.171:443?fp=chrome&host=wallweb-boi.pages.dev&path=%2F&security=tls&sni=wallweb-boi.pages.dev&type=ws#MolidoVPN
 vless://fceb3200-2516-47d2-8e28-d04ecde9427a@104.16.251.179:443?security=tls&type=ws&path=%2F&host=edge-fef90023.pages.dev&packetEncoding=xudp&sni=edge-fef90023.pages.dev&fp=chrome#MolidoVPN
 vless://2b181a3a-c001-4145-845a-5d43a43837d5@8.35.211.188:8443?security=tls&type=ws&path=/&host=vpn-1fj.pages.dev&packetEncoding=xudp&sni=vpn-1fj.pages.dev&fp=chrome#MolidoVPN
 vless://2cf94f4d-9d5b-49ca-81a3-ddc0529a2dac@172.66.44.133:443?security=tls&type=ws&path=/&host=web-tomcat.pages.dev&packetEncoding=xudp&sni=web-tomcat.pages.dev&fp=chrome#MolidoVPN
 vless://2b181a3a-c001-4145-845a-5d43a43837d5@104.17.112.90:2053?&security=tls&fp=chrome&sni=vpn-1fj.pages.dev&type=ws&headerType=none&host=vpn-1fj.pages.dev&path=%2F#MolidoVPN
-vless://a4a951b9-901d-4db8-8a7d-6df82c4b5c23@172.67.79.160:2087?sni=cvhpyn.pages.dev&type=ws&host=cvhpyn.pages.dev&path=/fp=chrome&security=tls#MolidoVPN
 vless://3ccba794-1c6d-48a8-acf2-f5caf0e69d86@104.18.0.1:443?security=tls&type=ws&path=/&host=all.speedtest03.ccwu.cc&packetEncoding=xudp&sni=all.speedtest03.ccwu.cc&fp=chrome&encryption=none#MolidoVPN
-vless://8895be79-9817-4011-b81a-14a35a3d328e@104.18.40.171:443?&security=tls&sni=wallweb-boi.pages.dev&type=ws&headerType=none&host=wallweb-boi.pages.dev&path=%2F#MolidoVPN
+vless://c83f15bf-1817-4ec8-a19f-6393d226434c@172.67.199.126:2053?security=tls&type=ws&path=%2Fws-tesla&host=fast.145779.xyz&packetEncoding=xudp&sni=fast.145779.xyz&fp=chrome#MolidoVPN
 vless://2b181a3a-c001-4145-845a-5d43a43837d5@104.19.32.132:8443?&security=tls&fp=chrome&sni=vpn-1fj.pages.dev&type=ws&headerType=none&host=vpn-1fj.pages.dev&path=%2F#MolidoVPN
-vless://a4a951b9-901d-4db8-8a7d-6df82c4b5c23@172.67.74.90:443?host=cvhpyn.pages.dev&path=%2Ffp&security=tls&sni=cvhpyn.pages.dev&type=ws#MolidoVPN
-vless://a4a951b9-901d-4db8-8a7d-6df82c4b5c23@172.67.74.90:443?&security=tls&sni=cvhpyn.pages.dev&type=ws&headerType=&host=cvhpyn.pages.dev&path=%2Ffp%3Dchrome#MolidoVPN
 vless://2cf94f4d-9d5b-49ca-81a3-ddc0529a2dac@web-tomcat.pages.dev:443?&security=tls&fp=chrome&sni=web-tomcat.pages.dev&type=ws&headerType=none&host=web-tomcat.pages.dev&path=%2F#MolidoVPN
 vless://2b181a3a-c001-4145-845a-5d43a43837d5@104.19.50.28:443?&security=tls&fp=chrome&sni=vpn-1fj.pages.dev&type=ws&headerType=none&host=vpn-1fj.pages.dev&path=%2F#MolidoVPN
 vless://2cf94f4d-9d5b-49ca-81a3-ddc0529a2dac@172.66.47.123:443?security=tls&type=ws&path=/&host=web-tomcat.pages.dev&packetEncoding=xudp&sni=web-tomcat.pages.dev&fp=chrome#MolidoVPN
