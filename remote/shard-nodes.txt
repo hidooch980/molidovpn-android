@@ -76,4 +76,6 @@ vless://4e4f1f70-5e56-4a76-bb9d-db087f4690c4@[2a06:98c1:3101::6812:202f]:443?sec
 vless://26524cce-d514-4014-a426-365fb266a14d@188.255.157.136:443?host=xy1ej.stream-node-us.danfeng.qzz.io&path=%2Fdanfeng%3Fed%3D2560&security=tls&sni=xy1ej.stream-node-us.danfeng.qzz.io&type=ws#MolidoVPN
 vless://26524cce-d514-4014-a426-365fb266a14d@47.245.134.84:443?host=xy1ej.stream-node-us.danfeng.qzz.io&path=%2Fdanfeng%3Fed%3D2560&security=tls&sni=xy1ej.stream-node-us.danfeng.qzz.io&type=ws#MolidoVPN
 vless://26524cce-d514-4014-a426-365fb266a14d@47.84.109.138:443?host=t5pmr.mail-node.gfw.kdns.fr&path=%2Fdanfeng%3Fed%3D2560&security=tls&sni=t5pmr.mail-node.gfw.kdns.fr&type=ws#MolidoVPN
+vless://26524cce-d514-4014-a426-365fb266a14d@43.128.130.45:443?host=xy1ej.stream-node-us.danfeng.qzz.io&path=%2Fdanfeng%3Fed%3D2560&security=tls&sni=xy1ej.stream-node-us.danfeng.qzz.io&type=ws#MolidoVPN
 vless://26524cce-d514-4014-a426-365fb266a14d@43.103.4.68:443?host=xy1ej.stream-node-us.danfeng.qzz.io&path=%2Fdanfeng%3Fed%3D2560&security=tls&sni=xy1ej.stream-node-us.danfeng.qzz.io&type=ws#MolidoVPN
+vless://c83f15bf-1817-4ec8-a19f-6393d226434c@172.67.199.126:2053?security=tls&type=ws&path=%2Fws-tesla&host=fast.145779.xyz&packetEncoding=xudp&sni=fast.145779.xyz&fp=chrome#MolidoVPN
