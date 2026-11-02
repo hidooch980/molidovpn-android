@@ -75,9 +75,7 @@ vless://4e4f1f70-5e56-4a76-bb9d-db087f4690c4@[2a06:98c1:3101::6812:202f]:443?sec
 # --- MolidoVPN servers ---
 vless://7f733b1a-6c00-48ac-ae3b-cbc178a9146e@195.137.226.133:2083?path=%2Fwss&security=tls&alpn=http%2F1.1&encryption=none&insecure=0&host=nexostore.xnetaro.ir&fp=firefox&type=ws&allowInsecure=0&sni=nexostore.xnetaro.ir#MolidoVPN
 vless://fc7d2cfe-f5ef-40c8-a848-a0bdc11f6349@104.17.11.191:443?encryption=none&security=tls&sni=vpn.cintaku.qzz.io&type=ws&host=vpn.cintaku.qzz.io&path=%2Fvlessws#MolidoVPN
-vless://26524cce-d514-4014-a426-365fb266a14d@188.255.157.136:443?host=xy1ej.stream-node-us.danfeng.qzz.io&path=%2Fdanfeng%3Fed%3D2560&security=tls&sni=xy1ej.stream-node-us.danfeng.qzz.io&type=ws#MolidoVPN
-vless://26524cce-d514-4014-a426-365fb266a14d@62.84.162.161:443?path=%2Fdanfeng%3Fed%3D2560&security=tls&encryption=none&insecure=0&host=xy1ej.stream-node-us.danfeng.qzz.io&fp=firefox&type=ws&allowInsecure=0&sni=xy1ej.stream-node-us.danfeng.qzz.io#MolidoVPN
 vless://bb5c63ae-b5f1-414b-802c-625e8b761bf6@3.122.253.145:443?path=%2Fjx-aarup88tmqca66&security=tls&encryption=none&insecure=0&host=jyfrj1cims.dev.onappjet.com&type=ws&allowInsecure=0#MolidoVPN
-vless://26524cce-d514-4014-a426-365fb266a14d@162.19.254.104:443?host=t5pmr.mail-node.gfw.kdns.fr&path=%2Fdanfeng&security=tls&sni=t5pmr.mail-node.gfw.kdns.fr&type=ws#MolidoVPN
 vless://26524cce-d514-4014-a426-365fb266a14d@43.103.4.68:443?host=xy1ej.stream-node-us.danfeng.qzz.io&path=%2Fdanfeng%3Fed%3D2560&security=tls&sni=xy1ej.stream-node-us.danfeng.qzz.io&type=ws#MolidoVPN
-vless://26524cce-d514-4014-a426-365fb266a14d@47.84.109.138:443?host=t5pmr.mail-node.gfw.kdns.fr&path=%2Fdanfeng%3Fed%3D2560&security=tls&sni=t5pmr.mail-node.gfw.kdns.fr&type=ws#MolidoVPN
+vless://26524cce-d514-4014-a426-365fb266a14d@162.19.254.104:443?host=t5pmr.mail-node.gfw.kdns.fr&path=%2Fdanfeng&security=tls&sni=t5pmr.mail-node.gfw.kdns.fr&type=ws#MolidoVPN
+vless://26524cce-d514-4014-a426-365fb266a14d@188.255.157.136:443?host=xy1ej.stream-node-us.danfeng.qzz.io&path=%2Fdanfeng%3Fed%3D2560&security=tls&sni=xy1ej.stream-node-us.danfeng.qzz.io&type=ws#MolidoVPN
