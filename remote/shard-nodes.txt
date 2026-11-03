@@ -60,6 +60,5 @@ vless://4e4f1f70-5e56-4a76-bb9d-db087f4690c4@[2a06:98c1:3101::6812:202f]:443?enc
 # --- MolidoVPN servers ---
 vless://c6438331-a79b-4471-fd5e-42c2eeac29fa@104.21.2.166:443?security=tls&type=ws&path=%2Fnmd2&host=903.rtgpu.com&sni=903.rtgpu.com&fp=chrome#MolidoVPN
 vless://49ccad64-c854-4f33-b334-793cf0d02b74@104.17.98.5:443?encryption=none&type=ws&path=/&host=newcf.jisucf.cloudns.ch&security=tls&sni=newcf.jisucf.cloudns.ch#MolidoVPN
+vless://26524cce-d514-4014-a426-365fb266a14d@47.245.139.226:443?path=/danfeng?ed=2560&security=tls&alpn=http/1.1&encryption=none&insecure=0&host=xy1ej.stream-node-us.danfeng.qzz.io&fp=chrome&type=ws&allowInsecure=0&sni=xy1ej.stream-node-us.danfeng.qzz.io#MolidoVPN
 vless://26524cce-d514-4014-a426-365fb266a14d@62.132.3.104:8443?path=/danfeng&security=tls&alpn=http/1.1&encryption=none&insecure=0&host=xy1ej.stream-node-us.danfeng.qzz.io&type=ws&allowInsecure=0&sni=xy1ej.stream-node-us.danfeng.qzz.io#MolidoVPN
-vless://26524cce-d514-4014-a426-365fb266a14d@45.152.67.226:443?host=xy1ej.stream-node-us.danfeng.qzz.io&path=%2Fdanfeng%3Fed%3D2560&security=tls&sni=xy1ej.stream-node-us.danfeng.qzz.io&type=ws#MolidoVPN
-vless://e3149c82-00f6-4227-b2c0-b78f1dd81279@172.67.199.126:2053?security=tls&sni=fast.145779.xyz&type=ws&host=fast.145779.xyz&path=%2Fws-tesla&fp=chrome&alpn=http%2F1.1#MolidoVPN
