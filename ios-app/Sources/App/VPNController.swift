@@ -77,6 +77,10 @@ final class VPNController: ObservableObject {
                 let tunnel = NETunnelProviderProtocol()
                 tunnel.providerBundleIdentifier = self.providerBundleIdentifier
                 tunnel.serverAddress = "Molido Mesh AI"
+                // Route all device traffic through the packet tunnel. iOS drops traffic
+                // while this VPN is disconnected/reconnecting (apart from Apple-defined
+                // control-plane and captive-portal exceptions), preventing direct fallback.
+                tunnel.includeAllNetworks = true
                 tunnel.providerConfiguration = [
                     "profileVersion": MolidoTunnelConfiguration.currentVersion,
                     "appGroupIdentifier": MolidoTunnelConfiguration.appGroupIdentifier
