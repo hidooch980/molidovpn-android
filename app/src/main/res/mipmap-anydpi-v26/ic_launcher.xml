@@ -1,8 +1,8 @@
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- «Firoozeh & Shab»: full-bleed firoozeh gradient plate (#2DD4BF -> #0B6E7A). -->
-    <background android:drawable="@drawable/molido_icon_bg" />
+    <background android:drawable="@drawable/molido_mesh_icon_bg" />
     <!-- White shield + Iranian arch + dot. Farthest point of the shield sits at
          r=123px of the 432px canvas, inside the 132px (66dp) safe circle. -->
-    <foreground android:drawable="@drawable/molido_icon_fg" />
+    <foreground android:drawable="@drawable/molido_mesh_icon_fg" />
     <monochrome android:drawable="@drawable/ic_launcher_monochrome" />
 </adaptive-icon>
