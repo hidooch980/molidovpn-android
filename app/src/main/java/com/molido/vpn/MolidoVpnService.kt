@@ -4416,7 +4416,7 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
                 val score = SmartScore.score(measured)
                 val observation = DeviceNetworkProfile.observe(measured.probes, now)
                 val profileKey = "device_network_profile_$netKey"
-                val priorProfile = DeviceNetworkProfile.parse(prefs.getString(profileKey, null))
+                val priorProfile = DeviceNetworkProfile.parse(prefs.getString(profileKey, null), now = now)
                 val updatedProfile = DeviceNetworkProfile.merge(priorProfile, observation, linkProfile, now)
                 prefs.edit().putString(profileKey, DeviceNetworkProfile.toJson(updatedProfile)).apply()
                 scores[c.id] = score
