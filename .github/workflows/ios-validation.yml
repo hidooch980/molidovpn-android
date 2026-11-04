@@ -77,6 +77,10 @@ jobs:
       - name: Build Aether static library for Apple target
         env:
           CMAKE_GENERATOR: Ninja
+          # BoringSSL emits ___chkstk_darwin for iOS 13+; keep Rust/CMake
+          # target metadata aligned with the app's iOS 16 minimum.
+          IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+          CMAKE_OSX_DEPLOYMENT_TARGET: "16.0"
         run: cargo build --manifest-path core/aether/Cargo.toml --locked --release --lib --target ${{ matrix.target }}
       - name: Verify static library artifact
         run: test -s core/aether/target/${{ matrix.target }}/release/libaether.a
