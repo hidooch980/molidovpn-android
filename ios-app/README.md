@@ -1,55 +1,44 @@
 # Molido Mesh AI — iOS
 
-Native iOS app and Network Extension Packet Tunnel integration for Molido Mesh AI.
+Native iOS app and Network Extension Packet Tunnel for the Molido Aether transport core.
 
 ## Architecture
 
-- **SwiftUI app:** native iPhone UI and VPN profile lifecycle.
-- **Network Extension:** dedicated `NEPacketTunnelProvider`.
-- **Native transport:** the shared Rust Aether library, linked as an XCFramework for iPhone arm64 and iOS Simulator.
-- **Packet bridge:** Aether's bounded IPv4/IPv6 queues connected to `NEPacketTunnelFlow` by `MolidoAetherPacketAdapter`.
-
-## Current connection path
-
-1. The app creates a versioned, non-secret bootstrap in the App Group and prepares a private `engine/` directory.
-2. The provider validates its bundle profile, App Group, bootstrap, DNS list, MTU, and full-tunnel-only route policy.
-3. `MolidoAetherConfigurationBuilder` generates the exact `NativeStartOptions` JSON expected by `core/aether/src/ffi.rs`.
-4. On a worker queue, `aether_prepare_json` provisions or loads the selected MASQUE/WireGuard identity and returns assigned IPv4/IPv6 CIDRs.
-5. The provider starts `aether_start_json_with_packet_channel` off the NetworkExtension lifecycle queue and waits for Aether readiness.
-6. Only after readiness, it installs IPv4 and IPv6 default routes, DNS servers with a catch-all match domain, and the validated MTU.
-7. The packet adapter starts the inbound/outbound `NEPacketTunnelFlow` pumps, preserves inbound batches during native queue backpressure, and monitors native runtime health.
-8. `stopTunnel` requests native shutdown and waits for the blocking worker to return before completing teardown.
-
-The iOS bootstrap defaults to Aether MASQUE. WireGuard is supported by the native options builder, but no iOS UI for importing a user WireGuard profile is exposed yet.
+- SwiftUI app manages the Molido VPN profile and non-secret App Group bootstrap.
+- Packet Tunnel extension prepares the Aether identity, starts MASQUE or WireGuard, installs validated IPv4/IPv6 default routes and DNS, then bridges system packets through `NEPacketTunnelFlow`.
+- Rust Aether core provides bounded packet queues and the live MASQUE/WireGuard packet transport.
+- A private App Group engine directory stores Aether's persisted identity and certificate material.
 
 ## Build
 
-Requires macOS, Xcode 16.4 in CI (Xcode 15+ may work locally), iOS 16 SDK, and XcodeGen.
+Requires macOS, Xcode 16.4 (as selected by CI), iOS 16 SDK, Rust Apple targets and XcodeGen.
 
 ```bash
 brew install xcodegen
 cd ios-app
 xcodegen generate
-xcodebuild -project MolidoMeshAI.xcodeproj -scheme MolidoMeshAI -sdk iphonesimulator -configuration Debug CODE_SIGNING_ALLOWED=NO build
+xcodebuild -project MolidoMeshAI.xcodeproj -scheme MolidoMeshAI -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
 ```
 
-The GitHub Actions workflow cross-compiles Aether for iPhone arm64 and simulator architectures, packages the XCFramework, and builds the app and extension. A successful simulator build does not prove that Apple has granted the Network Extension entitlement.
+The GitHub Actions workflow cross-compiles the Rust static library for iPhone arm64 and simulator architectures, packages `Aether.xcframework`, then builds the app and Packet Tunnel extension.
 
-## Security and routing
+## Security and route policy
 
-- The bootstrap contains no account secrets. Aether persists its MASQUE/WireGuard identity beneath the App Group's private `engine/` directory.
-- The engine directory and identity files receive iOS Data Protection (`completeUntilFirstUserAuthentication`) and restrictive POSIX permissions.
-- Symlinks are rejected when resolving the engine identity file.
-- The provider accepts full-tunnel routing only. It installs both IPv4 and IPv6 default routes and routes DNS through the configured tunnel DNS servers. Unsupported split routing fails closed.
-- The adapter treats malformed packets, queue errors, and native runtime loss as fatal and stops the tunnel rather than silently dropping traffic.
-- The UI displays actual NetworkExtension status; it does not fabricate ping, download, or upload metrics.
+- The versioned bootstrap stores protocol choice, DNS, MTU and a safe identity filename; it contains no secrets.
+- Aether owns personal identity provisioning and persists its keys, tokens and certificates in the protected App Group engine directory.
+- The directory and files use iOS data protection and restrictive POSIX permissions; symlinks are rejected.
+- The provider applies IPv4 and IPv6 default routes and catch-all DNS only after the native engine reports ready.
+- The current iOS build supports full-tunnel routing only. Split-tunnel requests are rejected until a validated route policy exists.
+- Queue saturation is treated as backpressure and retained within a bounded handoff buffer; malformed packets, exhausted buffers, native failure and packet-flow errors fail closed.
+- The app does not display fabricated latency or throughput values.
 
-## Remaining production gates
+## Current scope and limitations
 
-- Validate DNS/IP leak behavior, kill-switch semantics, reconnect, Wi-Fi/cellular handover, and sustained traffic on physical iPhones.
-- Verify Apple Developer Team, Network Extension capability, App Group, and bundle provisioning on a real developer account.
-- Validate that the Aether transport's own sockets remain outside the packet tunnel on every supported iOS version and network type.
-- Add app-specific localization (fa/en/ar/tr), RTL validation, signed node registry integration, and WireGuard import UI.
-- Configure TestFlight signing and distribution; no signed iOS release is produced by the unsigned simulator workflow.
+- Native SwiftUI home screen and VPN profile lifecycle.
+- Integrated Aether preparation/start/stop lifecycle and IPv4/IPv6 packet adapter.
+- MASQUE and WireGuard engine modes in the bootstrap schema.
+- Full-tunnel routes, DNS and MTU configuration.
+- No claim of production certification: physical iPhone leak testing, carrier handover tests, Apple Network Extension entitlement approval, Team provisioning, signing and TestFlight distribution remain outstanding.
+- fa/en/ar/tr localization and RTL validation remain outstanding.
 
-Android behavior and the existing Android signing identity are not modified by this iOS integration branch.
+See [TRANSPORT_INTEGRATION.md](TRANSPORT_INTEGRATION.md) for the implementation status and validation gates.
