@@ -14,6 +14,7 @@ The Android-only `aether_start_json_with_tun(json, fd)` API is not used by iOS. 
 
 ## Safety and lifecycle behavior
 
+- Minimum deployment target: iOS 16.4. The app explicitly disables APNs and cellular-service exclusions; on earlier supported SDK versions those settings are unavailable and default to excluded traffic, which conflicts with the requested full-tunnel policy.
 - First-run identity provisioning and native startup run off the NetworkExtension lifecycle queue.
 - Bootstrap JSON contains no credentials. Aether persists its identity, keys, tokens and certificates beneath the protected App Group engine directory.
 - Engine files are protected with `completeUntilFirstUserAuthentication`; directories use restrictive permissions and symlinks are rejected.
@@ -26,11 +27,11 @@ The Android-only `aether_start_json_with_tun(json, fd)` API is not used by iOS. 
 
 ## Confirmed validation
 
-Aether Rust unit tests (including packet-channel tests) and Apple-target cross-compilation have passed in recent runs. A fresh macOS/Xcode app/extension build and the Android validation and packet-regression workflows are being rerun for the latest integration commits. CI does not prove Apple entitlement approval, signing, real network reachability, or absence of leaks on physical devices.
+Aether Rust unit tests (including packet-channel tests), Apple-target cross-compilation, and Android emulator packet regression tests pass for the current integration branch. The Xcode Simulator app/extension build must be green on the latest commit before calling the iOS build CI-validated. CI does not prove Apple entitlement approval, signing, real network reachability, or absence of leaks on physical devices.
 
 ## Remaining production gates
 
-1. Fresh iOS CI build after the provider/adapter integration changes.
+1. Fresh iOS CI build after the minimum deployment target correction.
 2. Physical iPhone tests on Wi-Fi and cellular, including IPv4-only, IPv6-only and dual-stack networks.
 3. Verify public egress IP, DNS resolver path, IPv6 routing, reconnect, network handover, and fail-closed behavior by observing traffic outside and inside the tunnel.
 4. Validate Apple Developer Team, Packet Tunnel Network Extension capability, App Group entitlement and provisioning profiles for both app and extension.
