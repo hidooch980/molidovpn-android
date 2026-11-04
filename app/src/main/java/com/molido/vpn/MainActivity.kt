@@ -1687,7 +1687,7 @@ class MainActivity : Activity() {
             addView(card, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(6) })
             Thread {
-                val items = WhatsNew.items(ver)
+                val items = WhatsNew.items(this@MainActivity, ver)
                 runOnUiThread {
                     if (isFinishing) return@runOnUiThread
                     fun rtl(t: String, size: Float, color: Int, style: TypefaceStyle = TypefaceStyle.REGULAR) =
