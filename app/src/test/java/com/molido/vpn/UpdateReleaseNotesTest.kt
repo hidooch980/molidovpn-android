@@ -204,6 +204,23 @@ class UpdateReleaseNotesTest {
         assertEquals("4.0.0", result?.version)
     }
 
+    @Test fun workerCanSupersedeStaticCopyWhenGithubIsUnavailable() {
+        val staticUrl = LiveSync.RAW + "latest.json"
+        val result = UpdateSources.latest(
+            listOf(staticUrl, UpdateSources.WORKER_RELEASE_URL),
+            "3.2.161",
+            ::isNewer,
+        ) { url ->
+            when (url) {
+                staticUrl -> release("3.3.60")
+                UpdateSources.GITHUB_RELEASE_URL -> throw IllegalStateException("GitHub unavailable")
+                UpdateSources.WORKER_RELEASE_URL -> release("4.0.0")
+                else -> null
+            }
+        }
+        assertEquals("4.0.0", result?.version)
+    }
+
     @Test fun allReachableSourcesWithoutANewerReleaseReturnNull() {
         val staticUrl = LiveSync.RAW + "latest.json"
         val result = UpdateSources.latest(
