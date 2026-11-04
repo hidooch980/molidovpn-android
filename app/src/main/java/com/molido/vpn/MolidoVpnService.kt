@@ -4419,9 +4419,16 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
                 }
                 val score = SmartScore.score(measured)
                 val observation = DeviceNetworkProfile.observe(measured.probes, now)
-                val previous = DeviceNetworkProfile.parse(prefs.getString(profileKey, null), now = now)
-                val updatedProfile = DeviceNetworkProfile.merge(previous, observation, linkProfile, now)
-                prefs.edit().putString(profileKey, DeviceNetworkProfile.toJson(updatedProfile)).apply()
+                // A Wi-Fi/mobile handover during a trial invalidates attribution:
+                // never write the old link's profile using samples from the new link.
+                val samePhysicalNetwork = smartNetworkKey() == netKey
+                if (samePhysicalNetwork) {
+                    val previous = DeviceNetworkProfile.parse(prefs.getString(profileKey, null), now = now)
+                    val updatedProfile = DeviceNetworkProfile.merge(previous, observation, linkProfile, now)
+                    prefs.edit().putString(profileKey, DeviceNetworkProfile.toJson(updatedProfile)).apply()
+                } else {
+                    ConnectionLog.record("Device network changed during Smart trial; sample not attributed to previous network")
+                }
                 scores[c.id] = score
                 measuredBy[c.id] = measured
                 results[c.label] = if (score > 0) "${score.toInt()} (${smartReason(measured)})" else "fail"
