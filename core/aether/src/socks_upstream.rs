@@ -700,7 +700,7 @@ async fn handle_tcp(
                     let ack_for_reader = Arc::clone(&ack_shared);
                     let seq_for_reader = Arc::clone(&seq_shared);
                     if tun_reader_fd < 0 {
-                        ffi::record_log("[tun2socks] failed to duplicate TUN fd for response reader".into());
+                        ffi::record_log("[tun2socks] failed to duplicate TUN fd for response reader");
                         let _ = send_tcp(
                             &tun_async, dst_ip, src_ip,
                             dport, sport, 0, seq_num.wrapping_add(1), 0x04, &[],
@@ -893,7 +893,7 @@ pub async fn serve(upstream: SocketAddr, tun_fd: i32) -> Result<()> {
     let file = unsafe { std::fs::File::from_raw_fd(fd) };
     // SAFETY: file owns the duplicated descriptor and remains open and unchanged
     // for the lifetime of the AsyncFd, which owns file.
-    let tun: TunW = Arc::new(unsafe { tokio::io::unix::AsyncFd::register(file) }?);
+    let tun: TunW = Arc::new(unsafe { tokio::io::unix::AsyncFd::register(file) }.map_err(std::io::Error::from)?);
 
     let conns: Arc<Mutex<HashMap<u16, TcpConn>>> = Arc::new(Mutex::new(HashMap::new()));
     let dns_cache: DnsCache = Arc::new(Mutex::new(HashMap::new()));
