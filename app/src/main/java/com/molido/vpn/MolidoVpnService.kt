@@ -30,6 +30,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import ca.psiphon.PsiphonTunnel
 import com.molido.vpn.engine.Cost
+import com.molido.vpn.engine.DeviceNetworkProfile
 import com.molido.vpn.engine.Measured
 import com.molido.vpn.engine.MethodBandit
 import com.molido.vpn.engine.NetworkMemory
@@ -4335,7 +4336,19 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
             val prefs = getSharedPreferences("settings", MODE_PRIVATE)
             val smartRaw = ResilienceConfig.smart(this)
             // Smart off (remote switch): behave like the old ladder — first working method wins.
-            val smart = if (smartRaw.enabled) smartRaw else smartRaw.copy(goodEnough = 1, minTrials = 1)
+            val baseSmart = if (smartRaw.enabled) smartRaw else smartRaw.copy(goodEnough = 1, minTrials = 1)
+            val linkProfile = smartLinkSnapshot()
+            val netKey = smartNetworkKey()
+            val profileKey = "device_network_profile_$netKey"
+            val priorProfile = DeviceNetworkProfile.parse(prefs.getString(profileKey, null), now = System.currentTimeMillis())
+            val networkPolicy = DeviceNetworkProfile.policy(
+                linkProfile, baseSmart.parallelProbes, baseSmart.downloadBytes, priorProfile,
+            )
+            val smart = baseSmart.copy(
+                parallelProbes = networkPolicy.parallelProbes,
+                downloadBytes = networkPolicy.downloadBytes,
+            )
+            ConnectionLog.record("Device network: ${linkProfile?.transport?.name ?: "unknown"} validated=${linkProfile?.validated ?: "?"} metered=${linkProfile?.metered ?: "?"} roaming=${linkProfile?.roaming ?: "?"}; probes=${smart.parallelProbes}, download=${smart.downloadBytes}B")
             val lowBattery = smartLowBattery(smart)
             // A chosen country ([CountryFilter]): only the pools that can exit there.
             val wantedCountry = CountryFilter.selected(this)
@@ -4347,7 +4360,6 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
                     (wantedCountry.isEmpty() || c.coreName == "v2ray" || c.coreName == MyConfigs.PROTOCOL)
             }
             if (wantedCountry.isNotEmpty()) ConnectionLog.record("Smart: country $wantedCountry — V2Ray/My configs from it only")
-            val netKey = smartNetworkKey()
             val now = System.currentTimeMillis()
             var memory = NetworkMemory.read(prefs.getString(smartPrefMemory, null), netKey, now, smart.memoryTtlDays)
             if (smartPreferRunnerUp && memory?.runnerUp != null) {
@@ -4406,6 +4418,17 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
                     }
                 }
                 val score = SmartScore.score(measured)
+                val observation = DeviceNetworkProfile.observe(measured.probes, now)
+                // A Wi-Fi/mobile handover during a trial invalidates attribution:
+                // never write the old link's profile using samples from the new link.
+                val samePhysicalNetwork = smartNetworkKey() == netKey
+                if (samePhysicalNetwork) {
+                    val previous = DeviceNetworkProfile.parse(prefs.getString(profileKey, null), now = now)
+                    val updatedProfile = DeviceNetworkProfile.merge(previous, observation, linkProfile, now)
+                    prefs.edit().putString(profileKey, DeviceNetworkProfile.toJson(updatedProfile)).apply()
+                } else {
+                    ConnectionLog.record("Device network changed during Smart trial; sample not attributed to previous network")
+                }
                 scores[c.id] = score
                 measuredBy[c.id] = measured
                 results[c.label] = if (score > 0) "${score.toInt()} (${smartReason(measured)})" else "fail"
@@ -4547,25 +4570,71 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
     private var smartLastRx = 0L
     private var smartLastTx = 0L
 
-    /** Network identity for [NetworkMemory]: operator MCC/MNC, or a hash of the Wi-Fi gateway + DNS. */
-    private fun smartNetworkKey(): String = try {
-        val cm = getSystemService(CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
-        // The underlying network, not our own VPN.
-        val net = cm.allNetworks.firstOrNull { n ->
-            val caps = cm.getNetworkCapabilities(n)
-            caps != null && !caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN) &&
-                caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
+    /**
+     * Snapshot the best physical uplink for THIS device. allNetworks has no ordering
+     * guarantee; choosing firstOrNull can profile a secondary/unused link.
+     * VPN interfaces are excluded so the tunnel never measures itself as its own uplink.
+     */
+    private fun smartLinkSnapshot(): DeviceNetworkProfile.Link? = try {
+        val cm = getSystemService(ConnectivityManager::class.java) ?: return null
+        val active = cm.activeNetwork
+        val candidates = cm.allNetworks.mapNotNull { network ->
+            val caps = cm.getNetworkCapabilities(network) ?: return@mapNotNull null
+            if (caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN) ||
+                !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            ) return@mapNotNull null
+            val lp = cm.getLinkProperties(network)
+            val defaultRoute = lp?.routes?.any { it.isDefaultRoute } == true
+            val transport = when {
+                caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> DeviceNetworkProfile.Transport.WIFI
+                caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> DeviceNetworkProfile.Transport.CELLULAR
+                caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> DeviceNetworkProfile.Transport.ETHERNET
+                else -> DeviceNetworkProfile.Transport.OTHER
+            }
+            DeviceNetworkProfile.Candidate(
+                link = DeviceNetworkProfile.Link(
+                    transport = transport,
+                    validated = caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED),
+                    metered = !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED),
+                    roaming = caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) &&
+                        !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_ROAMING),
+                    downstreamKbps = caps.linkDownstreamBandwidthKbps.coerceAtLeast(0),
+                    upstreamKbps = caps.linkUpstreamBandwidthKbps.coerceAtLeast(0),
+                    hasDefaultRoute = defaultRoute,
+                ),
+                isActive = network == active,
+            )
         }
-        val caps = net?.let { cm.getNetworkCapabilities(it) }
+        DeviceNetworkProfile.choose(candidates)
+    } catch (_: Exception) {
+        null
+    }
+
+    /** Network identity for local per-network learning; raw Wi-Fi names/addresses are never stored. */
+    private fun smartNetworkKey(): String = try {
+        val link = smartLinkSnapshot()
+        val cm = getSystemService(ConnectivityManager::class.java) ?: return "unknown"
+        val net = cm.allNetworks.filter { n ->
+            val caps = cm.getNetworkCapabilities(n)
+            caps != null && !caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN) &&
+                caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+        }.maxByOrNull { n ->
+            val caps = cm.getNetworkCapabilities(n) ?: return@maxByOrNull Int.MIN_VALUE
+            val lp = cm.getLinkProperties(n)
+            (if (n == cm.activeNetwork) 1000 else 0) +
+                (if (caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) 500 else 0) +
+                (if (lp?.routes?.any { it.isDefaultRoute } == true) 250 else 0)
+        }
         val lp = net?.let { cm.getLinkProperties(it) }
-        val wifi = caps?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) == true
-        val eth = caps?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_ETHERNET) == true
+        val wifi = link?.transport == DeviceNetworkProfile.Transport.WIFI
+        val eth = link?.transport == DeviceNetworkProfile.Transport.ETHERNET
         val tm = getSystemService(TELEPHONY_SERVICE) as? android.telephony.TelephonyManager
-        val mccMnc = tm?.networkOperator?.takeIf { it.length >= 5 } ?: tm?.simOperator
-        val fp = lp?.let { p ->
+        val mccMnc = if (link?.transport == DeviceNetworkProfile.Transport.CELLULAR)
+            tm?.networkOperator?.takeIf { it.length >= 5 } ?: tm?.simOperator else null
+        val fp = if (wifi) lp?.let { p ->
             (p.routes.mapNotNull { r -> r.gateway?.hostAddress?.takeIf { r.isDefaultRoute } } +
                 p.dnsServers.mapNotNull { it.hostAddress } + listOfNotNull(p.domains)).joinToString(",")
-        }
+        } else null
         NetworkMemory.key(wifi, eth, mccMnc, fp)
     } catch (_: Exception) {
         "unknown"

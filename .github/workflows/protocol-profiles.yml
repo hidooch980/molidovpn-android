@@ -34,19 +34,22 @@ jobs:
         run: bash tools/fetch-binaries.sh
       - name: Fetch Xray host validator matching the recorded Android core
         run: |
-          python3 - <<'PY'
+          VERSION=$(python3 - <<'PY'
           import json
           from pathlib import Path
           version = json.loads(Path('.github/core-versions.json').read_text())['components']['xray']['applied']
-          # v26.10.29 was withdrawn upstream (downloads 404): validate with the last published release.
-          if version not in ('v26.10.29', 'v26.10.21'):
-              raise SystemExit('Update the pinned host-validator version and checksum to match the Android core')
+          # Keep this allowlist and digest in sync with the Android core update.
+          if version != 'v26.10.31':
+              raise SystemExit(f'No verified Linux host-validator checksum for Android Xray {version}')
+          print(version)
           PY
+          )
+          SHA256="e4bd9119f50ae7c41658b1abd0679ae06f98bd864a2907ff33f2f2cf7081b214"
           mkdir -p "$RUNNER_TEMP/molido-xray"
           curl -fsSL --retry 3 --max-time 120 \
-            https://github.com/XTLS/Xray-core/releases/download/v26.10.21/Xray-linux-64.zip \
+            "https://github.com/XTLS/Xray-core/releases/download/$VERSION/Xray-linux-64.zip" \
             -o "$RUNNER_TEMP/molido-xray/engine.zip"
-          echo "0eec3ed4163c273d8c8bf821f7d219e257921cf584aa3fb970715e458e631978  $RUNNER_TEMP/molido-xray/engine.zip" | sha256sum -c -
+          echo "$SHA256  $RUNNER_TEMP/molido-xray/engine.zip" | sha256sum -c -
           unzip -q "$RUNNER_TEMP/molido-xray/engine.zip" -d "$RUNNER_TEMP/molido-xray"
           chmod +x "$RUNNER_TEMP/molido-xray/xray"
           echo "MOLIDO_XRAY=$RUNNER_TEMP/molido-xray/xray" >> "$GITHUB_ENV"

@@ -4,46 +4,24 @@ import android.content.Context
 import android.graphics.Color
 
 /**
- * The Orbit palettes — one dark, one light, chosen by the user.
+ * Molido Mesh AI's two coordinated visual palettes.
  *
- * History matters here. The colour picker used to offer five palettes plus a
- * "Dynamic" mode that inherited the phone's Material colours, and that was
- * removed on purpose: the approved design is a specific look, and letting the OS
- * repaint it produced washed-out greys and light surfaces the layout was never
- * designed for.
+ * - [ORBIT] is Mesh Night: deep ink surfaces with teal and violet intelligence accents.
+ * - [PORCELAIN] is Mesh Mist: cool pale canvas, crisp cards and accessible teal-violet accents.
  *
- * This is not that. There are exactly two palettes, both drawn from an approved
- * mock, and nothing about them is derived from the phone's wallpaper:
- *   - [ORBIT]     — the original dark glass + neon console.
- *   - [PORCELAIN] — a light palette: grey canvas, white raised cards.
+ * The mesh background is a low-contrast visual layer only. Real network state and
+ * measurements are always rendered by the connection and diagnostics components.
  *
- * ## Why a light palette is more than swapping ink for canvas
- *
- * The dark look builds depth out of a white specular highlight on the top edge
- * of every surface. On a white card that highlight is invisible, so a naive
- * inversion produces flat white rectangles floating on flat white. Depth on
- * light has to come from the opposite direction: a shadow below the surface, and
- * a card that is *lighter* than the page rather than darker.
- *
- * That inversion lives in [Sculpt.Lighting], carried on the palette, so every
- * surface in the app changes lighting model together instead of each call site
- * guessing. [load] installs it before any drawing happens.
- *
- * ## Text vs graphics accents
- *
- * `#4FE3C1` mint reads at 11:1 on the dark card and 3.4:1 on white — fine for a
- * dial arc, below the 4.5:1 floor for the letters of a label. So every accent
- * has a `…Text` sibling. On [ORBIT] the two are the same colour; on [PORCELAIN]
- * the text sibling is darkened until it clears 4.5:1 on both the card and the
- * canvas. Shapes keep the vivid colour, which is what makes the light theme
- * still look like MolidoVPN instead of a generic white app.
+ * Surface lighting remains palette-aware through [Sculpt.Lighting], so cards and
+ * controls keep consistent depth in both dark and light modes. Text-safe accent
+ * siblings are used wherever a vivid shape colour would not meet readable contrast.
  */
 object AppAppearance {
 
     /** Which palette the user picked. Persisted in the shared "settings" store. */
     enum class Mode(val key: String, val enLabel: String, val description: String) {
-        DARK("dark", "Dark", "Night — turquoise on deep navy"),
-        LIGHT("light", "Light — theme", "Turquoise on mist — white cards"),
+        DARK("dark", "Dark", "Mesh Night — teal and violet"),
+        LIGHT("light", "Light — theme", "Mesh Mist — cool light surfaces"),
         ;
 
         /** Localized at call time so a language switch refreshes the label. */
@@ -123,25 +101,24 @@ object AppAppearance {
 
     /** MolidoVPN dark: deep teal-black page, teal accent, green "connected". */
     val ORBIT = Palette(
-        // «Firoozeh & Shab» dark: night #0C1222 page, firoozeh #2DD4BF accent.
-        canvas = 0xFF0C1222.toInt(),
-        // v2: opaque night card (was 4% white glass, which rendered as grey chrome on some views).
-        surface = 0xFF141D33.toInt(),
-        surfaceVariant = 0xFF1C2640.toInt(),
-        ink = 0xFFEEF2FA.toInt(),
-        muted = 0xFF9AA6C0.toInt(),
-        divider = 0x14FFFFFF,
-        primary = 0xFF2DD4BF.toInt(),
-        primaryContainer = 0xFF0C1222.toInt(),
-        selectedSurface = 0xFF0C1222.toInt(),
-        connected = 0xFF2DD4BF.toInt(),
-        connectedContainer = 0xFF0E2F33.toInt(),
-        faint = 0xFF66728F.toInt(),
-        mint = 0xFF2DD4BF.toInt(),
-        violet = 0xFF7088F2.toInt(),
-        amber = 0xFFF4A93B.toInt(),
-        danger = 0xFFE5484D.toInt(),
-        error = 0xFFF2878A.toInt(),
+        // New Molido Mesh AI identity: deep ink canvas, layered blue surfaces and living teal.
+        canvas = 0xFF080D1B.toInt(),
+        surface = 0xFF111A2D.toInt(),
+        surfaceVariant = 0xFF192640.toInt(),
+        ink = 0xFFF2F6FF.toInt(),
+        muted = 0xFFA3B0C8.toInt(),
+        divider = 0x263B5272,
+        primary = 0xFF43E6CF.toInt(),
+        primaryContainer = 0xFF071521.toInt(),
+        selectedSurface = 0xFF0B1D2B.toInt(),
+        connected = 0xFF52E6A6.toInt(),
+        connectedContainer = 0xFF0D332F.toInt(),
+        faint = 0xFF71819F.toInt(),
+        mint = 0xFF43E6CF.toInt(),
+        violet = 0xFF8B82FF.toInt(),
+        amber = 0xFFFFC36B.toInt(),
+        danger = 0xFFFF6B82.toInt(),
+        error = 0xFFFF9AA8.toInt(),
         lighting = Sculpt.DARK_LIGHTING,
     )
 
@@ -151,30 +128,30 @@ object AppAppearance {
      * and on the page.
      */
     val PORCELAIN = Palette(
-        // «Firoozeh & Shab» light: mist #F6F8FB page, white cards, firoozeh #12A594 accent.
-        canvas = 0xFFF6F8FB.toInt(),
+        // Bright counterpart to the new mesh identity: cool mist, crisp white and teal-violet accents.
+        canvas = 0xFFF1F5FC.toInt(),
         surface = 0xFFFFFFFF.toInt(),
-        surfaceVariant = 0xFFEEF2F7.toInt(),
-        ink = 0xFF0F172A.toInt(),
-        muted = 0xFF5B6478.toInt(),
-        divider = 0xFFE2E8F0.toInt(),
-        primary = 0xFF12A594.toInt(),
-        primaryContainer = 0xFF0F172A.toInt(),
-        selectedSurface = 0xFFE8FAF7.toInt(),
-        connected = 0xFF0B8577.toInt(),
-        connectedContainer = 0xFFC6F2EA.toInt(),
-        faint = 0xFF6B7690.toInt(),
-        mint = 0xFF12A594.toInt(),
-        violet = 0xFF4F6BED.toInt(),
-        amber = 0xFFD98B1E.toInt(),
-        danger = 0xFFE5484D.toInt(),
-        primaryText = 0xFF0B7A6E.toInt(),
-        connectedText = 0xFF0B7A6E.toInt(),
-        mintText = 0xFF0B7A6E.toInt(),
-        violetText = 0xFF3B55D9.toInt(),
-        amberText = 0xFF92400E.toInt(),
-        dangerText = 0xFFC9363B.toInt(),
-        error = 0xFFC9363B.toInt(),
+        surfaceVariant = 0xFFE8EEF8.toInt(),
+        ink = 0xFF111B31.toInt(),
+        muted = 0xFF596982.toInt(),
+        divider = 0xFFD9E2F0.toInt(),
+        primary = 0xFF087F79.toInt(),
+        primaryContainer = 0xFF101A30.toInt(),
+        selectedSurface = 0xFFE1F7F3.toInt(),
+        connected = 0xFF087D65.toInt(),
+        connectedContainer = 0xFFD0F5E8.toInt(),
+        faint = 0xFF71819B.toInt(),
+        mint = 0xFF087F79.toInt(),
+        violet = 0xFF6559D9.toInt(),
+        amber = 0xFFB66B13.toInt(),
+        danger = 0xFFC93650.toInt(),
+        primaryText = 0xFF076B66.toInt(),
+        connectedText = 0xFF076B58.toInt(),
+        mintText = 0xFF076B66.toInt(),
+        violetText = 0xFF5145C1.toInt(),
+        amberText = 0xFF8A4B08.toInt(),
+        dangerText = 0xFFB52340.toInt(),
+        error = 0xFFB52340.toInt(),
         lighting = Sculpt.LIGHT_LIGHTING,
     )
 

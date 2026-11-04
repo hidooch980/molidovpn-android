@@ -5,6 +5,7 @@ import org.json.JSONObject
 import java.io.File
 import java.io.InputStream
 import java.security.MessageDigest
+import java.net.URI
 
 /**
  * Where the in-app updater looks, and how it checks what it got. Pure (unit tested); the network
@@ -14,11 +15,22 @@ import java.security.MessageDigest
  * second worker on a custom domain, an R2 public bucket, an ArvanCloud bucket). A mirror is a plain
  * folder holding `latest.json` (GitHub "latest release" shape) next to the APK files.
  *
- * Trust: a mirror is never trusted. The APK must (1) match the SHA-256 the metadata lists, when it
- * lists one (GitHub's `digest`, or `sha256` that our workflow writes), and (2) ALWAYS be signed with
- * the same certificate as the installed app — checked in [AppUpdater] before the installer opens.
+ * Trust: a mirror is never trusted. The APK must (1) include a valid SHA-256 in release metadata
+ * (`digest` from GitHub or `sha256` from our worker) and match it byte-for-byte, and (2) ALWAYS be
+ * signed with the same certificate lineage as the installed app — checked in [AppUpdater] before
+ * the installer opens. Missing or malformed hashes make an APK ineligible for installation.
  */
 object UpdateSources {
+
+    const val MAX_APK_BYTES: Long = 300L * 1024L * 1024L
+    const val MAX_METADATA_BYTES: Long = 2L * 1024L * 1024L
+    fun withinMetadataSizeLimit(declaredBytes: Long, receivedBytes: Long): Boolean =
+        (declaredBytes < 0L || declaredBytes <= MAX_METADATA_BYTES) &&
+            receivedBytes in 0L..MAX_METADATA_BYTES
+
+    fun withinApkSizeLimit(declaredBytes: Long, receivedBytes: Long): Boolean =
+        (declaredBytes < 0L || declaredBytes <= MAX_APK_BYTES) &&
+            receivedBytes in 0L..MAX_APK_BYTES
 
     const val WORKER_RELEASE_URL = "https://molido-sub.hidooch980.workers.dev/app/latest.json"
     const val GITHUB_RELEASE_URL = "https://api.github.com/repos/hidooch980/molidovpn/releases/latest"
@@ -30,11 +42,22 @@ object UpdateSources {
         val sha256: String?,
         /** Owner marked the release "[critical]": prompt at once. */
         val critical: Boolean = false,
+        /** Human-readable release notes, shown before installation and once after upgrade. */
+        val notes: List<String> = emptyList(),
     )
+
+    /** Reject plaintext, credential-bearing, malformed, and non-web URLs before network access. */
+    fun isSecureHttpsUrl(value: String): Boolean = try {
+        val uri = URI(value)
+        uri.scheme.equals("https", ignoreCase = true) &&
+            !uri.host.isNullOrBlank() && uri.userInfo == null && uri.fragment == null
+    } catch (_: Exception) {
+        false
+    }
 
     fun releaseJsonUrls(mirrors: List<String>): List<String> =
         (listOf(LiveSync.RAW + "latest.json", LiveSync.CDN + "latest.json", StaticFirst.RAW + "latest.json", StaticFirst.CDN + "latest.json", GITHUB_RELEASE_URL, WORKER_RELEASE_URL) +
-            mirrors.map { "${it.trimEnd('/')}/latest.json" }).distinct()
+            mirrors.map { "${it.trimEnd('/')}/latest.json" }).filter(::isSecureHttpsUrl).distinct()
 
     /**
      * The first source that answers wins, except that a static copy (live/sub branch, refreshed every few
@@ -56,9 +79,21 @@ object UpdateSources {
         throw lastError ?: IllegalStateException("no release source")
     }
 
+    /** Extract concise, user-facing bullet points from GitHub release Markdown. */
+    fun releaseNotes(markdown: String): List<String> = markdown.lineSequence()
+        .map { it.trim() }
+        .filter { it.startsWith("- ") || it.startsWith("* ") || it.startsWith("• ") }
+        .map { it.drop(2).trim().replace(Regex("\\s+"), " ") }
+        .filter { it.isNotBlank() && !it.startsWith("http", ignoreCase = true) }
+        .map { if (it.length > 240) it.take(237).trimEnd() + "…" else it }
+        .distinct()
+        .take(8)
+        .toList()
+
     /** The release's own URL first, then the same file name on every mirror. */
     fun downloadUrls(release: Release, mirrors: List<String>): List<String> =
-        (listOf(release.downloadUrl) + mirrors.map { "${it.trimEnd('/')}/${release.assetName}" }).distinct()
+        (listOf(release.downloadUrl) + mirrors.map { "${it.trimEnd('/')}/${release.assetName}" })
+            .filter(::isSecureHttpsUrl).distinct()
 
     private val HEX64 = Regex("^[0-9a-f]{64}$")
 
@@ -81,14 +116,21 @@ object UpdateSources {
         val json = JSONObject(text)
         val version = json.getString("tag_name").removePrefix("v")
         val assets: JSONArray = json.getJSONArray("assets")
-        val critical = json.optBoolean("critical", false) || json.optString("body").contains("[critical]", ignoreCase = true)
+        val body = json.optString("body", "")
+        val critical = json.optBoolean("critical", false) || body.contains("[critical]", ignoreCase = true)
+        val notes = releaseNotes(body)
         for (abi in abis + "universal") {
             val token = abiToken(abi)
             for (i in 0 until assets.length()) {
                 val asset = assets.getJSONObject(i)
                 val name = asset.getString("name")
                 if (name.endsWith(".apk") && name.contains(token, ignoreCase = true)) {
-                    return Release(version, name, asset.getString("browser_download_url"), assetSha256(asset), critical)
+                    val downloadUrl = asset.optString("browser_download_url", "")
+                    if (!isSecureHttpsUrl(downloadUrl)) continue
+                    // No APK is installable unless release metadata supplies a valid SHA-256.
+                    // GitHub's asset digest and our update worker both publish this field.
+                    val sha256 = assetSha256(asset) ?: continue
+                    return Release(version, name, downloadUrl, sha256, critical, notes)
                 }
             }
         }
@@ -107,6 +149,27 @@ object UpdateSources {
     }
 
     fun sha256Hex(file: File): String = file.inputStream().use { sha256Hex(it) }
+
+    /**
+     * Accept only the installed current signer or a cryptographically verified Android signing
+     * lineage that explicitly carries it forward. Multi-signer APKs must match the complete signer
+     * set; a shared certificate is never enough in that case.
+     */
+    fun isValidSignerTransition(
+        installedCurrent: List<ByteArray>,
+        installedHasMultipleSigners: Boolean,
+        candidateCurrent: List<ByteArray>,
+        candidateHistory: List<ByteArray>,
+        candidateHasMultipleSigners: Boolean,
+    ): Boolean {
+        if (installedCurrent.isEmpty() || candidateCurrent.isEmpty()) return false
+        if (installedHasMultipleSigners || candidateHasMultipleSigners) {
+            return installedHasMultipleSigners && candidateHasMultipleSigners &&
+                sameSigners(installedCurrent, candidateCurrent)
+        }
+        if (installedCurrent.size != 1 || candidateCurrent.size != 1) return false
+        return candidateHistory.any { it.contentEquals(installedCurrent.single()) }
+    }
 
     /** Same signer set, compared as SHA-256 of each certificate. Empty on either side = no match. */
     fun sameSigners(a: List<ByteArray>, b: List<ByteArray>): Boolean {

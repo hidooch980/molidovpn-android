@@ -29,6 +29,36 @@ class AppUpdater(private val activity: Activity) {
     private val worker = Executors.newSingleThreadExecutor()
     private var progressDialog: AlertDialog? = null
     private var busy = false
+    private var availableRelease: Release? = null
+    private var readyApk: File? = null
+
+    /** Main-screen update banner; invoked only on the UI thread. */
+    var onHomeUpdate: ((version: String, critical: Boolean, ready: Boolean) -> Unit)? = null
+
+    private fun publishHomeUpdate(release: Release, ready: Boolean) {
+        if (availableRelease?.version != release.version) readyApk = null
+        availableRelease = release
+        WhatsNew.saveReleaseNotes(activity, release.version, release.notes)
+        if (ready) readyApk = File(File(activity.cacheDir, "updates"), "MolidoVPN-${release.version}.apk")
+        onHomeUpdate?.invoke(release.version, release.critical, ready)
+    }
+
+    /** Called by the home-screen banner. Android still asks the user to confirm installation. */
+    fun updateNow() {
+        val release = availableRelease
+        if (release == null) {
+            checkForUpdate()
+            return
+        }
+        val apk = readyApk
+        if (apk != null && apk.exists()) {
+            runCatching { verify(apk, release) }
+                .onSuccess { announceReady(release, apk) }
+                .onFailure { readyApk = null; announceUpdate(release) }
+        } else {
+            announceUpdate(release)
+        }
+    }
 
     /** [silent]: the launch-time check — no spinner, and only speaks up when a newer version exists. */
     fun checkForUpdate(silent: Boolean = false) {
@@ -43,7 +73,18 @@ class AppUpdater(private val activity: Activity) {
                 if (activity.isFinishing || activity.isDestroyed) return@runOnUiThread
                 val release = result.getOrNull()
                 if (silent) {
-                    if (release != null && isNewer(release.version, appVersion())) announceUpdate(release)
+                    if (release != null && isNewer(release.version, appVersion())) {
+                        publishHomeUpdate(release, ready = false)
+                        if (release.critical) announceUpdate(release)
+                        else if (!isMetered()) {
+                            worker.execute {
+                                val apk = runCatching { prefetch(release) }.getOrNull()
+                                if (apk != null) activity.runOnUiThread {
+                                    if (!activity.isFinishing && !activity.isDestroyed) publishHomeUpdate(release, ready = true)
+                                }
+                            }
+                        }
+                    }
                     return@runOnUiThread
                 }
                 result.onFailure { showMessage(Strings.t("Update check failed"), it.message ?: Strings.t("Try again later")) }
@@ -52,7 +93,10 @@ class AppUpdater(private val activity: Activity) {
                             found == null -> showMessage(Strings.t("No update available"), Strings.t("No compatible release was found"))
                             !isNewer(found.version, appVersion()) ->
                                 showMessage(Strings.t("You're up to date"), Strings.tf("MolidoVPN %s is installed", appVersion()))
-                            else -> announceUpdate(found)
+                            else -> {
+                                publishHomeUpdate(found, ready = readyApk?.exists() == true)
+                                if (readyApk?.exists() == true) announceReady(found, readyApk!!) else announceUpdate(found)
+                            }
                         }
                     }
             }
@@ -76,7 +120,8 @@ class AppUpdater(private val activity: Activity) {
             activity.runOnUiThread {
                 busy = false
                 if (activity.isFinishing || activity.isDestroyed) return@runOnUiThread
-                if (apk != null) announceReady(release, apk) else announceUpdate(release)
+                publishHomeUpdate(release, ready = apk != null)
+                if (release.critical) announceUpdate(release)
             }
         }
     }
@@ -107,7 +152,7 @@ class AppUpdater(private val activity: Activity) {
         dialogBuilder()
             .setTitle(Strings.t("Update ready"))
             .setMessage(Strings.tf("MolidoVPN %s has been released. You are on %s.", release.version, appVersion()) + "\n\n" +
-                Strings.t("It is downloaded and verified. Install now?"))
+                Strings.t("It is downloaded and verified. Install now?") + releaseNotesText(release))
             .setNegativeButton(Strings.t("Later"), null)
             .setPositiveButton(Strings.t("Install")) { _, _ -> install(apk) }
             .show()
@@ -119,12 +164,17 @@ class AppUpdater(private val activity: Activity) {
             .setTitle(Strings.t(if (release.critical) "Important update" else "Update available"))
             .setMessage(
                 Strings.tf("MolidoVPN %s has been released. You are on %s.", release.version, appVersion()) + "\n\n" +
-                    Strings.t("Tapping Update downloads and installs it inside the app.")
+                    Strings.t("Tapping Update downloads and installs it inside the app.") + releaseNotesText(release)
             )
             .setNegativeButton(Strings.t("Later"), null)
             .setPositiveButton(Strings.t("Update")) { _, _ -> openDownload(release) }
             .show()
     }
+
+    private fun releaseNotesText(release: Release): String = release.notes
+        .takeIf { it.isNotEmpty() }
+        ?.joinToString(prefix = "\n\n" + Strings.t("What's changed:") + "\n", separator = "\n") { "• $it" }
+        ?: ""
 
     /** APK already downloaded but waiting for the "install unknown apps" permission. */
     private var pendingApk: File? = null
@@ -174,45 +224,54 @@ class AppUpdater(private val activity: Activity) {
     }
 
     private fun downloadApk(url: String, release: Release): File {
+        require(UpdateSources.isSecureHttpsUrl(url)) { "Insecure update URL rejected" }
         val dir = File(activity.cacheDir, "updates").apply { mkdirs() }
         dir.listFiles()?.forEach { it.delete() }
         val target = File(dir, "MolidoVPN-${release.version}.apk")
-        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
-            connectTimeout = 15_000
-            readTimeout = 60_000
-            useCaches = false
-            setRequestProperty("Cache-Control", "no-cache")
-            setRequestProperty("User-Agent", "MolidoVPN-Android")
-        }
         try {
-            check(connection.responseCode == HttpURLConnection.HTTP_OK) { "HTTP ${connection.responseCode}" }
-            val total = connection.contentLengthLong
-            var received = 0L
-            var lastPercent = -1
-            connection.inputStream.use { input ->
-                target.outputStream().use { output ->
-                    val buffer = ByteArray(64 * 1024)
-                    while (true) {
-                        val read = input.read(buffer)
-                        if (read < 0) break
-                        output.write(buffer, 0, read)
-                        received += read
-                        if (total > 0) {
-                            val percent = (received * 100 / total).toInt()
-                            if (percent != lastPercent) {
-                                lastPercent = percent
-                                activity.runOnUiThread { updateDownloadProgress(percent) }
+            val connection = (URL(url).openConnection() as HttpURLConnection).apply {
+                connectTimeout = 15_000
+                readTimeout = 60_000
+                useCaches = false
+                setRequestProperty("Cache-Control", "no-cache")
+                setRequestProperty("User-Agent", "MolidoVPN-Android")
+            }
+            try {
+                check(connection.responseCode == HttpURLConnection.HTTP_OK) { "HTTP ${connection.responseCode}" }
+                check(connection.url.protocol.equals("https", ignoreCase = true)) { "HTTPS downgrade redirect rejected" }
+                val total = connection.contentLengthLong
+                check(UpdateSources.withinApkSizeLimit(total, 0L)) { "APK exceeds maximum allowed size" }
+                var received = 0L
+                var lastPercent = -1
+                connection.inputStream.use { input ->
+                    target.outputStream().use { output ->
+                        val buffer = ByteArray(64 * 1024)
+                        while (true) {
+                            val read = input.read(buffer)
+                            if (read < 0) break
+                            received += read
+                            check(UpdateSources.withinApkSizeLimit(total, received)) { "APK exceeds maximum allowed size" }
+                            output.write(buffer, 0, read)
+                            if (total > 0) {
+                                val percent = (received * 100 / total).toInt()
+                                if (percent != lastPercent) {
+                                    lastPercent = percent
+                                    activity.runOnUiThread { updateDownloadProgress(percent) }
+                                }
                             }
                         }
                     }
                 }
+                check(total <= 0 || received == total) { "incomplete download ($received / $total)" }
+            } finally {
+                connection.disconnect()
             }
-            check(total <= 0 || received == total) { "incomplete download ($received / $total)" }
-        } finally {
-            connection.disconnect()
+            verify(target, release)
+            return target
+        } catch (error: Exception) {
+            target.delete()
+            throw error
         }
-        verify(target, release)
-        return target
     }
 
     /** Throws (and deletes [target]) unless it is a newer, same-signed build matching the listed hash. */
@@ -246,23 +305,27 @@ class AppUpdater(private val activity: Activity) {
     @Suppress("DEPRECATION")
     private fun signedLikeInstalled(apk: File): Boolean = try {
         val pm = activity.packageManager
-        fun certs(info: android.content.pm.PackageInfo?): List<ByteArray> {
-            if (info == null) return emptyList()
-            return if (Build.VERSION.SDK_INT >= 28) {
-                val signing = info.signingInfo ?: return emptyList()
-                (if (signing.hasMultipleSigners()) signing.apkContentsSigners else signing.signingCertificateHistory)
-                    ?.map { it.toByteArray() }.orEmpty()
-            } else {
-                info.signatures?.map { it.toByteArray() }.orEmpty()
-            }
-        }
         val flags = if (Build.VERSION.SDK_INT >= 28) android.content.pm.PackageManager.GET_SIGNING_CERTIFICATES
             else android.content.pm.PackageManager.GET_SIGNATURES
-        val installed = certs(pm.getPackageInfo(activity.packageName, flags))
-        val archive = certs(pm.getPackageArchiveInfo(apk.path, flags))
-        // A rotated key keeps the old one in the history: the new APK's lineage must include ours.
-        UpdateSources.sameSigners(installed, archive) ||
-            (installed.isNotEmpty() && archive.isNotEmpty() && installed.all { c -> archive.any { it.contentEquals(c) } })
+        val installedInfo = pm.getPackageInfo(activity.packageName, flags)
+        val archiveInfo = pm.getPackageArchiveInfo(apk.path, flags)
+        if (installedInfo == null || archiveInfo == null) return false
+        if (Build.VERSION.SDK_INT >= 28) {
+            val installedSigning = installedInfo.signingInfo ?: return false
+            val archiveSigning = archiveInfo.signingInfo ?: return false
+            UpdateSources.isValidSignerTransition(
+                installedCurrent = installedSigning.apkContentsSigners.map { it.toByteArray() },
+                installedHasMultipleSigners = installedSigning.hasMultipleSigners(),
+                candidateCurrent = archiveSigning.apkContentsSigners.map { it.toByteArray() },
+                candidateHistory = archiveSigning.signingCertificateHistory.map { it.toByteArray() },
+                candidateHasMultipleSigners = archiveSigning.hasMultipleSigners(),
+            )
+        } else {
+            UpdateSources.sameSigners(
+                installedInfo.signatures?.map { it.toByteArray() }.orEmpty(),
+                archiveInfo.signatures?.map { it.toByteArray() }.orEmpty(),
+            )
+        }
     } catch (_: Exception) {
         false
     }
@@ -344,6 +407,7 @@ class AppUpdater(private val activity: Activity) {
     )
 
     private fun fetchRelease(url: String): Release? {
+        require(UpdateSources.isSecureHttpsUrl(url)) { "Insecure release metadata URL rejected" }
         val connection = (URL(url).openConnection() as HttpURLConnection).apply {
             connectTimeout = 10_000
             readTimeout = 20_000
@@ -352,12 +416,29 @@ class AppUpdater(private val activity: Activity) {
         }
         try {
             if (connection.responseCode == HttpURLConnection.HTTP_NOT_FOUND) return null
+            check(connection.url.protocol.equals("https", ignoreCase = true)) { "HTTPS downgrade redirect rejected" }
             check(connection.responseCode == HttpURLConnection.HTTP_OK) { "${URL(url).host} returned ${connection.responseCode}" }
+            // Metadata is untrusted too: bound both advertised and streamed size before parsing JSON.
+            val declared = connection.contentLengthLong
+            check(UpdateSources.withinMetadataSizeLimit(declared, 0L)) { "Release metadata exceeds size limit" }
+            val body = connection.inputStream.use { input ->
+                val output = java.io.ByteArrayOutputStream()
+                val buffer = ByteArray(8 * 1024)
+                var received = 0L
+                while (true) {
+                    val count = input.read(buffer)
+                    if (count < 0) break
+                    received += count
+                    check(UpdateSources.withinMetadataSizeLimit(declared, received)) {
+                        "Release metadata exceeds size limit"
+                    }
+                    output.write(buffer, 0, count)
+                }
+                check(declared <= 0L || received == declared) { "Incomplete release metadata" }
+                output.toString(Charsets.UTF_8.name())
+            }
             // MolidoVPN release assets are named MolidoVPN-android-arm64.apk / -armv7.apk / -universal.apk.
-            return UpdateSources.parseRelease(
-                connection.inputStream.bufferedReader().use { reader -> reader.readText() },
-                Build.SUPPORTED_ABIS.toList(),
-            )
+            return UpdateSources.parseRelease(body, Build.SUPPORTED_ABIS.toList())
         } finally {
             connection.disconnect()
         }

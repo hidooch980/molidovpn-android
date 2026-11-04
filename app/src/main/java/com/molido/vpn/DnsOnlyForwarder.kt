@@ -138,11 +138,21 @@ class DnsOnlyForwarder(
                 }
                 socket.soTimeout = TIMEOUT_MS
                 val server = InetAddress.getByAddress(dstIp)
-                socket.send(DatagramPacket(payload, payload.size, server, 53))
+                // Pin the UDP peer: an unconnected DatagramSocket accepts spoofed replies
+                // from arbitrary sources, allowing an off-path DNS response to win the race.
+                socket.connect(server, 53)
+                socket.send(DatagramPacket(payload, payload.size))
                 // 65535: EDNS answers larger than 4096 bytes were silently truncated.
                 val reply = ByteArray(65535)
                 val rp = DatagramPacket(reply, reply.size)
                 socket.receive(rp)
+                if (!DnsOnlyPacketValidation.matchesResponse(payload, reply, rp.length)) {
+                    failed.incrementAndGet()
+                    if (firstFailure.compareAndSet(false, true)) {
+                        ConnectionLog.record("DNS-only: rejected mismatched or invalid DNS response")
+                    }
+                    return
+                }
                 val answer = buildReply(dstIp, srcIp, srcPort, reply, rp.length)
                 synchronized(writeLock) {
                     if (running.get()) out.write(answer)

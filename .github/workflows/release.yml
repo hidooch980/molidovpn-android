@@ -1,4 +1,4 @@
-name: Build MolidoVPN Android
+name: Build Molido Mesh AI Android
 
 on:
   push:
@@ -50,7 +50,7 @@ jobs:
         run: bash tools/fetch-binaries.sh
       - name: Offline emergency configs + bundled resilience defaults (never fails the build)
         run: python3 tools/refresh-emergency-configs.py || true
-      - name: Signing key (same as earlier MolidoVPN releases)
+      - name: Signing key (preserve signing identity for existing MolidoVPN installs)
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: echo "$KEYSTORE_BASE64" | base64 -d > release.keystore
@@ -70,14 +70,14 @@ jobs:
           mkdir dist
           for f in app/build/outputs/apk/release/*.apk; do
             case "$f" in
-              *arm64-v8a*)   cp "$f" dist/MobinVPN-android-arm64.apk ;;
-              *armeabi-v7a*) cp "$f" dist/MobinVPN-android-armv7.apk ;;
-              *universal*)   cp "$f" dist/MobinVPN-android-universal.apk ;;
+              *arm64-v8a*)   cp "$f" dist/MolidoMeshAI-android-arm64.apk ;;
+              *armeabi-v7a*) cp "$f" dist/MolidoMeshAI-android-armv7.apk ;;
+              *universal*)   cp "$f" dist/MolidoMeshAI-android-universal.apk ;;
             esac
           done
           ls -la dist
 
       - uses: actions/upload-artifact@v6
         with:
-          name: molidovpn-android
+          name: molido-mesh-ai-android
           path: dist/*

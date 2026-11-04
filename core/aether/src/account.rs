@@ -257,9 +257,9 @@ fn retry_after(headers: &reqwest::header::HeaderMap) -> Option<std::time::Durati
 }
 
 fn worth_retrying(status: reqwest::StatusCode) -> bool {
-    status == reqwest::StatusCode::TOO_MANY_REQUESTS
-        || status == reqwest::StatusCode::REQUEST_TIMEOUT
-        || status.is_server_error()
+    // A 429 is a quota signal, not a transient invitation to send the same
+    // request repeatedly. Respect it and let the next user-driven attempt happen later.
+    status == reqwest::StatusCode::REQUEST_TIMEOUT || status.is_server_error()
 }
 
 /// Whether a status means the identity itself is gone, not the request.
@@ -356,6 +356,70 @@ async fn fallback_call(
         return Err(AetherError::IdentityRefused(described));
     }
     Err(AetherError::Api(described))
+}
+
+
+/// Only a definitive 403 can try another network path: the first address was
+/// explicitly refused. Quota, timeout and server responses must not trigger a
+/// second device-creating POST.
+fn registration_should_fallback_after_status(status: reqwest::StatusCode) -> bool {
+    status == reqwest::StatusCode::FORBIDDEN
+}
+
+/// Registration is deliberately not retried like GET/PATCH requests. Each successful
+/// POST /reg creates a new Cloudflare device identity; retrying a 429/5xx or a lost
+/// response can burn registrations/tokens. A single explicit 403 may use the
+/// alternate route because the API has definitively rejected the first address.
+async fn send_registration_once<F>(
+    label: &str,
+    build: F,
+    path: &str,
+    body: Vec<u8>,
+    jwt: Option<&str>,
+) -> Result<AccountData>
+where
+    F: FnOnce() -> Result<reqwest::RequestBuilder>,
+{
+    let response = match build()?.send().await {
+        Ok(response) => response,
+        Err(error) if error.is_connect() => {
+            log::warn!("[!] {label} could not connect directly; trying one alternate route: {error}");
+            return fallback_call(label, "POST", path, Some(body), None, jwt).await;
+        }
+        Err(error) => {
+            return Err(AetherError::Api(format!(
+                "{label}: {error}; automatic retry suppressed to avoid duplicate Cloudflare registrations"
+            )));
+        }
+    };
+
+    let status = response.status();
+    let retry = retry_after(response.headers());
+    let response_body = response
+        .text()
+        .await
+        .map_err(|e| AetherError::Api(format!("{label}: response read failed: {e}; registration will not be repeated")))?;
+
+    if status.is_success() {
+        return serde_json::from_str::<AccountData>(&response_body)
+            .map_err(|e| AetherError::Api(format!("{label} decode: {e}; registration will not be repeated")));
+    }
+
+    if registration_should_fallback_after_status(status) {
+        log::warn!("[!] {label} was rejected on this network; trying the alternate route once");
+        return fallback_call(label, "POST", path, Some(body), None, jwt).await;
+    }
+
+    let mut detail = describe_rejection(status, &response_body);
+    if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+        if let Some(wait) = retry {
+            detail.push_str(&format!("; server Retry-After: {} seconds", wait.as_secs()));
+        }
+        detail.push_str("; no retry or alternate registration was sent");
+    } else {
+        detail.push_str("; automatic retry suppressed to avoid duplicate registrations");
+    }
+    Err(AetherError::Api(format!("{label}: {detail}")))
 }
 
 fn describe_status(status: u16, body: &str) -> String {
@@ -547,32 +611,23 @@ pub async fn register(
     let encoded =
         serde_json::to_vec(&body).map_err(|e| AetherError::Api(format!("encode: {e}")))?;
 
-    let direct = send_with_retry("registration", || {
-        let mut req = http_client()?
-            .post(&url)
-            .headers(base_headers())
-            .json(&body);
-        if let Some(jwt) = jwt {
-            req = req.header("CF-Access-Jwt-Assertion", jwt);
-        }
-        Ok(req)
-    })
-    .await;
-
-    let account = match direct {
-        Ok(account) => account,
-        Err(primary) => {
-            log::warn!("[!] registration failed over the direct route: {primary}");
-            match fallback_call("registration", "POST", &path, Some(encoded), None, jwt).await {
-                Ok(account) => account,
-                Err(secondary) => {
-                    return Err(AetherError::Api(format!(
-                        "registration: direct route -> {primary}; camouflaged route -> {secondary}"
-                    )));
-                }
+    let account = send_registration_once(
+        "registration",
+        || {
+            let mut req = http_client()?
+                .post(&url)
+                .headers(base_headers())
+                .json(&body);
+            if let Some(jwt) = jwt {
+                req = req.header("CF-Access-Jwt-Assertion", jwt);
             }
-        }
-    };
+            Ok(req)
+        },
+        &path,
+        encoded,
+        jwt,
+    )
+    .await?;
 
     Ok((account, wg_private))
 }
@@ -669,39 +724,20 @@ pub async fn register_with_team(
     let encoded =
         serde_json::to_vec(&body).map_err(|e| AetherError::Api(format!("encode: {e}")))?;
 
-    let direct = send_with_retry("team registration", || {
-        Ok(http_client()?
-            .post(&url)
-            .headers(base_headers())
-            .header("CF-Access-Jwt-Assertion", token)
-            .json(&body))
-    })
-    .await;
-
-    let account = match direct {
-        Ok(account) => account,
-        Err(primary) => {
-            log::warn!("[!] team registration failed over the direct route: {primary}");
-            match fallback_call(
-                "team registration",
-                "POST",
-                &path,
-                Some(encoded),
-                None,
-                Some(token),
-            )
-            .await
-            {
-                Ok(account) => account,
-                Err(secondary) => {
-                    return Err(AetherError::Api(format!(
-                        "team registration: direct route -> {primary}; \
-                         camouflaged route -> {secondary}"
-                    )));
-                }
-            }
-        }
-    };
+    let account = send_registration_once(
+        "team registration",
+        || {
+            Ok(http_client()?
+                .post(&url)
+                .headers(base_headers())
+                .header("CF-Access-Jwt-Assertion", token)
+                .json(&body))
+        },
+        &path,
+        encoded,
+        Some(token),
+    )
+    .await?;
 
     Ok((account, wg_private))
 }
@@ -1202,6 +1238,18 @@ mod tests {
     }
 
     #[test]
+    fn registration_only_uses_an_alternate_route_after_explicit_forbidden() {
+        for code in 400..600u16 {
+            let status = reqwest::StatusCode::from_u16(code).unwrap();
+            assert_eq!(
+                registration_should_fallback_after_status(status),
+                status == reqwest::StatusCode::FORBIDDEN,
+                "unexpected fallback policy for registration response {status}"
+            );
+        }
+    }
+
+    #[test]
     fn a_forbidden_rejection_mentions_the_flagged_address() {
         let message = describe_rejection(reqwest::StatusCode::FORBIDDEN, "");
         assert!(message.contains("flagged"));
@@ -1209,7 +1257,8 @@ mod tests {
 
     #[test]
     fn only_transient_statuses_are_retried() {
-        assert!(worth_retrying(reqwest::StatusCode::TOO_MANY_REQUESTS));
+        assert!(!worth_retrying(reqwest::StatusCode::TOO_MANY_REQUESTS));
+        assert!(worth_retrying(reqwest::StatusCode::REQUEST_TIMEOUT));
         assert!(worth_retrying(reqwest::StatusCode::BAD_GATEWAY));
         assert!(!worth_retrying(reqwest::StatusCode::FORBIDDEN));
         assert!(!worth_retrying(reqwest::StatusCode::BAD_REQUEST));

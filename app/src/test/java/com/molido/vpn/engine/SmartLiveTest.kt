@@ -154,4 +154,66 @@ class SmartLiveTest {
         assertEquals(31, der[3].toInt())
         assertEquals(33, der[4 + 31 + 1].toInt())
     }
+
+    @Test fun invalidWeightsAndMeasurementsProduceFiniteBoundedScores() {
+        val measured = Measured(
+            "invalid",
+            listOf(Probe(ok = true, latencyMs = -1, throughputKbps = -1)),
+            connectMs = -1,
+        )
+        val invalidWeights = Weights(
+            stability = Double.NaN,
+            latency = Double.POSITIVE_INFINITY,
+            throughput = -1.0,
+            connect = Double.NaN,
+        )
+        val score = SmartScore.score(measured, invalidWeights)
+        assertTrue("score must be finite: $score", score.isFinite())
+        assertTrue("score must remain within 0..100: $score", score in 0.0..100.0)
+
+        val zeroWeights = SmartScore.score(
+            measured,
+            Weights(stability = 0.0, latency = 0.0, throughput = 0.0, connect = 0.0),
+        )
+        assertTrue(zeroWeights.isFinite())
+        assertTrue(zeroWeights in 0.0..100.0)
+    }
+
+    @Test fun noSuccessfulProbeRemainsZeroWithInvalidWeights() {
+        val score = SmartScore.score(
+            Measured("dead", listOf(Probe(ok = false))),
+            Weights(Double.NaN, -1.0, Double.POSITIVE_INFINITY, 0.0),
+        )
+        assertEquals(0.0, score, 0.0)
+    }
+
+
+    @Test fun banditRejectsNonFiniteRewardsAndInvalidMethodIds() {
+        val original = """{"cell:43235@3":{"v2ray":{"n":2.0,"m":0.8},"_at":100}}"""
+        assertEquals(original, MethodBandit.record(original, "cell:43235@3", "v2ray", Double.NaN, 200))
+        assertEquals(original, MethodBandit.record(original, "cell:43235@3", "v2ray", Double.POSITIVE_INFINITY, 200))
+        assertEquals(original, MethodBandit.record(original, "cell:43235@3", "contains space", 0.2, 200))
+        assertEquals(original, MethodBandit.record(original, "cell:43235@3", "v2ray", 0.2, 0))
+    }
+
+    @Test fun banditRankingIgnoresCorruptArmsAndBoundsUnseenScore() {
+        val arms = mapOf(
+            "healthy" to MethodBandit.Arm(4.0, 0.8),
+            "nan-mean" to MethodBandit.Arm(3.0, Double.NaN),
+            "infinite-count" to MethodBandit.Arm(Double.POSITIVE_INFINITY, 0.9),
+            "out-of-range" to MethodBandit.Arm(2.0, 4.0),
+        )
+        val ranked = MethodBandit.rank(
+            arms,
+            listOf("healthy", "nan-mean", "infinite-count", "out-of-range", "new"),
+            unseen = Double.NaN,
+        )
+        assertTrue(ranked.values.all { it.isFinite() })
+        assertTrue(ranked.getValue("healthy") > ranked.getValue("new"))
+        assertEquals(0.55, ranked.getValue("nan-mean"), 1e-9)
+        assertEquals(0.55, ranked.getValue("infinite-count"), 1e-9)
+        assertEquals(0.55, ranked.getValue("out-of-range"), 1e-9)
+        assertEquals(0.55, ranked.getValue("new"), 1e-9)
+    }
+
 }

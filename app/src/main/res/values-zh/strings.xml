@@ -1,10 +1,10 @@
 <resources>
-    <string name="app_name">MolidoVPN</string>
-    <string name="vpn_channel_name">MolidoVPN</string>
-    <string name="vpn_notification">MolidoVPN 正在运行</string>
+    <string name="app_name">Molido Mesh AI</string>
+    <string name="vpn_channel_name">Molido Mesh AI</string>
+    <string name="vpn_notification">Molido Mesh AI 正在运行</string>
 
     <!-- Quick Tile strings -->
-    <string name="vpn_tile_label">MolidoVPN</string>
+    <string name="vpn_tile_label">Molido Mesh AI</string>
     <string name="vpn_connected">已连接</string>
     <string name="vpn_disconnected">未连接</string>
     <string name="vpn_connecting">正在连接…</string>

@@ -115,6 +115,13 @@ class MainActivity : Activity() {
     private var homeAdvancedLink: TextView? = null
     /** Owner announcement banner at the top of home ([renderNotice]); GONE when there is none. */
     private var homeNoticeBox: LinearLayout? = null
+    /** Main-screen automatic update banner; hidden until a newer release is found. */
+    private var homeUpdateBox: LinearLayout? = null
+    private var homeUpdateTitle: TextView? = null
+    private var homeUpdateAction: TextView? = null
+    private var homeUpdateVersion: String? = null
+    private var homeUpdateCritical = false
+    private var homeUpdateReady = false
     private var settingsAdvancedExpanded = false
     /** Settings DNS row while the settings page is built, so a home pick repaints it. */
     private var settingsDnsRow: OrbitSettingsRow? = null
@@ -552,6 +559,7 @@ class MainActivity : Activity() {
         )
 
         appUpdater = AppUpdater(this)
+        appUpdater.onHomeUpdate = { version, critical, ready -> renderHomeUpdate(version, critical, ready) }
         if (savedInstanceState == null) appUpdater.checkForUpdate(silent = true)
         // Registers the periodic SHARD list refresh. Idempotent, so calling it on
         // every launch is how the job gets re-registered after an app update — a
@@ -563,6 +571,9 @@ class MainActivity : Activity() {
         ShardSubscription.refreshIfDue(this)
         // V2Ray servers pool: hourly floor, background thread.
         V2raySubscription.refreshIfDue(this)
+        // Refresh the user's own subscription URLs on foreground entry too; the
+        // JobScheduler repeats this while the app is closed, with the same hourly floor.
+        MyConfigs.refreshIfDue(this)
         // Same trigger for the edge and geo-blocked lists. Separate file, separate
         // ETag, same 6-hour floor — see [RemotePolicy]. Cheap enough to sit next to
         // the subscription fetch: a 304 is a few hundred bytes.
@@ -695,11 +706,14 @@ class MainActivity : Activity() {
         }
 
         mainRoot = FrameLayout(this).apply {
-            setBackgroundColor(CANVAS)
+            // The shared MeshBackdropView lives in pageHost beneath every page.
+            // Keep this layer transparent so the new visual identity remains
+            // continuous while navigating between the home and secondary screens.
+            setBackgroundColor(Color.TRANSPARENT)
             // Mirror the UI language: Persian lays out right-to-left, the
-            // Latin/Chinese consoles left-to-right. Views inherit this once.
+            // Latin/Arabic/Turkish consoles use their locale direction.
             layoutDirection = when (AppLanguage.current()) {
-                "fa" -> android.view.View.LAYOUT_DIRECTION_RTL
+                "fa", "ar" -> android.view.View.LAYOUT_DIRECTION_RTL
                 else -> android.view.View.LAYOUT_DIRECTION_LTR
             }
         }
@@ -755,6 +769,12 @@ class MainActivity : Activity() {
         }
         pageHost = FrameLayout(this).apply {
             setBackgroundColor(CANVAS)
+            // One adaptive mesh background is shared by the app's page stack.
+            // It animates only while attached and performs no network work.
+            addView(MeshBackdropView(this@MainActivity, palette), FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+            ))
             addView(mainRoot, FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -915,32 +935,56 @@ class MainActivity : Activity() {
         pendingConfig = null
     }
 
-    private fun showOpeningOverlay() {
+    fun showOpeningOverlay() {
         val overlay = FrameLayout(this).apply {
-            setBackgroundColor(CANVAS)
+            // Let the new mesh ambience show through the opening animation.
+            setBackgroundColor(Color.TRANSPARENT)
             isClickable = true
         }
-        val logo = ImageView(this).apply {
-            setImageResource(R.drawable.molido_splash_logo)
-            contentDescription = getString(R.string.app_name)
-            scaleType = ScaleType.FIT_CENTER
+        val brand = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
             alpha = 0f
             scaleX = 0.82f
             scaleY = 0.82f
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
         }
-        overlay.addView(logo, FrameLayout.LayoutParams(dp(198), dp(276), Gravity.CENTER))
+        val logo = ImageView(this).apply {
+            setImageResource(R.drawable.molido_mesh_icon_fg)
+            contentDescription = getString(R.string.app_name)
+            scaleType = ScaleType.FIT_CENTER
+        }
+        brand.addView(logo, LinearLayout.LayoutParams(dp(172), dp(172)))
+        brand.addView(label("MOLIDO", 24f, INK, TypefaceStyle.MEDIUM).apply {
+            gravity = Gravity.CENTER
+            letterSpacing = 0.10f
+            contentDescription = "Molido Mesh AI"
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            topMargin = dp(12)
+        })
+        brand.addView(label("MESH AI  ·  SECURE NETWORK", 11f, palette.primaryText, TypefaceStyle.MEDIUM).apply {
+            gravity = Gravity.CENTER
+            letterSpacing = 0.06f
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            topMargin = dp(5)
+        })
+        overlay.addView(brand, FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            Gravity.CENTER,
+        ))
         pageHost.addView(overlay)
 
-        logo.animate()
+        brand.animate()
             .alpha(1f)
             .scaleX(1f)
             .scaleY(1f)
             .setDuration(500)
             .setInterpolator(PathInterpolator(0.2f, 0f, 0f, 1f))
             .withEndAction {
-                logo.animate()
-                    .scaleX(1.05f)
-                    .scaleY(1.05f)
+                brand.animate()
+                    .scaleX(1.035f)
+                    .scaleY(1.035f)
                     .setDuration(700)
                     .setInterpolator(PathInterpolator(0.4f, 0f, 0.2f, 1f))
                     .withEndAction {
@@ -1445,11 +1489,33 @@ class MainActivity : Activity() {
             background = roundedBackground(SURFACE, 16, palette.divider)
             setOnClickListener { openNavigationDrawer() }
         }, LinearLayout.LayoutParams(dp(48), dp(48)))
-        addView(label("MOLIDO VPN", 17f, INK, TypefaceStyle.MEDIUM).apply {
-            maxLines = 1
-            ellipsize = android.text.TextUtils.TruncateAt.END
-        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
-            marginStart = dp(12)
+        val brandMark = label("M", 18f, palette.primaryContainer, TypefaceStyle.MEDIUM).apply {
+            gravity = Gravity.CENTER
+            background = android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
+                intArrayOf(palette.primary, palette.violet),
+            ).apply { cornerRadius = dp(14).toFloat() }
+            contentDescription = "Molido Mesh AI"
+        }
+        addView(brandMark, LinearLayout.LayoutParams(dp(40), dp(40)).apply {
+            marginStart = dp(10)
+        })
+        val brandStack = LinearLayout(this@MainActivity).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_VERTICAL
+            addView(label("MOLIDO", 16f, INK, TypefaceStyle.MEDIUM).apply {
+                maxLines = 1
+                letterSpacing = 0.08f
+            })
+            addView(label("MESH AI  ·  SECURE NETWORK", 9f, palette.primaryText, TypefaceStyle.MEDIUM).apply {
+                maxLines = 1
+                letterSpacing = 0.035f
+            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                topMargin = dp(1)
+            })
+        }
+        addView(brandStack, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+            marginStart = dp(9)
             marginEnd = dp(8)
         })
         statusPillText = label(Strings.t("Not connected"), 11.5f, MUTED, TypefaceStyle.MEDIUM).apply {
@@ -1594,6 +1660,24 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun renderHomeUpdate(version: String?, critical: Boolean, ready: Boolean) {
+        homeUpdateVersion = version
+        homeUpdateCritical = critical
+        homeUpdateReady = ready
+        val box = homeUpdateBox ?: return
+        if (version.isNullOrBlank()) {
+            box.visibility = View.GONE
+            return
+        }
+        homeUpdateTitle?.text = when {
+            ready -> Strings.tf("Molido Mesh AI %s is downloaded and verified", version)
+            critical -> Strings.tf("Important update available: Molido Mesh AI %s", version)
+            else -> Strings.tf("New version available: Molido Mesh AI %s", version)
+        }
+        homeUpdateAction?.text = if (ready) Strings.t("Install update") else Strings.t("Download update")
+        box.visibility = View.VISIBLE
+    }
+
     private fun createConnectionConsole(): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
         gravity = Gravity.CENTER_HORIZONTAL
@@ -1621,6 +1705,33 @@ class MainActivity : Activity() {
         ).apply { topMargin = dp(6) })
         renderNotice()
 
+        // Persistent home-screen update banner. It is populated only after the updater
+        // has found a newer release; the APK is independently verified before install.
+        val updateBox = LinearLayout(this@MainActivity).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+            setPadding(dp(14), dp(10), dp(14), dp(10))
+            visibility = View.GONE
+            background = Sculpt.sculptedBackground(resources.displayMetrics.density,
+                Sculpt.withAlpha(palette.amber, 0.13f), 14, Sculpt.withAlpha(palette.amber, 0.48f))
+        }
+        homeUpdateBox = updateBox
+        homeUpdateTitle = label("", 14f, INK, TypefaceStyle.MEDIUM).apply {
+            textDirection = View.TEXT_DIRECTION_RTL
+            textAlignment = View.TEXT_ALIGNMENT_VIEW_START
+        }
+        updateBox.addView(homeUpdateTitle)
+        homeUpdateAction = label("", 13f, palette.amberText, TypefaceStyle.MEDIUM).apply {
+            setPadding(0, dp(8), 0, 0)
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { appUpdater.updateNow() }
+        }
+        updateBox.addView(homeUpdateAction)
+        addView(updateBox, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(6) })
+        renderHomeUpdate(homeUpdateVersion, homeUpdateCritical, homeUpdateReady)
+
         // "What's new" card after an update (once). Built empty; filled off the main thread, never blocks connecting.
         WhatsNew.pendingVersion(this@MainActivity)?.let { ver ->
             val card = LinearLayout(this@MainActivity).apply {
@@ -1634,7 +1745,7 @@ class MainActivity : Activity() {
             addView(card, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(6) })
             Thread {
-                val items = WhatsNew.items(ver)
+                val items = WhatsNew.items(this@MainActivity, ver)
                 runOnUiThread {
                     if (isFinishing) return@runOnUiThread
                     fun rtl(t: String, size: Float, color: Int, style: TypefaceStyle = TypefaceStyle.REGULAR) =
@@ -1701,7 +1812,7 @@ class MainActivity : Activity() {
         ).apply { topMargin = dp(7) })
 
 
-        // MolidoVPN home order: connect control -> location card -> mode chips ->
+        // Molido Mesh AI home order: connect control -> location card -> mode chips ->
         // mode add-on card -> stats.
         addView(exitNodeCard, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
@@ -2746,7 +2857,7 @@ class MainActivity : Activity() {
             .toList()
         val app = fromDisk?.takeIf { it.isNotBlank() } ?: ConnectionLog.snapshot().joinToString("\n")
         return buildString {
-            append("MolidoVPN ")
+            append("Molido Mesh AI ")
             append(appVersionOrNull() ?: "?")
             append(" · ")
             append(selectedProtocol.label)
@@ -2813,7 +2924,7 @@ class MainActivity : Activity() {
                         Intent.createChooser(
                             Intent(Intent.ACTION_SEND)
                                 .setType("text/plain")
-                                .putExtra(Intent.EXTRA_SUBJECT, "MolidoVPN log")
+                                .putExtra(Intent.EXTRA_SUBJECT, "Molido Mesh AI log")
                                 .putExtra(Intent.EXTRA_STREAM, uri)
                                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION),
                             Strings.t("Share log"),
@@ -2916,7 +3027,7 @@ class MainActivity : Activity() {
             .setView(box)
             .setNeutralButton(Strings.t("Copy")) { _, _ ->
                 getSystemService(ClipboardManager::class.java)
-                    ?.setPrimaryClip(ClipData.newPlainText("MolidoVPN settings", json))
+                    ?.setPrimaryClip(ClipData.newPlainText("Molido Mesh AI settings", json))
                 toastShort(Strings.t("Settings copied — this text holds no passwords"))
             }
             .setPositiveButton(Strings.t("Share")) { _, _ ->
@@ -3698,8 +3809,8 @@ class MainActivity : Activity() {
         content.addView(navRow(Strings.t("Donate (حمایت مالی)"), "♥") { showDonateSheet() }, mainParams())
         content.addView(navRow(Strings.t("About"), "v${appVersion()}") {
             android.app.AlertDialog.Builder(this)
-                .setTitle("MolidoVPN")
-                .setMessage("MolidoVPN ${appVersion()}\nAGPL-3.0")
+                .setTitle("Molido Mesh AI")
+                .setMessage("Molido Mesh AI ${appVersion()}\nAGPL-3.0")
                 .setPositiveButton(Strings.t("Check for updates")) { _, _ -> appUpdater.checkForUpdate() }
                 .setNeutralButton(Strings.t("Open-source licenses")) { _, _ -> showLicensesSheet() }
                 .setNegativeButton(Strings.t("Close"), null)
@@ -4560,7 +4671,7 @@ class MainActivity : Activity() {
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.WRAP_CONTENT,
         ).apply { topMargin = dp(8) })
-        content.addView(label("MolidoVPN ${appVersion()}", 11.5f, Sculpt.withAlpha(MUTED, 0.7f)).apply {
+        content.addView(label("Molido Mesh AI ${appVersion()}", 11.5f, Sculpt.withAlpha(MUTED, 0.7f)).apply {
             gravity = Gravity.CENTER_HORIZONTAL
             letterSpacing = spacing(0.06f)
             setPadding(0, dp(22), 0, 0)
@@ -8470,7 +8581,7 @@ class MainActivity : Activity() {
         actions.addView(createSettingsButton(Strings.t("Copy")) {
             runCatching {
                 getSystemService(ClipboardManager::class.java)
-                    ?.setPrimaryClip(ClipData.newPlainText("MolidoVPN", SITE_URL))
+                    ?.setPrimaryClip(ClipData.newPlainText("Molido Mesh AI", SITE_URL))
                 toastShort(Strings.t("Link copied"))
             }
         }, LinearLayout.LayoutParams(0, dp(44), 1f).apply { marginStart = dp(10) })
@@ -8502,7 +8613,7 @@ class MainActivity : Activity() {
 
     /**
      * Shares this install's own APK (base.apk; the app ships as whole per-ABI APKs, not splits).
-     * Copied to cacheDir/share under a readable name so receivers see "MolidoVPN-x.y.z.apk".
+     * Copied to cacheDir/share under a readable name so receivers see "MolidoMeshAI-x.y.z.apk".
      */
     private fun shareApkFile() {
         Thread({
@@ -8511,7 +8622,7 @@ class MainActivity : Activity() {
                 val version = runCatching { packageManager.getPackageInfo(packageName, 0).versionName }.getOrNull() ?: "app"
                 val dir = File(cacheDir, "share").apply { mkdirs() }
                 dir.listFiles()?.forEach { it.delete() }
-                val target = File(dir, "MolidoVPN-$version.apk")
+                val target = File(dir, "MolidoMeshAI-$version.apk")
                 source.inputStream().use { input -> target.outputStream().use { input.copyTo(it, 256 * 1024) } }
                 FileProvider.getUriForFile(this, "$packageName.fileprovider", target)
             }
@@ -8565,7 +8676,7 @@ class MainActivity : Activity() {
             .setMessage(id + "\n\n" + Strings.t("INSTALL_ID_BODY"))
             .setPositiveButton(Strings.t("Copy")) { _, _ ->
                 getSystemService(android.content.ClipboardManager::class.java)
-                    ?.setPrimaryClip(android.content.ClipData.newPlainText("MolidoVPN install ID", id))
+                    ?.setPrimaryClip(android.content.ClipData.newPlainText("Molido Mesh AI install ID", id))
                 toastShort(Strings.t("Copied"))
             }
             .setNegativeButton(Strings.t("OK"), null)
@@ -8579,7 +8690,7 @@ class MainActivity : Activity() {
             packageManager.getPackageInfo(packageName, 0).versionName
         }.getOrNull().orEmpty()
         val text = buildString {
-            appendLine("MolidoVPN $version")
+            appendLine("Molido Mesh AI $version")
             appendLine("Install ID: ${InstallId.get(this@MainActivity)}")
             appendLine("Android ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})")
             appendLine("Operator: ${ConnectionReports.operator(this@MainActivity)}")
@@ -8592,7 +8703,7 @@ class MainActivity : Activity() {
         Diagnostics.upload(this, userAsked = true)
         try {
             getSystemService(android.content.ClipboardManager::class.java)
-                ?.setPrimaryClip(android.content.ClipData.newPlainText("MolidoVPN report", text))
+                ?.setPrimaryClip(android.content.ClipData.newPlainText("Molido Mesh AI report", text))
             android.app.AlertDialog.Builder(this)
                 .setTitle(Strings.t("Report a problem"))
                 .setMessage(Strings.t("REPORT_COPIED_BODY"))

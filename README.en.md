@@ -1,8 +1,8 @@
 <div align="center">
 
-<img src="docs/logo.png" width="160" alt="MolidoVPN">
+<img src="docs/logo.png" width="160" alt="Molido Mesh AI">
 
-# MolidoVPN
+# Molido Mesh AI
 
 **Free device-wide VPN for Iranian families — Rust core, native Android client, many connection modes**
 
@@ -19,7 +19,7 @@
 
 ## What this is
 
-MolidoVPN is a native Android VPN client that moves every packet leaving the device through one of five independent transports. That word *native* is doing real work here. Most tools in this space are proxies: they hand you a local SOCKS port, and whatever bothers to read the system proxy setting — usually just a browser — gets protected. Everything else leaks. MolidoVPN binds Android's own `VpnService`, stands up a TUN interface, and takes ownership of the whole routing table. Every TCP stream, every UDP datagram, every QUIC flow, from every installed app, goes through the tunnel whether that app knows about proxies or not.
+Molido Mesh AI is a native Android VPN client that moves every packet leaving the device through one of five independent transports. That word *native* is doing real work here. Most tools in this space are proxies: they hand you a local SOCKS port, and whatever bothers to read the system proxy setting — usually just a browser — gets protected. Everything else leaks. Molido Mesh AI binds Android's own `VpnService`, stands up a TUN interface, and takes ownership of the whole routing table. Every TCP stream, every UDP datagram, every QUIC flow, from every installed app, goes through the tunnel whether that app knows about proxies or not.
 
 The codebase splits cleanly in two. A **Rust network core** implements the transports and negotiates with upstream gateways. A **Kotlin layer** owns the Android VPN lifecycle, the interface, and platform plumbing. The last two transports — Psiphon and Tor — bring their own cores and attach to the same TUN through a local SOCKS listener. There is no relay server of ours in the middle — the handset speaks directly to the upstream gateway.
 
@@ -64,7 +64,7 @@ The device-wide tunnel runs on `VpnService` + a TUN interface, so every app — 
 - What's-new card after an update
 - Share-with-friends QR code
 - **My configs** — import by paste, file, QR image, subscription link or Outline; "fastest of my configs"
-- Remote control: mode on/off flags and announcements pushed from the MolidoVPN worker
+- Remote control: mode on/off flags and announcements pushed from the Molido Mesh AI worker
 - Persian / English / Chinese UI, home-screen widget, Quick Settings tile
 - **Smart Split** and per-app split tunnelling
 - **Iran-direct** routing for domestic sites
@@ -286,6 +286,6 @@ Released under the [GNU AGPL-3.0](LICENSE). Vendored libraries keep their own te
 
 <div align="center">
 
-**MolidoVPN — support: [@Molido_Vpn](https://t.me/Molido_Vpn)**
+**Molido Mesh AI — support: [@Molido_Vpn](https://t.me/Molido_Vpn)**
 
 </div>

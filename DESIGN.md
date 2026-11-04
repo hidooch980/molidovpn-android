@@ -1,58 +1,98 @@
-# MolidoVPN Android design contract
+# Molido Mesh AI — Android visual system (v3)
 
-## Intent
+## Product direction
 
-MolidoVPN should feel like a calm, trustworthy dark Android system tool. The home screen is a
-single-purpose connection console: the connection state is visible at a glance, the main
-action is physically obvious, and live connection facts (exit IP, country, data, duration)
-are readable without scrolling.
+MolidoVPN is presented as a modern, intelligent, privacy-first mesh network client.
+The visual language should communicate adaptive networking and security without
+looking like a generic VPN template or a neon gaming dashboard.
 
-This is MolidoVPN's own visual system. Any third-party app is an interaction reference only;
-do not copy its code, wording, logo, or branding.
+The redesign is native Android Views and reuses the app's existing connection,
+network intelligence, diagnostics, server, update and privacy logic. Visual
+components must render real state only; never fabricate speed, latency, node
+health, AI confidence or protection status.
 
-## Foundations
+## Visual foundations
 
-- **Platform:** native Android views, platform typography, and Android system bars.
-- **Canvas:** `#101411`
-- **Surface:** `#171C18`
-- **Surface variant:** `#222A24`
-- **Ink:** `#E8F1EA`
-- **Muted text:** `#B9C6BB`
-- **Divider:** `#3B473E`
-- **Idle / primary:** `#A4D8BB`
-- **Connected:** `#67D89C`
-- **Connection error:** `#FFB4AB`
-- **Typography:** Roboto / Android system sans. Use a compact hierarchy: app name 22sp,
-  status 20sp, supporting labels 14sp, metadata 12sp.
+### Dark — Mesh Night
+- Canvas: `#080D1B`
+- Raised surface: `#111A2D`
+- Secondary surface: `#192640`
+- Primary text: `#F2F6FF`
+- Muted text: `#A3B0C8`
+- Teal action: `#43E6CF`
+- Connected: `#52E6A6`
+- Violet intelligence accent: `#8B82FF`
+- Amber attention: `#FFC36B`
+- Error: `#FF6B82`
+
+### Light — Mesh Mist
+- Canvas: `#F1F5FC`
+- Raised surface: `#FFFFFF`
+- Secondary surface: `#E8EEF8`
+- Primary text: `#111B31`
+- Muted text: `#596982`
+- Teal action: `#087F79`
+- Connected: `#087D65`
+- Violet intelligence accent: `#6559D9`
+
+Both palettes share the same semantic roles. Text accents must pass WCAG AA
+contrast on the surface on which they are used. Vivid accents may be used for
+shapes and indicators while darker siblings are used for text.
+
+## Background and depth
+
+- A subtle adaptive mesh backdrop may use low-opacity network lines, nodes and
+  ambient teal/violet radial light.
+- The mesh is decorative only. It must not imply a live topology or display
+  synthetic network measurements.
+- Animate slowly, pause when detached/backgrounded, and avoid continuous network
+  or CPU work.
+- Cards remain readable and visually distinct from the background. Avoid heavy
+  glass blur, high-frequency particles, excessive glow and nested-card overload.
 
 ## Home screen
 
-- Keep the top of the screen quiet: no logo, no wordmark, no decorative cards. The brand
-  lives on the launcher icon and the opening splash, not above the connect button.
-- Put the circular connection control at the visual centre. It is the only large, filled
-  control on the screen and has a minimum 176dp target.
-- Place the selected connection status immediately below the circle.
-- The app is VPN-mode only; there is no mode selector. The protocol picker is the single
-  outlined, full-width control beneath the status, and it is disabled while a tunnel is active.
-- Use real connection wording only: `Not connected`, `Connecting`, `Connected`, and
-  `Connection failed`. Do not claim protection before the core reports it is running.
-- The control uses the primary colour while idle or connecting, brighter green while connected,
-  and red only after a reported connection failure.
+- Keep the main connect action visually dominant and immediately reachable.
+- Show truthful connection state, selected route/protocol and location.
+- Show ping, download, upload, traffic and session duration only from live sources.
+- Surface Smart Connect's actual probing progress, winner, reason and backup when
+  available. Clearly distinguish a recommendation from an established tunnel.
+- Keep advanced protocol and DNS controls discoverable without overwhelming the
+  primary connect flow.
+- The top brand identifies Molido Mesh AI; the connection status remains visible.
 
-## Motion and feedback
+## Smart network experience
 
-- A press scales the circular control to 97% for 90ms, then returns over 180ms with a
-  strong ease-out. State changes redraw the ring and icon rather than moving the layout.
-- Use Android's standard context-click haptic on an intentional connection tap.
-- Keep motion under 300ms and restricted to transform, alpha, and the control's own drawing.
-- Latency keeps its normal graph while probing. After each returned `N ms`, lift and settle the
-  graph over 280ms without moving surrounding content.
-- Respect Android accessibility: every interactive element has a clear content description;
-  colour never carries state alone.
+- Explain why a route or transport was selected using measured quality and
+  device/network context when those signals exist.
+- Display network quality dimensions such as RTT, jitter, packet loss, throughput
+  and handover state only when measured and available.
+- Never claim that AI has optimized or protected a connection unless the relevant
+  engine reports a completed action.
+- Keep failover, diagnosis and recovery states explicit and understandable.
 
-## Guardrails
+## Motion and performance
 
-- No copied third-party assets, names, code, screenshots, or branding.
-- No gradients, neon, oversized text, fake statistics, or nested-card dashboards.
-- No extra UI libraries for this first screen. Add Jetpack Compose or Material dependencies
-  only when the app grows enough screens to justify that migration.
+- Motion should be calm, purposeful and generally under 300ms for interactions.
+- Background ambient animation may be slower, but must stop when the view detaches.
+- Respect Android reduced-motion/accessibility expectations and preserve touch
+  targets, TalkBack labels and readable contrast.
+- Do not add heavyweight UI dependencies solely for decoration.
+
+## Localization and accessibility
+
+- Support Persian, English, Arabic and Turkish layouts.
+- Use locale-aware direction: Persian and Arabic are RTL; English and Turkish are LTR.
+- Avoid letter spacing on joined scripts. Do not truncate critical security or
+  connection state text.
+- Colour never carries state alone; pair it with text or an accessible description.
+
+## Safety and compatibility guardrails
+
+- Do not remove or bypass existing VPN permission, kill switch, DNS, leak
+  protection, profile import, signed update, signer lineage or emergency controls.
+- Do not alter package identity, signing configuration, keystore secrets or
+  update trust rules as part of a visual redesign.
+- Preserve existing public navigation and connection behaviour unless a separate
+  tested migration explicitly changes it.
+- All new visual work must pass Android compilation and unit tests before merge.

@@ -24,5 +24,9 @@ jobs:
           workspaces: core/aether
       - name: Install native build dependencies
         run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libclang-dev
+      - name: Test Cloudflare registration retry, fallback, and reconnect cooldown safeguards
+        run: |
+          cargo test --manifest-path core/aether/Cargo.toml --lib account::tests --locked
+          cargo test --manifest-path core/aether/Cargo.toml --lib app::registration_cooldown_tests --locked
       - name: Compile core and test imported identity isolation
         run: cargo test --manifest-path core/aether/Cargo.toml --lib personal_wireguard --locked
