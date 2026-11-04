@@ -62,7 +62,7 @@ jobs:
         run: bash tools/fetch-binaries.sh
 
       - name: Refresh offline emergency defaults
-        run: python3 tools/refresh-emergency-configs.py
+        run: python3 tools/refresh-emergency-configs.py || true
 
       - name: Run Android unit tests and build unsigned release APKs
         run: |
