@@ -74,3 +74,51 @@ jobs:
         run: cargo build --manifest-path core/aether/Cargo.toml --locked --release --lib --target ${{ matrix.target }}
       - name: Verify static library artifact
         run: test -s core/aether/target/${{ matrix.target }}/release/libaether.a
+      - name: Stage target library
+        run: |
+          mkdir -p dist/${{ matrix.target }}
+          cp core/aether/target/${{ matrix.target }}/release/libaether.a dist/${{ matrix.target }}/libaether.a
+      - name: Upload target library
+        uses: actions/upload-artifact@v4
+        with:
+          name: aether-lib-${{ matrix.target }}
+          path: dist/${{ matrix.target }}/libaether.a
+          if-no-files-found: error
+          retention-days: 7
+
+  package-aether-xcframework:
+    name: Package Aether XCFramework
+    runs-on: macos-15
+    needs: build-rust-core
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+      - name: Download Apple target libraries
+        uses: actions/download-artifact@v4
+        with:
+          pattern: aether-lib-*
+          path: artifacts
+          merge-multiple: false
+      - name: Create universal simulator library
+        run: |
+          mkdir -p dist/simulator dist/ios
+          lipo -create \\
+            artifacts/aether-lib-aarch64-apple-ios-sim/libaether.a \\
+            artifacts/aether-lib-x86_64-apple-ios/libaether.a \\
+            -output dist/simulator/libaether.a
+          cp artifacts/aether-lib-aarch64-apple-ios/libaether.a dist/ios/libaether.a
+      - name: Create Aether XCFramework
+        run: |
+          xcodebuild -create-xcframework \\
+            -library dist/ios/libaether.a -headers core/aether/include \\
+            -library dist/simulator/libaether.a -headers core/aether/include \\
+            -output dist/Aether.xcframework
+          test -d dist/Aether.xcframework
+          find dist/Aether.xcframework -maxdepth 2 -type d -print
+      - name: Upload Aether XCFramework
+        uses: actions/upload-artifact@v4
+        with:
+          name: Aether-xcframework
+          path: dist/Aether.xcframework
+          if-no-files-found: error
+          retention-days: 14
