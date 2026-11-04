@@ -2,6 +2,10 @@ package com.molido.vpn
 
 import android.app.Activity
 import android.content.Intent
+import android.net.Uri
+import java.io.ByteArrayInputStream
+import java.security.cert.CertificateFactory
+import java.security.cert.X509Certificate
 import android.net.Ikev2VpnProfile
 import android.net.VpnManager
 import android.os.Build
@@ -31,6 +35,7 @@ class Ikev2VpnActivity : Activity() {
     private lateinit var password: EditText
     private lateinit var status: TextView
     private var pendingProfile: Ikev2VpnProfile? = null
+    private var serverRootCa: X509Certificate? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -67,6 +72,25 @@ class Ikev2VpnActivity : Activity() {
             setPadding(0, 12.dp(), 0, 12.dp())
         }
         root.addView(status)
+
+        root.addView(Button(this).apply {
+            text = Strings.t("Import server CA certificate (PEM)")
+            setOnClickListener {
+                startActivityForResult(
+                    Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                        addCategory(Intent.CATEGORY_OPENABLE)
+                        type = "*/*"
+                    },
+                    REQUEST_CA_CERTIFICATE,
+                )
+            }
+        }, matchWidth())
+        root.addView(Button(this).apply {
+            text = Strings.t("Get a free temporary IKEv2 account")
+            setOnClickListener {
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(FREE_PROVIDER_URL)))
+            }
+        }, matchWidth())
 
         root.addView(Button(this).apply {
             text = Strings.t("Connect with IKEv2")
@@ -113,7 +137,7 @@ class Ikev2VpnActivity : Activity() {
 
         try {
             val profile = Ikev2VpnProfile.Builder(host, identity)
-                .setAuthUsernamePassword(eapUser, eapPass, null)
+                .setAuthUsernamePassword(eapUser, eapPass, serverRootCa)
                 .setBypassable(false)
                 .setMetered(true)
                 .build()
@@ -140,6 +164,34 @@ class Ikev2VpnActivity : Activity() {
     @Deprecated("The platform consent flow uses Activity result APIs on API 30+.")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQUEST_CA_CERTIFICATE) {
+            if (resultCode != RESULT_OK) return
+            val uri = data?.data ?: return
+            try {
+                val bytes = contentResolver.openInputStream(uri)?.use { input ->
+                    val output = java.io.ByteArrayOutputStream()
+                    val buffer = ByteArray(8192)
+                    var total = 0
+                    while (true) {
+                        val count = input.read(buffer)
+                        if (count < 0) break
+                        total += count
+                        require(total <= MAX_CA_BYTES) { "CA certificate file is too large" }
+                        output.write(buffer, 0, count)
+                    }
+                    output.toByteArray()
+                } ?: throw IllegalArgumentException("Empty CA certificate")
+                val cert = CertificateFactory.getInstance("X.509")
+                    .generateCertificate(ByteArrayInputStream(bytes)) as X509Certificate
+                require(cert.basicConstraints >= 0) { "The selected certificate is not a CA" }
+                serverRootCa = cert
+                status.text = Strings.t("Server CA certificate imported for this session.")
+            } catch (_: Exception) {
+                serverRootCa = null
+                message("Could not read a valid CA certificate. Select a PEM or DER CA certificate.")
+            }
+            return
+        }
         if (requestCode != REQUEST_VPN_CONSENT) return
         if (resultCode != RESULT_OK) {
             pendingProfile = null
@@ -198,5 +250,8 @@ class Ikev2VpnActivity : Activity() {
 
     companion object {
         private const val REQUEST_VPN_CONSENT = 7301
+        private const val REQUEST_CA_CERTIFICATE = 7302
+        private const val MAX_CA_BYTES = 256 * 1024
+        private const val FREE_PROVIDER_URL = "https://www.vpnjantit.com/create-free-account?server=tr6&type=IKEV2"
     }
 }
