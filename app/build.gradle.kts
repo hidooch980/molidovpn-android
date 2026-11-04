@@ -9,7 +9,7 @@ val targetAbis = (project.findProperty("targetAbi") as String?)
     ?.split(',')
     ?.map(String::trim)
     ?.filter(String::isNotEmpty)
-    ?: listOf("arm64-v8a", "armeabi-v7a", "x86_64")
+    ?: listOf("arm64-v8a", "armeabi-v7a")
 val releaseKeystore = project.findProperty("aetheryKeystore") as String?
 
 kotlin {
