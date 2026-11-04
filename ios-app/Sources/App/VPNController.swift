@@ -174,6 +174,7 @@ final class VPNController: ObservableObject {
         egressVerificationTask = nil
         egressIP = nil
         egressVerified = false
+        preTunnelEgressIP = nil
         manager?.connection.stopVPNTunnel()
         message = "درخواست قطع اتصال ارسال شد."
     }
