@@ -91,3 +91,52 @@ object Ikev2FreeServerDirectory {
         return parseCountryHtml(country, url, doc.html())
     }
 }
+
+/** Shared non-secret cache used by the foreground picker and periodic refresh job. */
+object Ikev2FreeServerCache {
+    private const val PREFS = "ikev2_free_directory"
+    private const val JSON = "servers_json"
+    private const val UPDATED_AT = "updated_at"
+
+    fun save(context: android.content.Context, servers: List<Ikev2FreeServer>) {
+        val rows = org.json.JSONArray()
+        servers.forEach { item ->
+            rows.put(org.json.JSONObject().apply {
+                put("country", item.country)
+                put("host", item.host)
+                put("identity", item.identity)
+                put("accountUrl", item.accountUrl)
+                put("available", item.listedAvailable)
+            })
+        }
+        context.getSharedPreferences(PREFS, android.content.Context.MODE_PRIVATE).edit()
+            .putString(JSON, rows.toString())
+            .putLong(UPDATED_AT, System.currentTimeMillis())
+            .apply()
+    }
+
+    fun load(context: android.content.Context): Pair<List<Ikev2FreeServer>, Long> {
+        val prefs = context.getSharedPreferences(PREFS, android.content.Context.MODE_PRIVATE)
+        val raw = prefs.getString(JSON, null) ?: return emptyList<Ikev2FreeServer>() to 0L
+        return try {
+            val rows = org.json.JSONArray(raw)
+            val result = (0 until rows.length()).mapNotNull { index ->
+                val row = rows.optJSONObject(index) ?: return@mapNotNull null
+                val host = row.optString("host")
+                val url = row.optString("accountUrl")
+                if (!Ikev2ProfileValidation.isValidServer(host) ||
+                    !url.startsWith("https://www.vpnjantit.com/")) return@mapNotNull null
+                Ikev2FreeServer(
+                    country = row.optString("country"),
+                    host = host,
+                    identity = row.optString("identity", "vpnjantit"),
+                    accountUrl = url,
+                    listedAvailable = row.optBoolean("available", false),
+                )
+            }
+            result to prefs.getLong(UPDATED_AT, 0L)
+        } catch (_: Exception) {
+            emptyList<Ikev2FreeServer>() to 0L
+        }
+    }
+}
