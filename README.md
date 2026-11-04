@@ -287,7 +287,7 @@ cargo install cargo-ndk
 
 <div align="center">
 
-**MolidoVPN — پشتیبانی: [@Molido_Vpn](https://t.me/Molido_Vpn)**
+**Molido Mesh AI — پشتیبانی: [@Molido_Vpn](https://t.me/Molido_Vpn)**
 
 </div>
 
