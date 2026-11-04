@@ -71,8 +71,9 @@ object UpdateSources {
         var best: Release? = null
 
         fun consider(candidate: Release?) {
+            val currentBest = best
             if (candidate != null && isNewer(candidate.version, installed) &&
-                (best == null || isNewer(candidate.version, best!!.version))) {
+                (currentBest == null || isNewer(candidate.version, currentBest.version))) {
                 best = candidate
             }
         }
