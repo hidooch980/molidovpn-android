@@ -343,11 +343,15 @@ async fn wait_for_stop() {
     }
 }
 
-struct RunningGuard;
+struct RunningGuard {
+    reset_packet_channel: bool,
+}
 
 impl Drop for RunningGuard {
     fn drop(&mut self) {
-        let _ = aether_packet_channel_reset();
+        if self.reset_packet_channel {
+            let _ = aether_packet_channel_reset();
+        }
         RUNNING.store(false, Ordering::Release);
         READY.store(false, Ordering::Release);
     }
@@ -398,7 +402,7 @@ unsafe fn aether_start_json_inner(json: *const c_char, tun_fd: Option<i32>, pack
             set_last_error("Aether tunnel already running");
             return -2;
         }
-        let _running = RunningGuard;
+        let _running = RunningGuard { reset_packet_channel: packet_channel };
         STOP_REQUESTED.store(false, Ordering::Release);
         READY.store(false, Ordering::Release);
         if packet_channel {
