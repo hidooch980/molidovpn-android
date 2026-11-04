@@ -102,16 +102,16 @@ jobs:
       - name: Create universal simulator library
         run: |
           mkdir -p dist/simulator dist/ios
-          lipo -create \\
-            artifacts/aether-lib-aarch64-apple-ios-sim/libaether.a \\
-            artifacts/aether-lib-x86_64-apple-ios/libaether.a \\
+          lipo -create \
+            artifacts/aether-lib-aarch64-apple-ios-sim/libaether.a \
+            artifacts/aether-lib-x86_64-apple-ios/libaether.a \
             -output dist/simulator/libaether.a
           cp artifacts/aether-lib-aarch64-apple-ios/libaether.a dist/ios/libaether.a
       - name: Create Aether XCFramework
         run: |
-          xcodebuild -create-xcframework \\
-            -library dist/ios/libaether.a -headers core/aether/include \\
-            -library dist/simulator/libaether.a -headers core/aether/include \\
+          xcodebuild -create-xcframework \
+            -library dist/ios/libaether.a -headers core/aether/include \
+            -library dist/simulator/libaether.a -headers core/aether/include \
             -output dist/Aether.xcframework
           test -d dist/Aether.xcframework
           find dist/Aether.xcframework -maxdepth 2 -type d -print
