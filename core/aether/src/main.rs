@@ -1977,12 +1977,16 @@ async fn run_masque_tunnel(
     } else if let Some(fd) = options.tun_fd {
         tokio::spawn(async move { while addr_rx.recv().await.is_some() {} });
         log::info!("[+] Android TUN bridge active");
-        tokio::spawn(tun::bridge(
-            fd,
-            parse_local_v4(&identity.ipv4),
-            inbound_rx,
-            outbound_tx,
-        ))
+        tokio::spawn(async move {
+            if let Err(error) = tun::bridge(
+                fd,
+                parse_local_v4(&identity.ipv4),
+                inbound_rx,
+                outbound_tx,
+            ).await {
+                log::error!("[-] Android TUN bridge stopped: {error}");
+            }
+        })
     } else {
         let stack = netstack::spawn(
             &identity.ipv4,
@@ -2006,7 +2010,9 @@ async fn run_masque_tunnel(
         http_task = spawn_http_proxy(&stack, options);
         tokio::spawn(async move {
             log::info!("[+] socks5 server listening on {listen}");
-            socks::serve(listen, stack).await
+            if let Err(error) = socks::serve(listen, stack).await {
+                log::error!("[-] SOCKS5 server stopped: {error}");
+            }
         })
     };
 
@@ -2614,7 +2620,11 @@ async fn run_wireguard_tunnel(
         crate::packet_channel::spawn_bridge(outbound_tx, inbound_rx)
     } else if let Some(fd) = options.tun_fd {
         log::info!("[+] Android TUN bridge active");
-        tokio::spawn(tun::bridge(fd, ipv4, inbound_rx, outbound_tx))
+        tokio::spawn(async move {
+            if let Err(error) = tun::bridge(fd, ipv4, inbound_rx, outbound_tx).await {
+                log::error!("[-] Android TUN bridge stopped: {error}");
+            }
+        })
     } else {
         let stack = netstack::spawn(
             &identity.ipv4,
@@ -2626,7 +2636,9 @@ async fn run_wireguard_tunnel(
         http_task = spawn_http_proxy(&stack, options);
         tokio::spawn(async move {
             log::info!("[+] socks5 server listening on {listen}");
-            socks::serve(listen, stack).await
+            if let Err(error) = socks::serve(listen, stack).await {
+                log::error!("[-] SOCKS5 server stopped: {error}");
+            }
         })
     };
 
