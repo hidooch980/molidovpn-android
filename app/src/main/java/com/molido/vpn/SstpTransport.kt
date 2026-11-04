@@ -11,7 +11,7 @@ import java.util.Locale
  * Until that native data plane is packaged and tested, the transport must not be
  * offered as a connectable Smart Connect candidate.
  */
-data class SstpEndpoint private constructor(
+class SstpEndpoint private constructor(
     val hostname: String,
     val port: Int,
 ) {
