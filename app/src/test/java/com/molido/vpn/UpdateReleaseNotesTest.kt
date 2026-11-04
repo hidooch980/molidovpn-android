@@ -148,7 +148,16 @@ class UpdateReleaseNotesTest {
         sha256 = null,
     )
 
-    private fun isNewer(remote: String, installed: String) = remote == "4.0.0" && installed != "4.0.0"
+    private fun isNewer(remote: String, installed: String): Boolean {
+        val remoteParts = remote.split('.').map { it.toIntOrNull() ?: 0 }
+        val installedParts = installed.split('.').map { it.toIntOrNull() ?: 0 }
+        for (index in 0 until maxOf(remoteParts.size, installedParts.size)) {
+            val comparison = (remoteParts.getOrElse(index) { 0 })
+                .compareTo(installedParts.getOrElse(index) { 0 })
+            if (comparison != 0) return comparison > 0
+        }
+        return false
+    }
 
     @Test fun staleStaticCopyDoesNotBlockWorkerRelease() {
         val staticUrl = LiveSync.RAW + "latest.json"
