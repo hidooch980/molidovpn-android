@@ -47,6 +47,7 @@
         android:roundIcon="@mipmap/ic_launcher"
         android:theme="@style/Theme.Molido">
         <activity android:name=".VpnProfilesActivity" android:exported="false" />
+        <activity android:name=".Ikev2VpnActivity" android:exported="false" />
         <activity
             android:name=".MainActivity"
             android:exported="true"
