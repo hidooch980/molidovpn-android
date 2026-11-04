@@ -477,12 +477,16 @@ pub unsafe extern "C" fn aether_prepare_json(json: *const c_char) -> i32 {
             Ok(TunnelAddresses {
                 ipv4,
                 ipv6,
+                ipv4_cidr,
+                ipv6_cidr,
                 gateway_proxy,
                 organization,
             }) => {
                 set_last_result(serde_json::json!({
                     "ipv4": ipv4,
                     "ipv6": ipv6,
+                    "ipv4_cidr": ipv4_cidr,
+                    "ipv6_cidr": ipv6_cidr,
                     "gateway_proxy": gateway_proxy,
                     "organization": organization,
                 }));
