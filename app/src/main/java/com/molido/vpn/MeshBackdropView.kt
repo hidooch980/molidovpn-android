@@ -106,8 +106,7 @@ class MeshBackdropView(
     private fun withAlpha(color: Int, alpha: Float): Int =
         (color and 0x00ffffff) or ((alpha.coerceIn(0f, 1f) * 255f).toInt() shl 24)
 
-    override fun onAttachedToWindow() {
-        super.onAttachedToWindow()
+    private fun startAnimation() {
         if (animator?.isStarted == true) return
         animator = ValueAnimator.ofFloat(0f, 1f).apply {
             duration = 12_000L
@@ -121,9 +120,23 @@ class MeshBackdropView(
         }
     }
 
-    override fun onDetachedFromWindow() {
+    private fun stopAnimation() {
         animator?.cancel()
         animator = null
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        if (windowVisibility == VISIBLE) startAnimation()
+    }
+
+    override fun onWindowVisibilityChanged(visibility: Int) {
+        super.onWindowVisibilityChanged(visibility)
+        if (visibility == VISIBLE && isAttachedToWindow) startAnimation() else stopAnimation()
+    }
+
+    override fun onDetachedFromWindow() {
+        stopAnimation()
         super.onDetachedFromWindow()
     }
 }
