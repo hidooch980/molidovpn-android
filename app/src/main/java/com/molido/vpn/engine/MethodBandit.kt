@@ -27,7 +27,7 @@ object MethodBandit {
     fun arms(json: String?, key: String): Map<String, Arm> = try {
         val o = JSONObject(json ?: "{}").optJSONObject(key) ?: JSONObject()
         o.keys().asSequence()
-            .filter { METHOD_ID.matches(it) }
+            .filter { it != "_at" && METHOD_ID.matches(it) }
             .associateWith { id ->
                 val a = o.getJSONObject(id)
                 Arm(a.optDouble("n", 0.0), a.optDouble("m", 0.0))
@@ -57,7 +57,7 @@ object MethodBandit {
 
         o.put(method, JSONObject()
             .put("n", n + 1.0)
-            .put("m", mean + (boundedReward - mean) / (n + 1.0)))
+            .put("m", if (n == 0.0) boundedReward else mean + (boundedReward - mean) / (n + 1.0)))
         o.put("_at", now)
         root.put(key, o)
 
