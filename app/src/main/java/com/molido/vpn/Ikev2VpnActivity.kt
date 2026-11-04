@@ -19,6 +19,13 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import android.os.Handler
+import android.os.Looper
+import org.json.JSONArray
+import org.json.JSONObject
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * IKEv2/IPsec via Android's built-in IPsec stack (API 30+).
@@ -36,6 +43,17 @@ class Ikev2VpnActivity : Activity() {
     private lateinit var status: TextView
     private var pendingProfile: Ikev2VpnProfile? = null
     private var serverRootCa: X509Certificate? = null
+    private lateinit var directoryStatus: TextView
+    private lateinit var freeServerList: LinearLayout
+    private lateinit var refreshDirectoryButton: Button
+    private var refreshingDirectory = false
+    private val directoryHandler = Handler(Looper.getMainLooper())
+    private val directoryAutoRefresh = object : Runnable {
+        override fun run() {
+            refreshFreeDirectory(showMessage = false)
+            directoryHandler.postDelayed(this, DIRECTORY_REFRESH_INTERVAL_MS)
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -93,18 +111,24 @@ class Ikev2VpnActivity : Activity() {
             }
         }, matchWidth())
         root.addView(TextView(this).apply {
-            text = Strings.t("Free community endpoints are provided by a third party, not Molido. Accounts last up to 7 days and allow up to 2 devices. Review the provider's privacy policy; do not use a community server for sensitive traffic.")
+            text = Strings.t("Free community servers are third-party services, not operated by Molido. Availability and account lifetime can change. Do not use them for sensitive traffic; read the provider privacy policy before registering.")
             textSize = 13f
             setPadding(0, 12.dp(), 0, 8.dp())
         })
-        root.addView(Button(this).apply {
-            text = Strings.t("Free Istanbul server 6 (7 days)")
-            setOnClickListener { openFreeProvider(FREE_SERVER_6_HOST, FREE_SERVER_6_URL) }
-        }, matchWidth())
-        root.addView(Button(this).apply {
-            text = Strings.t("Free Istanbul server 5 (7 days)")
-            setOnClickListener { openFreeProvider(FREE_SERVER_5_HOST, FREE_SERVER_5_URL) }
-        }, matchWidth())
+        directoryStatus = TextView(this).apply {
+            text = Strings.t("Loading free IKEv2 server directory…")
+            textSize = 13f
+            setPadding(0, 8.dp(), 0, 8.dp())
+        }
+        root.addView(directoryStatus)
+        refreshDirectoryButton = Button(this).apply {
+            text = Strings.t("Refresh free IKEv2 servers")
+            setOnClickListener { refreshFreeDirectory(showMessage = true) }
+        }
+        root.addView(refreshDirectoryButton, matchWidth())
+        freeServerList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        root.addView(freeServerList, matchWidth())
+        renderCachedDirectory()
 
         root.addView(Button(this).apply {
             text = Strings.t("Connect with IKEv2")
@@ -116,10 +140,135 @@ class Ikev2VpnActivity : Activity() {
         }, matchWidth())
     }
 
-    private fun openFreeProvider(host: String, url: String) {
-        server.setText(host)
-        ikeIdentity.setText(FREE_SERVER_IDENTITY)
-        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+    override fun onResume() {
+        super.onResume()
+        renderCachedDirectory()
+        refreshFreeDirectory(showMessage = false)
+        directoryHandler.removeCallbacks(directoryAutoRefresh)
+        directoryHandler.postDelayed(directoryAutoRefresh, DIRECTORY_REFRESH_INTERVAL_MS)
+    }
+
+    override fun onPause() {
+        directoryHandler.removeCallbacks(directoryAutoRefresh)
+        super.onPause()
+    }
+
+    private fun refreshFreeDirectory(showMessage: Boolean) {
+        if (refreshingDirectory) return
+        refreshingDirectory = true
+        refreshDirectoryButton.isEnabled = false
+        directoryStatus.text = Strings.t("Refreshing free IKEv2 server directory…")
+        Thread {
+            try {
+                val servers = Ikev2FreeServerDirectory.refresh()
+                runOnUiThread {
+                    saveDirectoryCache(servers)
+                    renderDirectory(servers, System.currentTimeMillis())
+                    directoryStatus.text = Strings.tf(
+                        "Directory updated %s · %s servers · refreshes every 5 minutes while this screen is open",
+                        SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date()),
+                        servers.size,
+                    )
+                    refreshingDirectory = false
+                    refreshDirectoryButton.isEnabled = true
+                    if (showMessage) Toast.makeText(this, Strings.t("Free IKEv2 server list updated."), Toast.LENGTH_SHORT).show()
+                }
+            } catch (_: Exception) {
+                runOnUiThread {
+                    val cached = loadDirectoryCache()
+                    if (cached.first.isNotEmpty()) {
+                        renderDirectory(cached.first, cached.second)
+                        directoryStatus.text = Strings.t("Could not refresh now; showing the last saved server list.")
+                    } else {
+                        directoryStatus.text = Strings.t("Could not load the free IKEv2 directory. Check internet and retry.")
+                    }
+                    refreshingDirectory = false
+                    refreshDirectoryButton.isEnabled = true
+                    if (showMessage) Toast.makeText(this, Strings.t("Server list refresh failed."), Toast.LENGTH_LONG).show()
+                }
+            }
+        }.start()
+    }
+
+    private fun saveDirectoryCache(servers: List<Ikev2FreeServer>) {
+        val rows = JSONArray()
+        servers.forEach { item ->
+            rows.put(JSONObject().apply {
+                put("country", item.country)
+                put("host", item.host)
+                put("identity", item.identity)
+                put("accountUrl", item.accountUrl)
+                put("available", item.listedAvailable)
+            })
+        }
+        getSharedPreferences(DIRECTORY_PREFS, MODE_PRIVATE).edit()
+            .putString(DIRECTORY_JSON, rows.toString())
+            .putLong(DIRECTORY_UPDATED_AT, System.currentTimeMillis())
+            .apply()
+    }
+
+    private fun loadDirectoryCache(): Pair<List<Ikev2FreeServer>, Long> {
+        val prefs = getSharedPreferences(DIRECTORY_PREFS, MODE_PRIVATE)
+        val raw = prefs.getString(DIRECTORY_JSON, null) ?: return emptyList<Ikev2FreeServer>() to 0L
+        return try {
+            val rows = JSONArray(raw)
+            val result = (0 until rows.length()).mapNotNull { index ->
+                val row = rows.optJSONObject(index) ?: return@mapNotNull null
+                val host = row.optString("host")
+                val url = row.optString("accountUrl")
+                if (!Ikev2ProfileValidation.isValidServer(host) ||
+                    !url.startsWith("https://www.vpnjantit.com/")) return@mapNotNull null
+                Ikev2FreeServer(
+                    country = row.optString("country"),
+                    host = host,
+                    identity = row.optString("identity", "vpnjantit"),
+                    accountUrl = url,
+                    listedAvailable = row.optBoolean("available", false),
+                )
+            }
+            result to prefs.getLong(DIRECTORY_UPDATED_AT, 0L)
+        } catch (_: Exception) {
+            emptyList<Ikev2FreeServer>() to 0L
+        }
+    }
+
+    private fun renderCachedDirectory() {
+        val (servers, updatedAt) = loadDirectoryCache()
+        if (servers.isNotEmpty()) renderDirectory(servers, updatedAt)
+    }
+
+    private fun renderDirectory(servers: List<Ikev2FreeServer>, updatedAt: Long) {
+        freeServerList.removeAllViews()
+        if (servers.isEmpty()) {
+            freeServerList.addView(TextView(this).apply {
+                text = Strings.t("No free IKEv2 servers are currently listed by this provider.")
+                textSize = 13f
+            })
+            return
+        }
+        servers.forEach { item ->
+            val state = if (item.listedAvailable) Strings.t("Provider page reports available") else Strings.t("Check current status on provider site")
+            freeServerList.addView(Button(this).apply {
+                text = item.country + " · " + item.host + "\n" + state
+                isAllCaps = false
+                setOnClickListener {
+                    server.setText(item.host)
+                    ikeIdentity.setText(item.identity)
+                    try {
+                        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(item.accountUrl)))
+                    } catch (_: Exception) {
+                        message("Could not open the provider account page.")
+                    }
+                }
+            }, matchWidth())
+        }
+        if (updatedAt > 0L) {
+            directoryStatus.text = Strings.tf(
+                "Last directory update %s · %s servers",
+                SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(updatedAt)),
+                servers.size,
+            )
+        }
     }
 
     private fun field(parent: LinearLayout, label: String): EditText {
@@ -276,12 +425,11 @@ class Ikev2VpnActivity : Activity() {
 
     companion object {
         private const val REQUEST_VPN_CONSENT = 7301
+        private const val DIRECTORY_REFRESH_INTERVAL_MS = 5 * 60 * 1000L
+        private const val DIRECTORY_PREFS = "ikev2_free_directory"
+        private const val DIRECTORY_JSON = "servers_json"
+        private const val DIRECTORY_UPDATED_AT = "updated_at"
         private const val REQUEST_CA_CERTIFICATE = 7302
         private const val MAX_CA_BYTES = 256 * 1024
-        private const val FREE_SERVER_6_URL = "https://www.vpnjantit.com/create-free-account?server=tr6&type=IKEV2"
-        private const val FREE_SERVER_5_URL = "https://www.vpnjantit.com/create-free-account?server=tr5&type=IKEV2"
-        private const val FREE_SERVER_6_HOST = "tr6.vpnjantit.com"
-        private const val FREE_SERVER_5_HOST = "tr5.vpnjantit.com"
-        private const val FREE_SERVER_IDENTITY = "vpnjantit"
     }
 }
