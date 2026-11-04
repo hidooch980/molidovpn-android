@@ -89,7 +89,13 @@ final class MolidoAetherPacketAdapter {
                     // A native exit at any point after readiness is a tunnel failure,
                     // not a successful disconnect hidden behind an active packet pump.
                     if !self.stopping {
-                        self.fail(AdapterError.nativeStartFailed(nativeMessage))
+                        let error = AdapterError.nativeStartFailed(nativeMessage)
+                        if self.readyHandler != nil {
+                            self.finishStartup(.failure(error))
+                            self.stop()
+                        } else {
+                            self.fail(error)
+                        }
                     }
                     self.started = false
                     _ = aether_packet_channel_reset()
@@ -105,7 +111,8 @@ final class MolidoAetherPacketAdapter {
                     self.finishStartup(.success(()))
                 } else if DispatchTime.now() >= self.startupDeadline {
                     self.cancelReadinessTimer()
-                    self.fail(AdapterError.readinessTimeout)
+                    self.finishStartup(.failure(AdapterError.readinessTimeout))
+                    self.stop()
                 }
             }
             self.readinessTimer = timer
