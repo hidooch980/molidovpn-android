@@ -240,7 +240,7 @@ cargo install cargo-ndk
 
 خروجی در `app/build/outputs/apk/debug/` ساخته می‌شود. اسکریپت `core/build-android.sh` هستهٔ Rust را برای هر ABI کامپایل می‌کند و `libaether.so` را سر جایش می‌گذارد؛ خود Gradle این اسکریپت را صدا می‌زند و لازم نیست دستی اجرایش کنید.
 
-هر push روی شاخهٔ `main` گردش‌کار [`release.yml`](.github/workflows/release.yml) را اجرا می‌کند و APKها را به‌عنوان artifact آپلود می‌کند. نسخه‌های منتشرشده از همین مخزن توسط [گردش‌کار انتشار molidovpn](https://github.com/hidooch980/molidovpn/blob/main/.github/workflows/release.yml) و پس از تست اتصال روی شبیه‌ساز ساخته می‌شوند. گردش‌کار `sync-lists.yml` هر ساعت فهرست‌های `remote/` را تازه می‌کند و `core-updates.yml` هر ۶ ساعت هسته‌ها را به‌روز می‌کند.
+انتشار نسخهٔ اندروید با ایجاد و push کردن تگ نسخه‌ای مانند `v4.0.2` به‌صورت خودکار اجرا می‌شود؛ گردش‌کار ابتدا تست‌ها، کنترل باینری‌ها، ساخت سه APK امضاشده و تطبیق گواهی را انجام می‌دهد و فقط در صورت موفقیت همهٔ کنترل‌ها Release را منتشر می‌کند. push معمولی به `main` به‌تنهایی نسخهٔ جدید منتشر نمی‌کند. نسخه‌های منتشرشده از همین مخزن توسط [گردش‌کار انتشار molidovpn](https://github.com/hidooch980/molidovpn/blob/main/.github/workflows/release.yml) و پس از تست اتصال روی شبیه‌ساز ساخته می‌شوند. گردش‌کار `sync-lists.yml` هر ساعت فهرست‌های `remote/` را تازه می‌کند و `core-updates.yml` هر ۶ ساعت هسته‌ها را به‌روز می‌کند.
 
 ---
 
