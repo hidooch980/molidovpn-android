@@ -42,6 +42,7 @@ final class MolidoAetherPacketAdapter {
     )
     private var readinessTimer: DispatchSourceTimer?
     private var outboundTimer: DispatchSourceTimer?
+    private var healthTimer: DispatchSourceTimer?
     private weak var packetFlow: NEPacketTunnelFlow?
     private var readyHandler: ((Result<Void, Error>) -> Void)?
     private var failureHandler: ((Error) -> Void)?
@@ -132,12 +133,16 @@ final class MolidoAetherPacketAdapter {
     /// Call only after validated NEPacketTunnelNetworkSettings have been applied.
     func activatePacketFlow(
         _ flow: NEPacketTunnelFlow,
+        activated: @escaping (Result<Void, Error>) -> Void,
         failed: @escaping (Error) -> Void
     ) {
         controlQueue.async {
             guard self.started, !self.stopping, !self.pumpsActive,
-                  aether_is_ready() == 1 else {
-                failed(AdapterError.nativeStartFailed("Packet flow activation attempted before engine readiness."))
+                  aether_is_running() == 1, aether_is_ready() == 1 else {
+                let error = AdapterError.nativeStartFailed(
+                    "Packet flow activation attempted before engine readiness."
+                )
+                activated(.failure(error))
                 return
             }
             self.packetFlow = flow
@@ -145,6 +150,8 @@ final class MolidoAetherPacketAdapter {
             self.pumpsActive = true
             self.readNextPacketBatch()
             self.startOutboundPump()
+            self.startHealthMonitor()
+            activated(.success(()))
         }
     }
 
@@ -155,6 +162,8 @@ final class MolidoAetherPacketAdapter {
             self.cancelReadinessTimer()
             self.outboundTimer?.cancel()
             self.outboundTimer = nil
+            self.healthTimer?.cancel()
+            self.healthTimer = nil
             self.pumpsActive = false
             self.packetFlow = nil
             self.readyHandler = nil
@@ -236,6 +245,24 @@ final class MolidoAetherPacketAdapter {
             self?.drainOutboundPackets()
         }
         outboundTimer = timer
+        timer.resume()
+    }
+
+    /// Detects an engine exit after the initial ready signal. Without this
+    /// watchdog, a dead native runtime could leave iOS reporting a stale tunnel.
+    private func startHealthMonitor() {
+        let timer = DispatchSource.makeTimerSource(queue: controlQueue)
+        timer.schedule(deadline: .now() + .milliseconds(250), repeating: .milliseconds(250))
+        timer.setEventHandler { [weak self] in
+            guard let self, self.pumpsActive, !self.stopping else { return }
+            guard aether_is_running() == 1, aether_is_ready() == 1 else {
+                self.fail(AdapterError.nativeStartFailed(
+                    "Aether stopped or lost readiness while the packet tunnel was active."
+                ))
+                return
+            }
+        }
+        healthTimer = timer
         timer.resume()
     }
 
