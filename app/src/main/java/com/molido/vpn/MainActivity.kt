@@ -706,11 +706,14 @@ class MainActivity : Activity() {
         }
 
         mainRoot = FrameLayout(this).apply {
-            setBackgroundColor(CANVAS)
+            // The shared MeshBackdropView lives in pageHost beneath every page.
+            // Keep this layer transparent so the new visual identity remains
+            // continuous while navigating between the home and secondary screens.
+            setBackgroundColor(Color.TRANSPARENT)
             // Mirror the UI language: Persian lays out right-to-left, the
-            // Latin/Chinese consoles left-to-right. Views inherit this once.
+            // Latin/Arabic/Turkish consoles use their locale direction.
             layoutDirection = when (AppLanguage.current()) {
-                "fa" -> android.view.View.LAYOUT_DIRECTION_RTL
+                "fa", "ar" -> android.view.View.LAYOUT_DIRECTION_RTL
                 else -> android.view.View.LAYOUT_DIRECTION_LTR
             }
         }
@@ -766,6 +769,12 @@ class MainActivity : Activity() {
         }
         pageHost = FrameLayout(this).apply {
             setBackgroundColor(CANVAS)
+            // One adaptive mesh background is shared by the app's page stack.
+            // It animates only while attached and performs no network work.
+            addView(MeshBackdropView(this@MainActivity, palette), FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+            ))
             addView(mainRoot, FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT,
