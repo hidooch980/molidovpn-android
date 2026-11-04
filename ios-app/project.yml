@@ -17,6 +17,7 @@ targets:
     platform: iOS
     sources:
       - path: Sources/App
+      - path: Sources/Shared
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.molido.meshai
@@ -34,6 +35,7 @@ targets:
     platform: iOS
     sources:
       - path: Sources/PacketTunnel
+      - path: Sources/Shared
     dependencies:
       - framework: Frameworks/Aether.xcframework
     settings:
