@@ -113,8 +113,8 @@ class AppUpdater(private val activity: Activity) {
         busy = true
         worker.execute {
             val release = runCatching(::latestRelease).getOrNull()
-            val newer = release != null && isNewer(release.version, appVersion())
-            if (!newer || release == null) { busy = false; return@execute }
+            if (release == null) { busy = false; return@execute }
+            if (!isNewer(release.version, appVersion())) { busy = false; return@execute }
             val quiet = !release.critical && !isMetered()
             val apk = if (quiet) runCatching { prefetch(release) }.getOrNull() else null
             activity.runOnUiThread {
@@ -282,7 +282,7 @@ class AppUpdater(private val activity: Activity) {
         check(archive != null && archive.packageName == activity.packageName) { Strings.t("The downloaded file is damaged") }
         val current = pm.getPackageInfo(activity.packageName, 0)
         @Suppress("DEPRECATION")
-        val newCode = if (Build.VERSION.SDK_INT >= 28) archive!!.longVersionCode else archive!!.versionCode.toLong()
+        val newCode = if (Build.VERSION.SDK_INT >= 28) archive.longVersionCode else archive.versionCode.toLong()
         @Suppress("DEPRECATION")
         val oldCode = if (Build.VERSION.SDK_INT >= 28) current.longVersionCode else current.versionCode.toLong()
         check(newCode > oldCode) { Strings.t("The downloaded file is not newer than this version") }
