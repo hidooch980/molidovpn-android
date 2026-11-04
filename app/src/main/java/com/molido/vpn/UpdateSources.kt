@@ -15,9 +15,10 @@ import java.net.URI
  * second worker on a custom domain, an R2 public bucket, an ArvanCloud bucket). A mirror is a plain
  * folder holding `latest.json` (GitHub "latest release" shape) next to the APK files.
  *
- * Trust: a mirror is never trusted. The APK must (1) match the SHA-256 the metadata lists, when it
- * lists one (GitHub's `digest`, or `sha256` that our workflow writes), and (2) ALWAYS be signed with
- * the same certificate as the installed app — checked in [AppUpdater] before the installer opens.
+ * Trust: a mirror is never trusted. The APK must (1) include a valid SHA-256 in release metadata
+ * (`digest` from GitHub or `sha256` from our worker) and match it byte-for-byte, and (2) ALWAYS be
+ * signed with the same certificate lineage as the installed app — checked in [AppUpdater] before
+ * the installer opens. Missing or malformed hashes make an APK ineligible for installation.
  */
 object UpdateSources {
 
