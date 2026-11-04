@@ -115,8 +115,13 @@ final class MolidoAetherPacketAdapter {
                     self.finishStartup(.success(()))
                 } else if DispatchTime.now() >= self.startupDeadline {
                     self.cancelReadinessTimer()
-                    self.finishStartup(.failure(AdapterError.readinessTimeout))
-                    self.fail(AdapterError.readinessTimeout)
+                    let error = AdapterError.readinessTimeout
+                    if self.readyHandler != nil {
+                        self.finishStartup(.failure(error))
+                        self.stop()
+                    } else {
+                        self.fail(error)
+                    }
                 }
             }
             self.readinessTimer = timer
