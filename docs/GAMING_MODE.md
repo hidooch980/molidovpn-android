@@ -13,7 +13,7 @@ Rank available routes for interactive games using measured latency distribution,
 
 ## Existing Android DNS preset safeguard
 
-Selecting one of the legacy Iranian Gaming DNS presets requires an explicit confirmation. The confirmation explains that DNS requests are routed outside the VPN tunnel and may be visible to the local network or ISP. Consent is stored separately from the preset: a migrated or previously saved gaming preset without the consent bit falls back to the connection mode's tunnel DNS. On Android versions below 13, direct routing is unavailable and the service also falls back to tunnel DNS. Re-selecting a gaming preset and accepting the warning is required to enable the direct route. This is an explicit-risk option, not a leak-free mode.
+Secure gaming route scoring does not enable direct Gaming DNS and does not change DNS routing. DNS stays inside the VPN tunnel by default. Selecting one of the legacy Iranian Gaming DNS presets requires an explicit confirmation. The confirmation explains that DNS requests are routed outside the VPN tunnel and may be visible to the local network or ISP. Consent is stored separately from the preset: a migrated or previously saved gaming preset without the consent bit falls back to the connection mode's tunnel DNS. On Android versions below 13, direct routing is unavailable and the service also falls back to tunnel DNS. Re-selecting a gaming preset and accepting the warning is required to enable the direct route. This is an explicit-risk option, not a leak-free mode.
 
 ## Recommended operating modes
 
