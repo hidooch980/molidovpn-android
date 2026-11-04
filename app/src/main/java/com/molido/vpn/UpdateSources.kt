@@ -21,6 +21,11 @@ import java.net.URI
  */
 object UpdateSources {
 
+    const val MAX_APK_BYTES: Long = 300L * 1024L * 1024L
+    fun withinApkSizeLimit(declaredBytes: Long, receivedBytes: Long): Boolean =
+        (declaredBytes < 0L || declaredBytes <= MAX_APK_BYTES) &&
+            receivedBytes in 0L..MAX_APK_BYTES
+
     const val WORKER_RELEASE_URL = "https://molido-sub.hidooch980.workers.dev/app/latest.json"
     const val GITHUB_RELEASE_URL = "https://api.github.com/repos/hidooch980/molidovpn/releases/latest"
 
