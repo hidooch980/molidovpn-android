@@ -114,7 +114,7 @@ class AppUpdater(private val activity: Activity) {
         worker.execute {
             val release = runCatching(::latestRelease).getOrNull()
             if (release == null) { busy = false; return@execute }
-            if (!isNewer(release.version, appVersion())) { busy = false; return@execute }
+            if (!UpdateSources.isNewerVersion(release.version, appVersion())) { busy = false; return@execute }
             val quiet = !release.critical && !isMetered()
             val apk = if (quiet) runCatching { prefetch(release) }.getOrNull() else null
             activity.runOnUiThread {
