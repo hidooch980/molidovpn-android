@@ -216,12 +216,12 @@ final class VPNController: ObservableObject {
                 self?.egressIP = ip
                 guard let baseline = self?.preTunnelEgressIP else {
                     self?.egressVerified = false
-                    self?.message = "IP خروجی دریافت شد، اما IP پیش از اتصال ثبت نشده بود؛ مسیر VPN مستقلأ تأیید نشد."
+                    self?.message = "IP خروجی دریافت شد، اما IP پیش از اتصال ثبت نشده بود؛ مسیر VPN مستقلاً تأیید نشد."
                     return
                 }
                 guard baseline != ip else {
                     self?.egressVerified = false
-                    self?.message = "IP خروجی با IP پیش از اتصال یکسان است؛ عبور از تونل مستقلأ قابل تأیید نیست."
+                    self?.message = "IP خروجی با IP پیش از اتصال یکسان است؛ عبور از تونل مستقلاً قابل تأیید نیست."
                     return
                 }
                 self?.egressVerified = true
@@ -277,7 +277,7 @@ final class VPNController: ObservableObject {
 
     var statusLabel: String {
         switch status {
-        case .connected: return egressVerified ? "اتصال و عبور تأیید شد" : "تونل متصل؛ بررسی عبور"
+        case .connected: return egressVerified ? "تونل متصل؛ IP خروجی تغییر کرده" : "تونل متصل؛ بررسی IP خروجی"
         case .connecting, .reasserting: return "در حال اتصال"
         case .disconnecting: return "در حال قطع"
         case .disconnected: return "قطع"
