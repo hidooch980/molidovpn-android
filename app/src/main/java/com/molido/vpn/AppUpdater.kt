@@ -73,7 +73,7 @@ class AppUpdater(private val activity: Activity) {
                 if (activity.isFinishing || activity.isDestroyed) return@runOnUiThread
                 val release = result.getOrNull()
                 if (silent) {
-                    if (release != null && isNewer(release.version, appVersion())) {
+                    if (release != null && UpdateSources.isNewerVersion(release.version, appVersion())) {
                         publishHomeUpdate(release, ready = false)
                         if (release.critical) announceUpdate(release)
                         else if (!isMetered()) {
@@ -91,7 +91,7 @@ class AppUpdater(private val activity: Activity) {
                     .onSuccess { found ->
                         when {
                             found == null -> showMessage(Strings.t("No update available"), Strings.t("No compatible release was found"))
-                            !isNewer(found.version, appVersion()) ->
+                            !UpdateSources.isNewerVersion(found.version, appVersion()) ->
                                 showMessage(Strings.t("You're up to date"), Strings.tf("MolidoVPN %s is installed", appVersion()))
                             else -> {
                                 publishHomeUpdate(found, ready = readyApk?.exists() == true)
@@ -403,7 +403,7 @@ class AppUpdater(private val activity: Activity) {
 
     /** Check the static mirrors first, then the GitHub release API, worker and configured mirrors. */
     private fun latestRelease(): Release? = UpdateSources.latest(
-        UpdateSources.releaseJsonUrls(ResilienceConfig.updateMirrors(activity)), appVersion(), ::isNewer, ::fetchRelease,
+        UpdateSources.releaseJsonUrls(ResilienceConfig.updateMirrors(activity)), appVersion(), UpdateSources::isNewerVersion, ::fetchRelease,
     )
 
     private fun fetchRelease(url: String): Release? {
@@ -495,14 +495,5 @@ class AppUpdater(private val activity: Activity) {
     private companion object {
         const val RELEASES_PAGE_URL = "https://github.com/hidooch980/molidovpn-android/releases/latest"
 
-        fun isNewer(remote: String, local: String): Boolean {
-            val remoteParts = remote.split('.', '-', '+').map { it.toIntOrNull() ?: 0 }
-            val localParts = local.split('.', '-', '+').map { it.toIntOrNull() ?: 0 }
-            for (index in 0 until maxOf(remoteParts.size, localParts.size)) {
-                val comparison = remoteParts.getOrElse(index) { 0 }.compareTo(localParts.getOrElse(index) { 0 })
-                if (comparison != 0) return comparison > 0
-            }
-            return false
-        }
     }
 }
