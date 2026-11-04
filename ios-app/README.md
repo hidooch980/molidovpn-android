@@ -25,6 +25,7 @@ For a physical-device build and distribution, configure an Apple Developer Team,
 ## Security contract
 
 - The App Group bootstrap is versioned and contains configuration references, never credentials.
+- A private `engine/` directory is created before Aether starts with iOS file protection (`completeUntilFirstUserAuthentication`) and restrictive POSIX permissions. Existing identity/cache files are re-protected on each provider start because Aether persists MASQUE identity material, including tokens and certificates, beneath its config path.
 - Secrets are stored as opaque data in the shared Keychain access group using `AfterFirstUnlockThisDeviceOnly`.
 - `MolidoTunnelBootstrapStore` writes the bootstrap atomically and applies file protection suitable for a tunnel that starts after the first device unlock.
 - The engine configuration file must be provisioned separately in the App Group. A missing file is a hard failure; no sample credentials or fabricated profile are installed.
@@ -37,7 +38,7 @@ For a physical-device build and distribution, configure an Apple Developer Team,
 - Honest connection state; no fabricated latency, throughput, or connected status.
 - Packet tunnel extension target with fail-closed startup validation.
 - Swift packet-channel adapter bridging Network Extension packets to Aether's bounded IPv4/IPv6 queues; it is not started until native engine readiness is wired.
-- Shared Keychain helper and atomic bootstrap storage contract.
+- Shared Keychain helper, atomic bootstrap storage, and protected Aether identity directory.
 - No production VPN transport, node discovery, server credentials, or release signing yet.
 
 ## Next engineering gates
