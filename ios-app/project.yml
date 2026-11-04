@@ -28,6 +28,7 @@ targets:
         SWIFT_EMIT_LOC_STRINGS: YES
     dependencies:
       - target: MolidoPacketTunnel
+        embed: true
   MolidoPacketTunnel:
     type: app-extension
     platform: iOS
