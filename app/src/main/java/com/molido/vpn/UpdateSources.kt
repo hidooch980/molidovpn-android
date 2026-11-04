@@ -110,7 +110,7 @@ object UpdateSources {
     fun releaseNotes(markdown: String): List<String> = markdown.lineSequence()
         .map { it.trim() }
         .filter { it.startsWith("- ") || it.startsWith("* ") || it.startsWith("• ") }
-        .map { it.drop(2).trim().replace(Regex("\\s+"), " ") }
+        .map { it.drop(2).trim().replace(Regex("\s+"), " ") }
         .filter { it.isNotBlank() && !it.startsWith("http", ignoreCase = true) }
         .map { if (it.length > 240) it.take(237).trimEnd() + "…" else it }
         .distinct()
@@ -130,7 +130,7 @@ object UpdateSources {
     )
 
     private val SEMVER = Regex(
-        """^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-([0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*))?(?:\\+([0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*))?$"""
+        """^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$"""
     )
 
     /** Strict SemVer comparison; stable releases outrank prereleases and build metadata is ignored. */
