@@ -60,23 +60,36 @@ object UpdateSources {
             mirrors.map { "${it.trimEnd('/')}/latest.json" }).filter(::isSecureHttpsUrl).distinct()
 
     /**
-     * The first source that answers wins, except that a static copy (live/sub branch, refreshed every few
-     * minutes by a cron job) saying "nothing newer" is double-checked once against GitHub's own API, so a
-     * just-published release is not hidden behind a stale copy. The Worker is never asked for that.
+     * Try every configured source until one has a release newer than the installed app.
+     * Static copies are double-checked against GitHub, but a stale or empty copy must not
+     * prevent the worker and user-configured mirrors from being tried.
      */
     fun latest(urls: List<String>, installed: String, isNewer: (String, String) -> Boolean, fetch: (String) -> Release?): Release? {
         var lastError: Exception? = null
+        var successfulFetch = false
         for (url in urls) {
-            val release = try { fetch(url) } catch (e: Exception) { lastError = e; continue }
+            val release = try {
+                fetch(url).also { successfulFetch = true }
+            } catch (e: Exception) {
+                lastError = e
+                continue
+            }
             val static = url.startsWith(LiveSync.RAW) || url.startsWith(LiveSync.CDN) ||
                 url.startsWith(StaticFirst.RAW) || url.startsWith(StaticFirst.CDN)
             if (static && (release == null || !isNewer(release.version, installed))) {
-                val fresh = runCatching { fetch(GITHUB_RELEASE_URL) }.getOrNull()
+                val fresh = try {
+                    fetch(GITHUB_RELEASE_URL).also { successfulFetch = true }
+                } catch (e: Exception) {
+                    lastError = e
+                    null
+                }
                 if (fresh != null && isNewer(fresh.version, installed)) return fresh
+                continue
             }
-            return release
+            if (release != null && isNewer(release.version, installed)) return release
         }
-        throw lastError ?: IllegalStateException("no release source")
+        if (!successfulFetch && lastError != null) throw lastError
+        return null
     }
 
     /** Extract concise, user-facing bullet points from GitHub release Markdown. */
