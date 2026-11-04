@@ -76,7 +76,7 @@ class Ikev2VpnActivity : Activity() {
         root.addView(Button(this).apply {
             text = Strings.t("Import server CA certificate (PEM)")
             setOnClickListener {
-                android.app.AlertDialog.Builder(this)
+                android.app.AlertDialog.Builder(this@Ikev2VpnActivity)
                     .setTitle(Strings.t("Trust server CA certificate?"))
                     .setMessage(Strings.t("A CA certificate can authorize VPN server identities. Import only the certificate downloaded from the provider's official site; a malicious CA could impersonate the VPN server."))
                     .setNegativeButton(Strings.t("Cancel"), null)
@@ -95,6 +95,10 @@ class Ikev2VpnActivity : Activity() {
         root.addView(Button(this).apply {
             text = Strings.t("Get a free temporary IKEv2 account")
             setOnClickListener {
+                // VPN Jantit currently lists two free Istanbul IKEv2 endpoints.
+                // Start with server 6; the user still creates their own short-lived account.
+                server.setText(FREE_SERVER_HOST)
+                ikeIdentity.setText(FREE_SERVER_IDENTITY)
                 startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(FREE_PROVIDER_URL)))
             }
         }, matchWidth())
@@ -116,7 +120,7 @@ class Ikev2VpnActivity : Activity() {
             setPadding(0, 8.dp(), 0, 4.dp())
         })
         return EditText(this).also { input ->
-            input.singleLine = true
+            input.setSingleLine(true)
             input.hint = Strings.t(label)
             parent.addView(input, matchWidth())
         }
@@ -266,5 +270,7 @@ class Ikev2VpnActivity : Activity() {
         private const val REQUEST_CA_CERTIFICATE = 7302
         private const val MAX_CA_BYTES = 256 * 1024
         private const val FREE_PROVIDER_URL = "https://www.vpnjantit.com/create-free-account?server=tr6&type=IKEV2"
+        private const val FREE_SERVER_HOST = "tr6.vpnjantit.com"
+        private const val FREE_SERVER_IDENTITY = "vpnjantit"
     }
 }
