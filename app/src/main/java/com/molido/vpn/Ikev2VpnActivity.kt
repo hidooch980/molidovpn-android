@@ -105,7 +105,8 @@ class Ikev2VpnActivity : Activity() {
         val eapUser = username.text.toString()
         val eapPass = password.text.toString()
         val identity = ikeIdentity.text.toString().ifBlank { eapUser }.trim()
-        if (!validServer(host) || identity.isBlank() || eapUser.isBlank() || eapPass.isBlank()) {
+        if (!Ikev2ProfileValidation.isValidServer(host) ||
+            !Ikev2ProfileValidation.hasEapCredentials(identity, eapUser, eapPass)) {
             message("Enter a valid server, IKE identity, EAP username and password.")
             return
         }
@@ -182,12 +183,6 @@ class Ikev2VpnActivity : Activity() {
         }
     }
 
-    private fun validServer(value: String): Boolean {
-        if (value.isBlank() || value.length > 253 || value.any { it.isWhitespace() }) return false
-        if (android.util.Patterns.IP_ADDRESS.matcher(value).matches()) return true
-        val ascii = try { java.net.IDN.toASCII(value) } catch (_: IllegalArgumentException) { return false }
-        return ascii.length <= 253 && android.util.Patterns.DOMAIN_NAME.matcher(ascii).matches()
-    }
 
     private fun message(value: String) {
         status.text = Strings.t(value)
