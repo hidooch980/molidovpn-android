@@ -6681,7 +6681,7 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
                 runCatching { InetAddress.getByName(address) }.getOrNull()
             }
             .distinct()
-            .filter { it.hostAddress !in forcedDns }
+            .filter { address -> address.hostAddress?.let { it !in forcedDns } == true }
             .forEach { addDnsServer(it) }
 
         ConnectionLog.record("DNS forced to public resolvers, carrier DNS excluded")
