@@ -60,6 +60,14 @@ jobs:
       - name: Validate release version and prevent tag overwrite
         run: |
           set -euo pipefail
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid release version: $VERSION" >&2
+            exit 1
+          fi
+          if git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null 2>&1; then
+            echo "Release tag v$VERSION already exists; refusing to overwrite it." >&2
+            exit 1
+          fi
 
       - name: Signing key (preserve signing identity for existing MolidoVPN installs)
         env:
@@ -82,14 +90,6 @@ jobs:
             -PaetheryKeystore=release.keystore \
             -PmolidoVersionCode=$((400000 + VERSION_CODE)) \
             -PmolidoVersionName=$VERSION
-          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Invalid release version: $VERSION" >&2
-            exit 1
-          fi
-          if git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null 2>&1; then
-            echo "Release tag v$VERSION already exists; refusing to overwrite it." >&2
-            exit 1
-          fi
           mkdir dist
           for f in app/build/outputs/apk/release/*.apk; do
             case "$f" in
