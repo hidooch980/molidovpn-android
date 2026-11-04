@@ -5,6 +5,8 @@ import android.app.job.JobParameters
 import android.app.job.JobScheduler
 import android.content.ComponentName
 import android.content.Context
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 /**
  * Keeps the SHARD node list fresh in the background.
@@ -101,16 +103,26 @@ class ShardRefreshJob : android.app.job.JobService() {
         CleanIpScanner.scanIfDue(applicationContext)
         // V2Ray servers pool (hourly floor, own thread, fire-and-forget).
         V2raySubscription.refreshIfDue(applicationContext)
-        // The user's own subscription URLs (6-hour floor, own thread).
-        MyConfigs.refreshIfDue(applicationContext)
-        ShardSubscription.refreshIfDue(applicationContext) {
-            // Never reschedule on failure. The next periodic window is minutes to
-            // hours away and the cache is still serviceable; retrying a blocked or
-            // flaky network immediately is how a background fetch turns into the
-            // battery drain this design exists to avoid.
-            jobFinished(params, false)
-        }
-        // Work continues on ShardSubscription's own thread.
+        // Keep the JobService alive until both server-list and user-subscription
+        // refreshes have completed; otherwise Android may stop the process after
+        // jobFinished while MyConfigs is still fetching on its worker thread.
+        val completed = CountDownLatch(2)
+        MyConfigs.refreshIfDue(applicationContext) { completed.countDown() }
+        ShardSubscription.refreshIfDue(applicationContext) { completed.countDown() }
+        Thread({
+            try {
+                // Every request has a bounded connect/read timeout. Do not hold a
+                // scheduled job indefinitely if a provider stalls or a long list
+                // of user subscriptions is temporarily unreachable.
+                completed.await(8, TimeUnit.MINUTES)
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+            } finally {
+                // A failed refresh keeps its last-known-good cache. Do not spin
+                // immediate retries; the next scheduled/foreground window retries.
+                jobFinished(params, false)
+            }
+        }, "catalog-refresh-finish").apply { isDaemon = true }.start()
         return true
     }
 
