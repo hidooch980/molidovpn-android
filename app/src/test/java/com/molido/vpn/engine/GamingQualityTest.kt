@@ -41,6 +41,11 @@ class GamingQualityTest {
         assertEquals(null, GamingQuality.jitterMs(listOf(ok(30))))
     }
 
+    @Test fun medianJitterDoesNotOverflowForLargeValidRttValues() {
+        val nearLimit = listOf(ok(Long.MAX_VALUE - 3), ok(Long.MAX_VALUE - 1))
+        assertEquals(2L, GamingQuality.jitterMs(nearLimit))
+    }
+
     @Test fun scoreIsBoundedAndMissingOptionalMetricsAreNeutral() {
         val score = GamingQuality.score(GamingMeasurement(listOf(ok(45), ok(46), ok(44))))
         assertTrue(score in 0.0..100.0)
