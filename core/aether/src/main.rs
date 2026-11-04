@@ -1977,13 +1977,9 @@ async fn run_masque_tunnel(
     } else if let Some(fd) = options.tun_fd {
         tokio::spawn(async move { while addr_rx.recv().await.is_some() {} });
         log::info!("[+] Android TUN bridge active");
+        let tun_ipv4 = parse_local_v4(&identity.ipv4);
         tokio::spawn(async move {
-            if let Err(error) = tun::bridge(
-                fd,
-                parse_local_v4(&identity.ipv4),
-                inbound_rx,
-                outbound_tx,
-            ).await {
+            if let Err(error) = tun::bridge(fd, tun_ipv4, inbound_rx, outbound_tx).await {
                 log::error!("[-] Android TUN bridge stopped: {error}");
             }
         })
