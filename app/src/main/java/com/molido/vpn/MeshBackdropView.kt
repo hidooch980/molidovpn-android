@@ -50,7 +50,6 @@ class MeshBackdropView(
         isClickable = false
         isFocusable = false
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
-        setLayerType(LAYER_TYPE_SOFTWARE, null)
     }
 
     override fun onDraw(canvas: Canvas) {
