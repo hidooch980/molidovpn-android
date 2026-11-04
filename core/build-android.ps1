@@ -81,7 +81,7 @@ try {
     $ErrorActionPreference = 'Continue'
     $oldNativeErrorPreference = $PSNativeCommandUseErrorActionPreference
     $PSNativeCommandUseErrorActionPreference = $false
-    & cargo ndk -t $Abi --platform $Api build --release --lib
+    & cargo ndk -t $Abi --platform $Api build --release --lib --locked
     $bootstrapExit = $LASTEXITCODE
     $PSNativeCommandUseErrorActionPreference = $oldNativeErrorPreference
     $ErrorActionPreference = 'Stop'
@@ -120,7 +120,7 @@ $env:RUSTFLAGS = "$env:RUSTFLAGS -C link-arg=-Wl,-soname,libaether.so -C link-ar
 
 Push-Location $crate
 try {
-    cargo build --release --lib --target $targetTriple
+    cargo build --release --lib --target $targetTriple --locked
     $library = (Join-Path $target "$targetTriple/release/libaether.so").Replace('\', '/')
     foreach ($destination in @(
         (Join-Path $root "core/android-libs/$Abi"),
