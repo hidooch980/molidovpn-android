@@ -224,6 +224,7 @@ class AppUpdater(private val activity: Activity) {
     }
 
     private fun downloadApk(url: String, release: Release): File {
+        require(UpdateSources.isSecureHttpsUrl(url)) { "Insecure update URL rejected" }
         val dir = File(activity.cacheDir, "updates").apply { mkdirs() }
         dir.listFiles()?.forEach { it.delete() }
         val target = File(dir, "MolidoVPN-${release.version}.apk")
@@ -236,6 +237,7 @@ class AppUpdater(private val activity: Activity) {
         }
         try {
             check(connection.responseCode == HttpURLConnection.HTTP_OK) { "HTTP ${connection.responseCode}" }
+            check(connection.url.protocol.equals("https", ignoreCase = true)) { "HTTPS downgrade redirect rejected" }
             val total = connection.contentLengthLong
             var received = 0L
             var lastPercent = -1
@@ -394,6 +396,7 @@ class AppUpdater(private val activity: Activity) {
     )
 
     private fun fetchRelease(url: String): Release? {
+        require(UpdateSources.isSecureHttpsUrl(url)) { "Insecure release metadata URL rejected" }
         val connection = (URL(url).openConnection() as HttpURLConnection).apply {
             connectTimeout = 10_000
             readTimeout = 20_000
@@ -402,6 +405,7 @@ class AppUpdater(private val activity: Activity) {
         }
         try {
             if (connection.responseCode == HttpURLConnection.HTTP_NOT_FOUND) return null
+            check(connection.url.protocol.equals("https", ignoreCase = true)) { "HTTPS downgrade redirect rejected" }
             check(connection.responseCode == HttpURLConnection.HTTP_OK) { "${URL(url).host} returned ${connection.responseCode}" }
             // MolidoVPN release assets are named MolidoVPN-android-arm64.apk / -armv7.apk / -universal.apk.
             return UpdateSources.parseRelease(
