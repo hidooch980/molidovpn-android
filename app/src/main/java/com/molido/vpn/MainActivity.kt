@@ -1701,7 +1701,7 @@ class MainActivity : Activity() {
         ).apply { topMargin = dp(7) })
 
 
-        // MolidoVPN home order: connect control -> location card -> mode chips ->
+        // Molido Mesh AI home order: connect control -> location card -> mode chips ->
         // mode add-on card -> stats.
         addView(exitNodeCard, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
@@ -2746,7 +2746,7 @@ class MainActivity : Activity() {
             .toList()
         val app = fromDisk?.takeIf { it.isNotBlank() } ?: ConnectionLog.snapshot().joinToString("\n")
         return buildString {
-            append("MolidoVPN ")
+            append("Molido Mesh AI ")
             append(appVersionOrNull() ?: "?")
             append(" · ")
             append(selectedProtocol.label)
@@ -2813,7 +2813,7 @@ class MainActivity : Activity() {
                         Intent.createChooser(
                             Intent(Intent.ACTION_SEND)
                                 .setType("text/plain")
-                                .putExtra(Intent.EXTRA_SUBJECT, "MolidoVPN log")
+                                .putExtra(Intent.EXTRA_SUBJECT, "Molido Mesh AI log")
                                 .putExtra(Intent.EXTRA_STREAM, uri)
                                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION),
                             Strings.t("Share log"),
@@ -2916,7 +2916,7 @@ class MainActivity : Activity() {
             .setView(box)
             .setNeutralButton(Strings.t("Copy")) { _, _ ->
                 getSystemService(ClipboardManager::class.java)
-                    ?.setPrimaryClip(ClipData.newPlainText("MolidoVPN settings", json))
+                    ?.setPrimaryClip(ClipData.newPlainText("Molido Mesh AI settings", json))
                 toastShort(Strings.t("Settings copied — this text holds no passwords"))
             }
             .setPositiveButton(Strings.t("Share")) { _, _ ->
@@ -3698,8 +3698,8 @@ class MainActivity : Activity() {
         content.addView(navRow(Strings.t("Donate (حمایت مالی)"), "♥") { showDonateSheet() }, mainParams())
         content.addView(navRow(Strings.t("About"), "v${appVersion()}") {
             android.app.AlertDialog.Builder(this)
-                .setTitle("MolidoVPN")
-                .setMessage("MolidoVPN ${appVersion()}\nAGPL-3.0")
+                .setTitle("Molido Mesh AI")
+                .setMessage("Molido Mesh AI ${appVersion()}\nAGPL-3.0")
                 .setPositiveButton(Strings.t("Check for updates")) { _, _ -> appUpdater.checkForUpdate() }
                 .setNeutralButton(Strings.t("Open-source licenses")) { _, _ -> showLicensesSheet() }
                 .setNegativeButton(Strings.t("Close"), null)
@@ -4560,7 +4560,7 @@ class MainActivity : Activity() {
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.WRAP_CONTENT,
         ).apply { topMargin = dp(8) })
-        content.addView(label("MolidoVPN ${appVersion()}", 11.5f, Sculpt.withAlpha(MUTED, 0.7f)).apply {
+        content.addView(label("Molido Mesh AI ${appVersion()}", 11.5f, Sculpt.withAlpha(MUTED, 0.7f)).apply {
             gravity = Gravity.CENTER_HORIZONTAL
             letterSpacing = spacing(0.06f)
             setPadding(0, dp(22), 0, 0)
@@ -8502,7 +8502,7 @@ class MainActivity : Activity() {
 
     /**
      * Shares this install's own APK (base.apk; the app ships as whole per-ABI APKs, not splits).
-     * Copied to cacheDir/share under a readable name so receivers see "MolidoVPN-x.y.z.apk".
+     * Copied to cacheDir/share under a readable name so receivers see "MolidoMeshAI-x.y.z.apk".
      */
     private fun shareApkFile() {
         Thread({
@@ -8511,7 +8511,7 @@ class MainActivity : Activity() {
                 val version = runCatching { packageManager.getPackageInfo(packageName, 0).versionName }.getOrNull() ?: "app"
                 val dir = File(cacheDir, "share").apply { mkdirs() }
                 dir.listFiles()?.forEach { it.delete() }
-                val target = File(dir, "MolidoVPN-$version.apk")
+                val target = File(dir, "MolidoMeshAI-$version.apk")
                 source.inputStream().use { input -> target.outputStream().use { input.copyTo(it, 256 * 1024) } }
                 FileProvider.getUriForFile(this, "$packageName.fileprovider", target)
             }
@@ -8565,7 +8565,7 @@ class MainActivity : Activity() {
             .setMessage(id + "\n\n" + Strings.t("INSTALL_ID_BODY"))
             .setPositiveButton(Strings.t("Copy")) { _, _ ->
                 getSystemService(android.content.ClipboardManager::class.java)
-                    ?.setPrimaryClip(android.content.ClipData.newPlainText("MolidoVPN install ID", id))
+                    ?.setPrimaryClip(android.content.ClipData.newPlainText("Molido Mesh AI install ID", id))
                 toastShort(Strings.t("Copied"))
             }
             .setNegativeButton(Strings.t("OK"), null)
@@ -8579,7 +8579,7 @@ class MainActivity : Activity() {
             packageManager.getPackageInfo(packageName, 0).versionName
         }.getOrNull().orEmpty()
         val text = buildString {
-            appendLine("MolidoVPN $version")
+            appendLine("Molido Mesh AI $version")
             appendLine("Install ID: ${InstallId.get(this@MainActivity)}")
             appendLine("Android ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})")
             appendLine("Operator: ${ConnectionReports.operator(this@MainActivity)}")
@@ -8592,7 +8592,7 @@ class MainActivity : Activity() {
         Diagnostics.upload(this, userAsked = true)
         try {
             getSystemService(android.content.ClipboardManager::class.java)
-                ?.setPrimaryClip(android.content.ClipData.newPlainText("MolidoVPN report", text))
+                ?.setPrimaryClip(android.content.ClipData.newPlainText("Molido Mesh AI report", text))
             android.app.AlertDialog.Builder(this)
                 .setTitle(Strings.t("Report a problem"))
                 .setMessage(Strings.t("REPORT_COPIED_BODY"))
