@@ -155,9 +155,9 @@ class Ikev2VpnActivity : Activity() {
                 message("No IKEv2 profile is ready.")
                 return
             }
-            // Provision again after consent: the profile is in memory only until
-            // Android accepts it; never persist it in app preferences.
-            manager.provisionVpnProfile(profile)
+            // provisionVpnProfile() already installed this profile and returned
+            // the consent intent. After RESULT_OK, start that provisioned profile.
+            // Do not provision it a second time or risk re-triggering consent.
             if (Build.VERSION.SDK_INT >= 33) {
                 manager.startProvisionedVpnProfileSession()
             } else {
