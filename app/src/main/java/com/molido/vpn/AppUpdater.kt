@@ -418,11 +418,27 @@ class AppUpdater(private val activity: Activity) {
             if (connection.responseCode == HttpURLConnection.HTTP_NOT_FOUND) return null
             check(connection.url.protocol.equals("https", ignoreCase = true)) { "HTTPS downgrade redirect rejected" }
             check(connection.responseCode == HttpURLConnection.HTTP_OK) { "${URL(url).host} returned ${connection.responseCode}" }
+            // Metadata is untrusted too: bound both advertised and streamed size before parsing JSON.
+            val declared = connection.contentLengthLong
+            check(UpdateSources.withinMetadataSizeLimit(declared, 0L)) { "Release metadata exceeds size limit" }
+            val body = connection.inputStream.use { input ->
+                val output = java.io.ByteArrayOutputStream()
+                val buffer = ByteArray(8 * 1024)
+                var received = 0L
+                while (true) {
+                    val count = input.read(buffer)
+                    if (count < 0) break
+                    received += count
+                    check(UpdateSources.withinMetadataSizeLimit(declared, received)) {
+                        "Release metadata exceeds size limit"
+                    }
+                    output.write(buffer, 0, count)
+                }
+                check(declared <= 0L || received == declared) { "Incomplete release metadata" }
+                output.toString(Charsets.UTF_8.name())
+            }
             // MolidoVPN release assets are named MolidoVPN-android-arm64.apk / -armv7.apk / -universal.apk.
-            return UpdateSources.parseRelease(
-                connection.inputStream.bufferedReader().use { reader -> reader.readText() },
-                Build.SUPPORTED_ABIS.toList(),
-            )
+            return UpdateSources.parseRelease(body, Build.SUPPORTED_ABIS.toList())
         } finally {
             connection.disconnect()
         }
