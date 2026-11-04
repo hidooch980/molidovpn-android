@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import re
 import sys
-import time
 from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from html.parser import HTMLParser
@@ -87,9 +86,9 @@ def main() -> None:
             if code:
                 account_links[code] = absolute
         plain = re.sub(r"<[^>]+>", " ", html)
-        plain = re.sub(r"\\s+", " ", plain)
-        available = bool(re.search(r"\\bAvailable\\b", plain, re.I)) and not bool(
-            re.search(r"\\b(Not Available|Unavailable)\\b", plain, re.I)
+        plain = re.sub(r"\s+", " ", plain)
+        available = bool(re.search(r"\bAvailable\b", plain, re.I)) and not bool(
+            re.search(r"\b(Not Available|Unavailable)\b", plain, re.I)
         )
         return [
             {
