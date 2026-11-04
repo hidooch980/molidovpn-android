@@ -25,6 +25,7 @@ targets:
         INFOPLIST_KEY_CFBundleDisplayName: Molido Mesh AI
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.utilities
         CODE_SIGN_ENTITLEMENTS: Resources/MolidoMeshAI.entitlements
+        INFOPLIST_KEY_MolidoKeychainAccessGroup: "$(AppIdentifierPrefix)com.molido.meshai.shared"
         GENERATE_INFOPLIST_FILE: YES
         SWIFT_EMIT_LOC_STRINGS: YES
     dependencies:
@@ -43,6 +44,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.molido.meshai.PacketTunnel
         PRODUCT_NAME: MolidoPacketTunnel
         CODE_SIGN_ENTITLEMENTS: Resources/MolidoPacketTunnel.entitlements
+        INFOPLIST_KEY_MolidoKeychainAccessGroup: "$(AppIdentifierPrefix)com.molido.meshai.shared"
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_NSExtension_NSExtensionPointIdentifier: com.apple.networkextension.packet-tunnel
         INFOPLIST_KEY_NSExtension_NSExtensionPrincipalClass: "$(PRODUCT_MODULE_NAME).PacketTunnelProvider"
