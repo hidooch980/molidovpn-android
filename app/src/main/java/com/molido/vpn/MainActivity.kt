@@ -3909,6 +3909,13 @@ class MainActivity : Activity() {
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.WRAP_CONTENT,
         ).apply { topMargin = dp(8) })
+        content.addView(navRow(
+            Strings.t("IKEv2 / IPsec"),
+            Strings.t("Android 11+ system VPN; requires your own server and account"),
+        ) { startActivity(Intent(this, Ikev2VpnActivity::class.java)) }, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+        ).apply { topMargin = dp(8) })
         content.addView(createToggleRow(
             Strings.t("Secure gaming route scoring"),
             Strings.t("Prioritize p95 latency, jitter and packet loss for Smart Connect. DNS remains inside the VPN tunnel; no direct DNS bypass."),
