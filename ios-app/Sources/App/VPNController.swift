@@ -38,8 +38,7 @@ final class VPNController: ObservableObject {
         }
     }
 
-    /// Installs the iOS VPN profile. It does not claim a live tunnel until
-    /// the shared Molido transport core is integrated and verified.
+    /// Installs only Molido's profile. Secrets are never placed in providerConfiguration.
     func prepareProfile() {
         NETunnelProviderManager.loadAllFromPreferences { [weak self] managers, error in
             Task { @MainActor in
@@ -56,7 +55,10 @@ final class VPNController: ObservableObject {
                 let tunnel = NETunnelProviderProtocol()
                 tunnel.providerBundleIdentifier = self.providerBundleIdentifier
                 tunnel.serverAddress = "Molido Mesh AI"
-                tunnel.providerConfiguration = ["profileVersion": 1]
+                tunnel.providerConfiguration = [
+                    "profileVersion": MolidoTunnelConfiguration.currentVersion,
+                    "appGroupIdentifier": MolidoTunnelConfiguration.appGroupIdentifier
+                ]
 
                 manager.protocolConfiguration = tunnel
                 manager.localizedDescription = "Molido Mesh AI"
@@ -76,7 +78,7 @@ final class VPNController: ObservableObject {
                                 self.manager = manager
                                 self.profileInstalled = true
                                 self.status = manager.connection.status
-                                self.message = "پروفایل Molido آماده شد؛ موتور تونل هنوز باید متصل و آزمایش شود."
+                                self.message = "پروفایل Molido آماده شد؛ فایل تنظیمات موتور و کلید امن حساب هنوز باید provision شوند."
                             }
                         }
                     }
@@ -92,7 +94,7 @@ final class VPNController: ObservableObject {
         }
         do {
             try manager.connection.startVPNTunnel()
-            message = "درخواست اتصال ارسال شد؛ وضعیت واقعی تونل در حال بررسی است."
+            message = "درخواست اتصال ارسال شد؛ افزونه اعتبارسنجی تنظیمات را انجام می‌دهد."
         } catch {
             message = "اتصال برقرار نشد: \(error.localizedDescription)"
         }
