@@ -1465,11 +1465,33 @@ class MainActivity : Activity() {
             background = roundedBackground(SURFACE, 16, palette.divider)
             setOnClickListener { openNavigationDrawer() }
         }, LinearLayout.LayoutParams(dp(48), dp(48)))
-        addView(label("MOLIDO VPN", 17f, INK, TypefaceStyle.MEDIUM).apply {
-            maxLines = 1
-            ellipsize = android.text.TextUtils.TruncateAt.END
-        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
-            marginStart = dp(12)
+        val brandMark = label("M", 18f, palette.primaryContainer, TypefaceStyle.MEDIUM).apply {
+            gravity = Gravity.CENTER
+            background = android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
+                intArrayOf(palette.primary, palette.violet),
+            ).apply { cornerRadius = dp(14).toFloat() }
+            contentDescription = "Molido Mesh AI"
+        }
+        addView(brandMark, LinearLayout.LayoutParams(dp(40), dp(40)).apply {
+            marginStart = dp(10)
+        })
+        val brandStack = LinearLayout(this@MainActivity).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_VERTICAL
+            addView(label("MOLIDO", 16f, INK, TypefaceStyle.MEDIUM).apply {
+                maxLines = 1
+                letterSpacing = 0.08f
+            })
+            addView(label("MESH AI  ·  SECURE NETWORK", 9f, palette.primaryText, TypefaceStyle.MEDIUM).apply {
+                maxLines = 1
+                letterSpacing = 0.035f
+            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                topMargin = dp(1)
+            })
+        }
+        addView(brandStack, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+            marginStart = dp(9)
             marginEnd = dp(8)
         })
         statusPillText = label(Strings.t("Not connected"), 11.5f, MUTED, TypefaceStyle.MEDIUM).apply {
