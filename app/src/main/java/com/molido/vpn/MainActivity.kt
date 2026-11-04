@@ -8470,7 +8470,7 @@ class MainActivity : Activity() {
         actions.addView(createSettingsButton(Strings.t("Copy")) {
             runCatching {
                 getSystemService(ClipboardManager::class.java)
-                    ?.setPrimaryClip(ClipData.newPlainText("MolidoVPN", SITE_URL))
+                    ?.setPrimaryClip(ClipData.newPlainText("Molido Mesh AI", SITE_URL))
                 toastShort(Strings.t("Link copied"))
             }
         }, LinearLayout.LayoutParams(0, dp(44), 1f).apply { marginStart = dp(10) })
