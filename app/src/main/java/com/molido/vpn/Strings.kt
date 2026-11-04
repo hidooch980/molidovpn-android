@@ -836,6 +836,11 @@ object Strings {
         "Donate" to Triple("Donate", "حمایت مالی", "捐助"),
         "Donate (حمایت مالی)" to Triple("Donate", "حمایت مالی (Donate)", "捐助"),
         "Copied" to Triple("Copied", "کپی شد", "已复制"),
+        "New version available: Molido Mesh AI %s" to Triple("New version available: Molido Mesh AI %s", "نسخه جدید Molido Mesh AI منتشر شده: %s", "Molido Mesh AI 有新版本：%s"),
+        "Important update available: Molido Mesh AI %s" to Triple("Important update available: Molido Mesh AI %s", "به‌روزرسانی مهم Molido Mesh AI: نسخه %s", "Molido Mesh AI 重要更新：%s"),
+        "Molido Mesh AI %s is downloaded and verified" to Triple("Molido Mesh AI %s is downloaded and verified", "نسخه %s دانلود و امضای آن تأیید شده است", "Molido Mesh AI %s 已下载并验证"),
+        "Download update" to Triple("Download update", "دریافت به‌روزرسانی", "下载更新"),
+        "Install update" to Triple("Install update", "نصب به‌روزرسانی", "安装更新"),
         "Open" to Triple("Open", "باز کردن", "打开"),
     )
 
