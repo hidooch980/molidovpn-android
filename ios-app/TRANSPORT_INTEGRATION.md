@@ -14,11 +14,11 @@ Important distinction:
 
 A bounded, thread-safe FFI queue primitive now exists in `core/aether/src/packet_channel.rs` and is declared in `core/aether/include/aether.h`. It carries IPv4/IPv6 family metadata, limits each packet to 65,535 bytes, caps each direction at 256 packets / 2 MiB, reports backpressure, and does not consume a packet when the caller's output buffer is too small. Unit tests cover byte/family preservation, buffer sizing, and queue bounds.
 
-This primitive is **not yet wired into the Aether live transport** and the Swift provider does not call it. A real iOS tunnel still requires the native packet-channel adapter:
+The queue primitive is now connected to Aether's existing packet channels through `packet_channel::spawn_bridge`, and a dedicated `aether_start_json_with_packet_channel` C ABI starts MASQUE or WireGuard without accepting a Unix fd. The bridge forwards device-originated packets into the native transport and queues decrypted packets for the provider, with bounded backpressure and task cancellation. The Swift provider still does not call this API, and the native library is not yet linked into the Xcode target; therefore this is a Rust-side integration milestone, not a functioning iOS VPN. Remaining work:
 
 1. Extend Aether start options with an explicit packet-channel mode. Never overload a valid fd or silently fall back to SOCKS.
-2. Add bounded, back-pressured packet queues across the FFI boundary. Define ownership, packet-size limits (IPv4/IPv6 maximum), cancellation, and queue-full behavior.
-3. In `NEPacketTunnelProvider`, read packets using `packetFlow.readPackets`, enqueue them to Aether, dequeue Aether's outbound packets, and return them using `packetFlow.writePackets`.
+2. Link the Rust static library into the Xcode app-extension target and expose the C header through a module map/bridging header. Preserve the dedicated packet-channel start API.
+3. In `NEPacketTunnelProvider`, call `aether_start_json_with_packet_channel`, read packets using `packetFlow.readPackets`, enqueue them to Aether, dequeue Aether's outbound packets, and return them using `packetFlow.writePackets`.
 4. Preserve packet protocol-family metadata and IPv4/IPv6 routing. Apply DNS, MTU, included/excluded routes, and IPv6 policy from validated tunnel configuration.
 5. Bind socket protection to NetworkExtension's required routing model; avoid recursive tunnel routing.
 6. Stop both packet pumps and the Rust runtime deterministically from `stopTunnel`; ensure no stale callbacks reach a deallocated provider.
