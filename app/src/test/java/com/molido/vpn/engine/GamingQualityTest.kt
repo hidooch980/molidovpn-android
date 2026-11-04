@@ -8,6 +8,16 @@ class GamingQualityTest {
     private fun ok(rtt: Long) = GamingProbe(success = true, rttMs = rtt)
     private val lost = GamingProbe(success = false)
 
+    @Test fun adapterPreservesFailedProbesAndTheirOrder() {
+        val adapted = GamingQuality.measurement(
+            listOf(Probe(ok = true, latencyMs = 32), Probe(ok = false), Probe(ok = true, latencyMs = 45)),
+        )
+        assertEquals(
+            listOf(GamingProbe(true, 32), GamingProbe(false, null), GamingProbe(true, 45)),
+            adapted.probes,
+        )
+    }
+
     @Test fun noSamplesAndAllLossScoreZero() {
         assertEquals(0.0, GamingQuality.score(GamingMeasurement(emptyList())), 0.0)
         assertEquals(0.0, GamingQuality.score(GamingMeasurement(listOf(lost, lost))), 0.0)
