@@ -28,7 +28,7 @@ class NekoBoxShareCompatibilityTest {
         assertEquals(uuid, outbound.getJSONObject("settings")
             .getJSONArray("vnext").getJSONObject(0)
             .getJSONArray("users").getJSONObject(0).getString("id"))
-        assertEquals("reality", outbound.getJSONObject("streamSettings")
+        assertEquals("cdn.example", outbound.getJSONObject("streamSettings")
             .getJSONObject("realitySettings").getString("serverName"))
     }
 
