@@ -187,4 +187,33 @@ class SmartLiveTest {
         assertEquals(0.0, score, 0.0)
     }
 
+
+    @Test fun banditRejectsNonFiniteRewardsAndInvalidMethodIds() {
+        val original = """{"cell:43235@3":{"v2ray":{"n":2.0,"m":0.8},"_at":100}}"""
+        assertEquals(original, MethodBandit.record(original, "cell:43235@3", "v2ray", Double.NaN, 200))
+        assertEquals(original, MethodBandit.record(original, "cell:43235@3", "v2ray", Double.POSITIVE_INFINITY, 200))
+        assertEquals(original, MethodBandit.record(original, "cell:43235@3", "contains space", 0.2, 200))
+        assertEquals(original, MethodBandit.record(original, "cell:43235@3", "v2ray", 0.2, 0))
+    }
+
+    @Test fun banditRankingIgnoresCorruptArmsAndBoundsUnseenScore() {
+        val arms = mapOf(
+            "healthy" to MethodBandit.Arm(4.0, 0.8),
+            "nan-mean" to MethodBandit.Arm(3.0, Double.NaN),
+            "infinite-count" to MethodBandit.Arm(Double.POSITIVE_INFINITY, 0.9),
+            "out-of-range" to MethodBandit.Arm(2.0, 4.0),
+        )
+        val ranked = MethodBandit.rank(
+            arms,
+            listOf("healthy", "nan-mean", "infinite-count", "out-of-range", "new"),
+            unseen = Double.NaN,
+        )
+        assertTrue(ranked.values.all { it.isFinite() })
+        assertTrue(ranked.getValue("healthy") > ranked.getValue("new"))
+        assertEquals(0.55, ranked.getValue("nan-mean"), 1e-9)
+        assertEquals(0.55, ranked.getValue("infinite-count"), 1e-9)
+        assertEquals(0.55, ranked.getValue("out-of-range"), 1e-9)
+        assertEquals(0.55, ranked.getValue("new"), 1e-9)
+    }
+
 }
