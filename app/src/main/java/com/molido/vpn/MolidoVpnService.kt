@@ -4586,7 +4586,8 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
                     transport = transport,
                     validated = caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED),
                     metered = !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED),
-                    roaming = !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_ROAMING),
+                    roaming = caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) &&
+                        !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_ROAMING),
                     downstreamKbps = caps.linkDownstreamBandwidthKbps.coerceAtLeast(0),
                     upstreamKbps = caps.linkUpstreamBandwidthKbps.coerceAtLeast(0),
                     hasDefaultRoute = defaultRoute,
