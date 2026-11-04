@@ -113,6 +113,25 @@ class UpdateReleaseNotesTest {
         assertEquals(hash, release?.sha256)
     }
 
+    @Test fun semanticVersionComparisonHandlesStableAndPrereleaseOrdering() {
+        assertTrue(UpdateSources.isNewerVersion("4.0.1", "4.0.0"))
+        assertTrue(UpdateSources.isNewerVersion("4.0.1", "4.0.1-rc.2"))
+        assertTrue(UpdateSources.isNewerVersion("4.0.1-rc.3", "4.0.1-rc.2"))
+        assertTrue(UpdateSources.isNewerVersion("4.0.1-rc.10", "4.0.1-rc.2"))
+        assertTrue(!UpdateSources.isNewerVersion("4.0.1-rc.1", "4.0.1"))
+        assertTrue(!UpdateSources.isNewerVersion("4.0.1+build.2", "4.0.1+build.1"))
+    }
+
+    @Test fun releaseParserRejectsMalformedReleaseVersion() {
+        val json = """{
+            "tag_name":"4.0.invalid",
+            "assets":[
+                {"name":"MolidoMeshAI-android-arm64.apk","browser_download_url":"https://cdn.example/arm64.apk","digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+            ]
+        }"""
+        assertEquals(null, UpdateSources.parseRelease(json, listOf("arm64-v8a")))
+    }
+
     @Test fun releaseParserRejectsMalformedSha256() {
         val json = """{
             "tag_name":"3.1.100",
