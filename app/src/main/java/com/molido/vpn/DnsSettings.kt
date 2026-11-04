@@ -3,16 +3,16 @@ package com.molido.vpn
 import android.content.Context
 
 /**
- * User DNS choice: Automatic (today's behaviour, unchanged) or one of the Iranian
- * "gaming DNS" servers.
+ * User DNS choice: Automatic or one of the optional Iranian gaming resolvers.
  *
- * The gaming servers only answer from inside Iranian networks, so their IPs are
- * routed OUTSIDE the tunnel (VpnService.Builder.excludeRoute, API 33+). Below
- * API 33 that is impossible and the service falls back to Automatic, logging why.
+ * Gaming DNS is direct by design on Android 13+ and therefore bypasses the VPN
+ * for those resolver IPs. That behavior is separately gated by an explicit
+ * per-device consent bit; selecting/migrating a preset alone is not consent.
  */
 object DnsSettings {
 
     const val PREF = "dns_preset"
+    const val DIRECT_GAMING_ALLOWED_PREF = "direct_gaming_dns_allowed"
 
     enum class Preset(
         val key: String,
@@ -39,7 +39,29 @@ object DnsSettings {
 
     fun byKey(key: String?): Preset? = Preset.entries.firstOrNull { it.key == key }
 
-    fun setPreset(context: Context, preset: Preset) {
-        prefs(context).edit().putString(PREF, preset.key).apply()
+    /** True only after the user accepts the direct-DNS disclosure for a gaming preset. */
+    fun directGamingDnsAllowed(context: Context): Boolean =
+        prefs(context).getBoolean(DIRECT_GAMING_ALLOWED_PREF, false)
+
+    fun setPreset(
+        context: Context,
+        preset: Preset,
+        explicitlyAllowDirectGamingDns: Boolean = false,
+    ) {
+        prefs(context).edit()
+            .putString(PREF, preset.key)
+            .putBoolean(
+                DIRECT_GAMING_ALLOWED_PREF,
+                preset.gaming && explicitlyAllowDirectGamingDns,
+            )
+            .apply()
     }
+
+    /** Pure routing gate, kept separate so the fail-closed policy is unit-testable. */
+    fun shouldBypassTunnelForGamingDns(
+        gamingPreset: Boolean,
+        explicitConsent: Boolean,
+        sdkInt: Int,
+        android13Api: Int = 33,
+    ): Boolean = gamingPreset && explicitConsent && sdkInt >= android13Api
 }
