@@ -53,6 +53,8 @@ pub struct StartOptions {
     pub tls_curve_preset: TlsCurvePreset,
     pub wireguard_data_check: bool,
     pub tun_fd: Option<i32>,
+    /// Route packets through the iOS NEPacketTunnelFlow FFI queues.
+    pub packet_channel: bool,
     pub log_level: Option<String>,
     pub perf_profile: Option<String>,
     pub h2_fragmentation: Option<bool>,
@@ -162,6 +164,7 @@ impl StartOptions {
             tls_curve_preset: TlsCurvePreset::Chrome,
             wireguard_data_check: true,
             tun_fd: None,
+            packet_channel: false,
             log_level: None,
             perf_profile: None,
             h2_fragmentation: None,
@@ -259,6 +262,13 @@ pub async fn run_cli() -> Result<()> {
 pub async fn start(options: StartOptions) -> Result<()> {
     apply_runtime_options(&options);
     initialize();
+
+    if options.packet_channel && options.tun_fd.is_some() {
+        return Err(AetherError::Other("packet-channel mode cannot be combined with a TUN file descriptor".into()));
+    }
+    if options.packet_channel && !matches!(options.protocol, Protocol::Masque | Protocol::WireGuard) {
+        return Err(AetherError::Other("iOS packet-channel mode currently supports MASQUE and WireGuard only".into()));
+    }
 
     match options.protocol {
         Protocol::Masque => {
@@ -1960,7 +1970,11 @@ async fn run_masque_tunnel(
 
     let (addr_tx, mut addr_rx) = tokio::sync::mpsc::channel::<quic::AssignedAddr>(8);
     let mut http_task = None;
-    let local_task = if let Some(fd) = options.tun_fd {
+    let local_task = if options.packet_channel {
+        tokio::spawn(async move { while addr_rx.recv().await.is_some() {} });
+        log::info!("[+] iOS packet-channel bridge active");
+        crate::packet_channel::spawn_bridge(outbound_tx, inbound_rx)
+    } else if let Some(fd) = options.tun_fd {
         tokio::spawn(async move { while addr_rx.recv().await.is_some() {} });
         log::info!("[+] Android TUN bridge active");
         tokio::spawn(tun::bridge(
@@ -2595,7 +2609,10 @@ async fn run_wireguard_tunnel(
     log::info!("[+] WireGuard endpoint validated in {validation_rtt:?}; live transport ready");
 
     let mut http_task = None;
-    let local_task = if let Some(fd) = options.tun_fd {
+    let local_task = if options.packet_channel {
+        log::info!("[+] iOS packet-channel bridge active");
+        crate::packet_channel::spawn_bridge(outbound_tx, inbound_rx)
+    } else if let Some(fd) = options.tun_fd {
         log::info!("[+] Android TUN bridge active");
         tokio::spawn(tun::bridge(fd, ipv4, inbound_rx, outbound_tx))
     } else {
