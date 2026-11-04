@@ -23,7 +23,20 @@ internal object LocalizedStrings {
         "Delete" to "حذف", "Retry" to "إعادة المحاولة", "Error" to "خطأ",
         "Warning" to "تحذير", "Privacy" to "الخصوصية", "Security" to "الأمان",
         "Gaming mode" to "وضع الألعاب", "WireGuard" to "WireGuard",
-        "IKEv2" to "IKEv2", "SSTP" to "SSTP", "No backup method on this network" to "لا توجد طريقة احتياطية على هذه الشبكة"
+        "IKEv2" to "IKEv2", "SSTP" to "SSTP", "No backup method on this network" to "لا توجد طريقة احتياطية على هذه الشبكة",
+        "Menu" to "القائمة", "Connection" to "الاتصال", "Tools" to "الأدوات",
+        "Personalize" to "التخصيص", "Support" to "الدعم", "Search menus" to "البحث في القوائم",
+        "No matching menu" to "لا توجد عناصر مطابقة", "Refresh server list" to "تحديث قائمة الخوادم",
+        "Refreshing server list…" to "جارٍ تحديث قائمة الخوادم…", "Connection logs" to "سجلات الاتصال",
+        "Connection check" to "فحص الاتصال", "Copy problem report" to "نسخ تقرير المشكلة",
+        "No internet-capable network detected. Check Wi-Fi or mobile data." to "لم يتم العثور على شبكة متصلة بالإنترنت. تحقق من Wi-Fi أو بيانات الهاتف.",
+        "No clear cause found. Copy the problem report or try another method." to "لم يتم تحديد سبب واضح. انسخ تقرير المشكلة أو جرّب طريقة أخرى.",
+        "The cached list is empty. Try refreshing; bundled backups may still be available." to "القائمة المخزنة فارغة. حاول التحديث؛ قد تتوفر خوادم احتياطية مضمّنة.",
+        "Gaming mode" to "وضع الألعاب", "Ping ms" to "زمن الاستجابة (مللي ثانية)",
+        "Download Mb/s" to "سرعة التنزيل ميغابت/ث", "Upload Mb/s" to "سرعة الرفع ميغابت/ث",
+        "Privacy" to "الخصوصية", "Security" to "الأمان", "Language" to "اللغة",
+        "Follow system" to "اتباع لغة النظام", "Arabic" to "العربية", "Turkish" to "التركية",
+        "WireGuard" to "WireGuard", "IKEv2" to "IKEv2", "SSTP" to "SSTP",
     )
     private val turkish = mapOf(
         "Connect" to "Bağlan", "Disconnect" to "Bağlantıyı kes", "Connected" to "Bağlandı",
@@ -42,7 +55,20 @@ internal object LocalizedStrings {
         "Delete" to "Sil", "Retry" to "Yeniden dene", "Error" to "Hata",
         "Warning" to "Uyarı", "Privacy" to "Gizlilik", "Security" to "Güvenlik",
         "Gaming mode" to "Oyun modu", "WireGuard" to "WireGuard",
-        "IKEv2" to "IKEv2", "SSTP" to "SSTP", "No backup method on this network" to "Bu ağda yedek yöntem yok"
+        "IKEv2" to "IKEv2", "SSTP" to "SSTP", "No backup method on this network" to "Bu ağda yedek yöntem yok",
+        "Menu" to "Menü", "Connection" to "Bağlantı", "Tools" to "Araçlar",
+        "Personalize" to "Kişiselleştir", "Support" to "Destek", "Search menus" to "Menülerde ara",
+        "No matching menu" to "Eşleşen menü yok", "Refresh server list" to "Sunucu listesini yenile",
+        "Refreshing server list…" to "Sunucu listesi yenileniyor…", "Connection logs" to "Bağlantı günlükleri",
+        "Connection check" to "Bağlantı kontrolü", "Copy problem report" to "Sorun raporunu kopyala",
+        "No internet-capable network detected. Check Wi-Fi or mobile data." to "İnternet bağlantısı olan ağ bulunamadı. Wi-Fi veya mobil veriyi kontrol edin.",
+        "No clear cause found. Copy the problem report or try another method." to "Belirgin bir neden bulunamadı. Sorun raporunu kopyalayın veya başka bir yöntem deneyin.",
+        "The cached list is empty. Try refreshing; bundled backups may still be available." to "Önbellekteki liste boş. Yenilemeyi deneyin; uygulama içi yedekler hâlâ kullanılabilir olabilir.",
+        "Gaming mode" to "Oyun modu", "Ping ms" to "Ping (ms)",
+        "Download Mb/s" to "İndirme Mb/sn", "Upload Mb/s" to "Yükleme Mb/sn",
+        "Privacy" to "Gizlilik", "Security" to "Güvenlik", "Language" to "Dil",
+        "Follow system" to "Sistem dilini kullan", "Arabic" to "Arapça", "Turkish" to "Türkçe",
+        "WireGuard" to "WireGuard", "IKEv2" to "IKEv2", "SSTP" to "SSTP",
     )
 
     fun translate(language: String, key: String): String? = when (language) {
