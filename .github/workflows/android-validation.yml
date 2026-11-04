@@ -12,7 +12,6 @@ on:
       - "settings.gradle.kts"
       - ".github/workflows/android-validation.yml"
       - ".github/workflows/release.yml"
-      - ".github/workflows/release.yml"
   push:
     branches: [main]
     paths:
@@ -24,6 +23,7 @@ on:
       - "build.gradle.kts"
       - "settings.gradle.kts"
       - ".github/workflows/android-validation.yml"
+      - ".github/workflows/release.yml"
 
 permissions:
   contents: read
