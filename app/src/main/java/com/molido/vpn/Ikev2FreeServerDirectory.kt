@@ -130,7 +130,7 @@ object Ikev2FreeServerDirectory {
                 accountUrl = accountUrl,
                 listedAvailable = listedAvailable,
             )
-        }.distinctBy { it.host }
+        }.distinctBy { it.host }.toList()
     }
 
     private fun readCountry(country: String, url: String): List<Ikev2FreeServer> {
