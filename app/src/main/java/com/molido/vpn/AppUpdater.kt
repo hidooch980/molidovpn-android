@@ -38,6 +38,7 @@ class AppUpdater(private val activity: Activity) {
     private fun publishHomeUpdate(release: Release, ready: Boolean) {
         if (availableRelease?.version != release.version) readyApk = null
         availableRelease = release
+        WhatsNew.saveReleaseNotes(activity, release.version, release.notes)
         if (ready) readyApk = File(File(activity.cacheDir, "updates"), "MolidoVPN-${release.version}.apk")
         onHomeUpdate?.invoke(release.version, release.critical, ready)
     }
@@ -55,7 +56,7 @@ class AppUpdater(private val activity: Activity) {
                 .onSuccess { install(apk) }
                 .onFailure { readyApk = null; openDownload(release) }
         } else {
-            openDownload(release)
+            announceUpdate(release)
         }
     }
 
@@ -151,7 +152,7 @@ class AppUpdater(private val activity: Activity) {
         dialogBuilder()
             .setTitle(Strings.t("Update ready"))
             .setMessage(Strings.tf("MolidoVPN %s has been released. You are on %s.", release.version, appVersion()) + "\n\n" +
-                Strings.t("It is downloaded and verified. Install now?"))
+                Strings.t("It is downloaded and verified. Install now?") + releaseNotesText(release))
             .setNegativeButton(Strings.t("Later"), null)
             .setPositiveButton(Strings.t("Install")) { _, _ -> install(apk) }
             .show()
@@ -163,12 +164,17 @@ class AppUpdater(private val activity: Activity) {
             .setTitle(Strings.t(if (release.critical) "Important update" else "Update available"))
             .setMessage(
                 Strings.tf("MolidoVPN %s has been released. You are on %s.", release.version, appVersion()) + "\n\n" +
-                    Strings.t("Tapping Update downloads and installs it inside the app.")
+                    Strings.t("Tapping Update downloads and installs it inside the app.") + releaseNotesText(release)
             )
             .setNegativeButton(Strings.t("Later"), null)
             .setPositiveButton(Strings.t("Update")) { _, _ -> openDownload(release) }
             .show()
     }
+
+    private fun releaseNotesText(release: Release): String = release.notes
+        .takeIf { it.isNotEmpty() }
+        ?.joinToString(prefix = "\\n\\n" + Strings.t("What's changed:") + "\\n", separator = "\\n") { "• $it" }
+        ?: ""
 
     /** APK already downloaded but waiting for the "install unknown apps" permission. */
     private var pendingApk: File? = null
