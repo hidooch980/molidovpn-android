@@ -47,7 +47,6 @@ import com.molido.vpn.ui.state.SmartConnectState
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
-import android.net.NetworkRequest
 
 
 /** Automatic's candidate is the engine's [com.molido.vpn.engine.Candidate]. */
@@ -3652,17 +3651,15 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
                 // Network lost - do nothing, watchdog will handle it
             }
         }
-        val request = NetworkRequest.Builder()
-            .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-            .addTransportType(NetworkCapabilities.TRANSPORT_CELLULAR)
-            .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
-            .addTransportType(NetworkCapabilities.TRANSPORT_ETHERNET)
-            .build()
         try {
-            connectivityManager?.registerNetworkCallback(request, connectivityCallback!!)
-            ConnectionLog.record("NetworkCallback registered for auto-reconnect")
+            // Only the system's selected default network should wake auto-reconnect.
+            // A NetworkRequest callback also reports secondary networks (for example,
+            // mobile data becoming available while Wi-Fi remains the default), which
+            // can repeatedly cancel the backoff and start competing tunnel attempts.
+            connectivityManager?.registerDefaultNetworkCallback(connectivityCallback!!)
+            ConnectionLog.record("Default NetworkCallback registered for auto-reconnect")
         } catch (e: Exception) {
-            ConnectionLog.record("NetworkCallback registration failed: ${e.message}")
+            ConnectionLog.record("Default NetworkCallback registration failed: ${e.message}")
             connectivityCallback = null
             connectivityManager = null
         }
