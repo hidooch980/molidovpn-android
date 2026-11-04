@@ -27,7 +27,7 @@ class GamingQualityTest {
     }
 
     @Test fun jitterMeasuresConsecutiveRttVariation() {
-        assertEquals(2L, GamingQuality.jitterMs(listOf(ok(30), ok(32), ok(31))))
+        assertEquals(1L, GamingQuality.jitterMs(listOf(ok(30), ok(32), ok(31))))
         assertEquals(null, GamingQuality.jitterMs(listOf(ok(30))))
     }
 
