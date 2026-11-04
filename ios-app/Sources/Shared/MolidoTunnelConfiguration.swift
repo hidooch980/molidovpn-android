@@ -23,7 +23,7 @@ enum MolidoTunnelConfigurationError: LocalizedError {
         case .unsupportedVersion:
             return "Tunnel bootstrap version is not supported."
         case .invalidConfigurationFile:
-            return "Engine config filename or Keychain reference is invalid."
+            return "Engine config filename or optional Keychain reference is invalid."
         case .invalidDNS:
             return "A configured DNS server address is invalid."
         case .invalidMTU:
@@ -37,7 +37,7 @@ enum MolidoTunnelConfigurationError: LocalizedError {
 }
 
 /// Versioned, non-secret bootstrap shared by the app and Packet Tunnel extension.
-/// Credentials remain in Keychain; this document stores references, never secrets.
+/// The native engine stores its provisioned identity in the protected engine directory. Optional Keychain references are metadata only; secrets never enter this document.
 struct MolidoTunnelConfiguration: Codable {
     static let currentVersion = 1
     static let appGroupIdentifier = "group.com.molido.meshai"
@@ -53,8 +53,8 @@ struct MolidoTunnelConfiguration: Codable {
     let engineConfigurationFile: String
     let keychainService: String?
     let keychainAccount: String?
-    let ipv4CIDR: String
-    let ipv6CIDR: String
+    let ipv4CIDR: String?
+    let ipv6CIDR: String?
     let dnsServers: [String]
     let mtu: Int
     let includeDefaultRoute: Bool
@@ -79,8 +79,10 @@ struct MolidoTunnelConfiguration: Codable {
               dnsServers.allSatisfy({ IPv4Address($0) != nil || IPv6Address($0) != nil }) else {
             throw MolidoTunnelConfigurationError.invalidDNS
         }
-        guard Self.isValidCIDR(ipv4CIDR, ipv6: false),
-              Self.isValidCIDR(ipv6CIDR, ipv6: true) else {
+        if let ipv4CIDR, !Self.isValidCIDR(ipv4CIDR, ipv6: false) {
+            throw MolidoTunnelConfigurationError.invalidTunnelAddress
+        }
+        if let ipv6CIDR, !Self.isValidCIDR(ipv6CIDR, ipv6: true) {
             throw MolidoTunnelConfigurationError.invalidTunnelAddress
         }
     }
