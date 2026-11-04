@@ -1,6 +1,8 @@
 package com.molido.vpn
 
 import java.net.IDN
+import java.net.Inet6Address
+import java.net.InetAddress
 
 /** Input validation only; this does not prove that a host runs an IKEv2 server. */
 object Ikev2ProfileValidation {
@@ -8,10 +10,10 @@ object Ikev2ProfileValidation {
         val host = value.trim().trimEnd('.')
         if (host.isEmpty() || host.length > 253 || host.any { it.isWhitespace() }) return false
         if (host.contains(':')) {
-            // Accept IPv6 literals only; zone identifiers and URI brackets are not profile hosts.
-            return host.matches(Regex("^[0-9A-Fa-f:.]+$")) &&
-                host.count { it == ':' } >= 2 &&
-                host.contains("::") || host.matches(Regex("^[0-9A-Fa-f]{1,4}(:[0-9A-Fa-f]{1,4}){7}$"))
+            // A colon forces literal parsing; this does not perform a hostname lookup.
+            if (!host.matches(Regex("^[0-9A-Fa-f:.]+$"))) return false
+            return try { InetAddress.getByName(host) is Inet6Address }
+            catch (_: Exception) { false }
         }
         val ipv4Parts = host.split('.')
         if (ipv4Parts.size == 4 && ipv4Parts.all { it.isNotEmpty() && it.all(Char::isDigit) }) {
