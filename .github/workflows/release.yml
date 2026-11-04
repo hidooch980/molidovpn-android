@@ -160,7 +160,9 @@ jobs:
           prerelease: false
           make_latest: true
           fail_on_unmatched_files: true
-          files: dist/*.apk
+          files: |
+            dist/*.apk
+            dist/SHA256SUMS.txt
           body: |
             MolidoVPN Android release ${{ env.VERSION }}.
 
