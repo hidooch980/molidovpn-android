@@ -30,6 +30,19 @@ struct HomeView: View {
                     .padding(.horizontal, 24)
                 controls
                 metrics
+                if let ip = vpn.egressIP, vpn.egressVerified {
+                    HStack(spacing: 8) {
+                        Image(systemName: "checkmark.shield.fill").foregroundStyle(teal)
+                        Text("IP خروجی تأییدشده:")
+                            .foregroundStyle(.white.opacity(0.62))
+                        Text(ip)
+                            .font(.system(.footnote, design: .monospaced).weight(.semibold))
+                            .foregroundStyle(teal)
+                            .textSelection(.enabled)
+                    }
+                    .font(.footnote)
+                    .padding(.top, 2)
+                }
                 Spacer(minLength: 8)
                 Text("MOLIDO MESH AI  •  iOS PREVIEW")
                     .font(.system(size: 10, weight: .medium, design: .rounded))
