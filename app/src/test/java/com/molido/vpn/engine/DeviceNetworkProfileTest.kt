@@ -42,7 +42,7 @@ class DeviceNetworkProfileTest {
             listOf(Probe(true, 100, 2_000), Probe(false), Probe(true, 140, 3_000), Probe(true, 120)), 1234L,
         )
         assertEquals(120L, o.rttMedianMs)
-        assertEquals(20L, o.jitterMedianMs)
+        assertEquals(30L, o.jitterMedianMs)
         assertEquals(0.25, o.packetLoss!!, 0.0001)
         assertEquals(2_500L, o.throughputMedianKbps)
     }
