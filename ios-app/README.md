@@ -35,18 +35,19 @@ For a physical-device build and distribution, configure an Apple Developer Team,
 - Native dark SwiftUI home screen with Molido branding.
 - VPN profile creation through `NETunnelProviderManager`.
 - Honest connection state; no fabricated latency, throughput, or connected status.
-- Packet tunnel extension target and explicit fail-closed placeholder.
+- Packet tunnel extension target with fail-closed startup validation.
+- Swift packet-channel adapter bridging Network Extension packets to Aether's bounded IPv4/IPv6 queues; it is not started until native engine readiness is wired.
 - Shared Keychain helper and atomic bootstrap storage contract.
 - No production VPN transport, node discovery, server credentials, or release signing yet.
 
 ## Next engineering gates
 
-1. Complete the Swift-to-Aether packet-channel adapter and lifecycle.
-2. Provision signed engine configurations and credentials through the shared Keychain contract.
-3. Implement packet I/O, DNS routing, IPv4/IPv6 handling, MTU, reconnect and kill-switch semantics.
+1. Wire the packet-channel adapter to the Aether start/stop worker and readiness state machine.
+2. Map MASQUE/WireGuard configuration and Keychain credentials into validated native options without writing secrets to disk.
+3. Apply packet tunnel network settings only after native preparation/readiness; implement DNS, IPv4/IPv6, MTU, reconnect and kill-switch semantics.
 4. Integrate signed node metadata and local-only network measurements.
 5. Add fa/en/ar/tr localization and RTL validation for Persian and Arabic.
-6. Test on physical iPhones over Wi-Fi and cellular, including handovers and leak checks.
+6. Test on physical iPhones over Wi-Fi and cellular, including handovers and DNS/IP leak checks.
 7. Configure Apple Network Extension entitlements and distribute through TestFlight before App Store review.
 
 Android behavior and release signing are not changed by this iOS scaffold.
