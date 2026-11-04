@@ -19,7 +19,7 @@ int32_t aether_is_ready(void);
  * Push: 1 queued, 0 full/backpressure, -1 invalid.
  * Pop: byte count, 0 empty, -required_size if buffer is too small, -1 invalid.
  * Bounded queues must be reset between provider sessions.
- * These queues are not yet connected to Aether's live transport loop.
+ * The iOS packet-channel start API connects these queues to Aether's live packet channels.
  */
 int32_t aether_packet_channel_reset(void);
 int32_t aether_packet_push_inbound(const uint8_t *packet, size_t length, uint8_t family);
