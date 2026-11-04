@@ -1,5 +1,8 @@
 name: Android IPv4 IPv6 native packet regressions
 on:
+  push:
+    branches: [main]
+    paths: ['app/**', 'native/network/**', '.github/workflows/network-packets.yml']
   pull_request:
     paths: ['app/**', 'native/network/**', '.github/workflows/network-packets.yml']
   workflow_dispatch: {}
