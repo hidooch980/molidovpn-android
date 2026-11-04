@@ -79,6 +79,7 @@ object UpdateSources {
         }
 
         for (url in urls) {
+            if (url == GITHUB_RELEASE_URL && githubChecked) continue
             val release = try {
                 fetch(url).also { successfulFetch = true }
             } catch (e: Exception) {
