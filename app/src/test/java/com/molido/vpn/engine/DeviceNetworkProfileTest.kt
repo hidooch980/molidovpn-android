@@ -37,6 +37,19 @@ class DeviceNetworkProfileTest {
         assertEquals(DeviceNetworkProfile.Policy(3, 512_000), DeviceNetworkProfile.policy(null, 8, 1_500_000))
     }
 
+    @Test fun freshLossHistoryReducesProbeLoadButStaleHistoryDoesNot() {
+        val poor = DeviceNetworkProfile.Profile(
+            DeviceNetworkProfile.Transport.WIFI, true, false, false, 20_000, 5_000,
+            250, 40, 0.30, 5_000, 6, 9, 10_000,
+        )
+        val conservative = DeviceNetworkProfile.policy(link(), 8, 1_500_000, poor, now = 20_000)
+        assertEquals(DeviceNetworkProfile.Policy(2, 256_000), conservative)
+        val stale = DeviceNetworkProfile.policy(link(), 8, 1_500_000, poor, now = 10_000 + 8L * 86_400_000L)
+        assertEquals(DeviceNetworkProfile.Policy(6, 1_500_000), stale)
+        assertTrue(DeviceNetworkProfile.confidence(poor, 20_000) > 0.0)
+        assertEquals(0.0, DeviceNetworkProfile.confidence(poor, 10_000 + 8L * 86_400_000L), 0.0)
+    }
+
     @Test fun qualityObservationComputesMedianJitterAndLoss() {
         val o = DeviceNetworkProfile.observe(
             listOf(Probe(true, 100, 2_000), Probe(false), Probe(true, 140, 3_000), Probe(true, 120)), 1234L,
