@@ -15,19 +15,19 @@
     <style name="Theme.Molido" parent="Theme.Material3.Dark.NoActionBar">
         <item name="android:fontFamily">sans</item>
         <!-- mint / neon accents, straight from the approved mock -->
-        <item name="colorPrimary">#2DD4BF</item>
-        <item name="colorOnPrimary">#06201D</item>
-        <item name="colorSecondary">#7088F2</item>
-        <item name="colorError">#E5484D</item>
+        <item name="colorPrimary">#43E6CF</item>
+        <item name="colorOnPrimary">#071521</item>
+        <item name="colorSecondary">#8B82FF</item>
+        <item name="colorError">#FF6B82</item>
         <!-- void / raised / recessed surfaces -->
-        <item name="android:colorBackground">#0C1222</item>
-        <item name="colorSurface">#141C30</item>
-        <item name="colorOnSurface">#EEF2FA</item>
-        <item name="colorSurfaceVariant">#1C2640</item>
-        <item name="colorOnSurfaceVariant">#9AA6C0</item>
-        <item name="colorOutline">#26314F</item>
-        <item name="android:navigationBarColor">#0C1222</item>
-        <item name="android:statusBarColor">#0C1222</item>
+        <item name="android:colorBackground">#080D1B</item>
+        <item name="colorSurface">#111A2D</item>
+        <item name="colorOnSurface">#F2F6FF</item>
+        <item name="colorSurfaceVariant">#192640</item>
+        <item name="colorOnSurfaceVariant">#A3B0C8</item>
+        <item name="colorOutline">#263B52</item>
+        <item name="android:navigationBarColor">#080D1B</item>
+        <item name="android:statusBarColor">#080D1B</item>
         <item name="android:windowLightStatusBar">false</item>
         <item name="android:windowLightNavigationBar">false</item>
         <item name="materialAlertDialogTheme">@style/ThemeOverlay.Molido.AlertDialog</item>
@@ -39,7 +39,7 @@
       the Orbit console appears.
     -->
     <style name="Theme.Molido.Starting" parent="Theme.Molido">
-        <item name="android:windowBackground">#0C1222</item>
+        <item name="android:windowBackground">#080D1B</item>
    </style>
 
     <!--
@@ -58,9 +58,9 @@
 
     <style name="ThemeOverlay.Molido.AlertDialog" parent="ThemeOverlay.Material3.MaterialAlertDialog">
         <item name="shapeAppearanceMediumComponent">@style/ShapeAppearance.Molido.Dialog</item>
-        <item name="colorSurface">#141C30</item>
-        <item name="colorOnSurface">#EEF2FA</item>
-        <item name="colorPrimary">#2DD4BF</item>
+        <item name="colorSurface">#111A2D</item>
+        <item name="colorOnSurface">#F2F6FF</item>
+        <item name="colorPrimary">#43E6CF</item>
    </style>
 
     <style name="ShapeAppearance.Molido.Dialog" parent="ShapeAppearance.Material3.MediumComponent">
@@ -83,18 +83,18 @@
     -->
     <style name="Theme.Molido.Light" parent="Theme.Material3.Light.NoActionBar">
         <item name="android:fontFamily">sans</item>
-        <item name="colorPrimary">#12A594</item>
+        <item name="colorPrimary">#087F79</item>
         <item name="colorOnPrimary">#FFFFFF</item>
         <item name="colorSecondary">#4F6BED</item>
-        <item name="colorError">#C9363B</item>
-        <item name="android:colorBackground">#F6F8FB</item>
+        <item name="colorError">#C93650</item>
+        <item name="android:colorBackground">#F1F5FC</item>
         <item name="colorSurface">#FFFFFF</item>
-        <item name="colorOnSurface">#0F172A</item>
-        <item name="colorSurfaceVariant">#EEF2F7</item>
-        <item name="colorOnSurfaceVariant">#5B6478</item>
-        <item name="colorOutline">#E2E8F0</item>
-        <item name="android:navigationBarColor">#F6F8FB</item>
-        <item name="android:statusBarColor">#F6F8FB</item>
+        <item name="colorOnSurface">#111B31</item>
+        <item name="colorSurfaceVariant">#E8EEF8</item>
+        <item name="colorOnSurfaceVariant">#596982</item>
+        <item name="colorOutline">#D9E2F0</item>
+        <item name="android:navigationBarColor">#F1F5FC</item>
+        <item name="android:statusBarColor">#F1F5FC</item>
         <!-- Dark icons in the bars: the bars are now near-white. -->
         <item name="android:windowLightStatusBar">true</item>
         <item name="android:windowLightNavigationBar">true</item>
@@ -104,7 +104,7 @@
     <style name="ThemeOverlay.Molido.Light.AlertDialog" parent="ThemeOverlay.Material3.MaterialAlertDialog">
         <item name="shapeAppearanceMediumComponent">@style/ShapeAppearance.Molido.Dialog</item>
         <item name="colorSurface">#FFFFFF</item>
-        <item name="colorOnSurface">#0F172A</item>
-        <item name="colorPrimary">#0B7A6E</item>
+        <item name="colorOnSurface">#111B31</item>
+        <item name="colorPrimary">#076B66</item>
    </style>
 </resources>
