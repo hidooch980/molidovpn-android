@@ -1,49 +1,22 @@
-package com.molido.vpn
-
-import android.content.Context
-import android.graphics.Color
-
 /**
- * The Orbit palettes — one dark, one light, chosen by the user.
+ * Molido Mesh AI's two coordinated visual palettes.
  *
- * History matters here. The colour picker used to offer five palettes plus a
- * "Dynamic" mode that inherited the phone's Material colours, and that was
- * removed on purpose: the approved design is a specific look, and letting the OS
- * repaint it produced washed-out greys and light surfaces the layout was never
- * designed for.
+ * - [ORBIT] is Mesh Night: deep ink surfaces with teal and violet intelligence accents.
+ * - [PORCELAIN] is Mesh Mist: cool pale canvas, crisp cards and accessible teal-violet accents.
  *
- * This is not that. There are exactly two palettes, both drawn from an approved
- * mock, and nothing about them is derived from the phone's wallpaper:
- *   - [ORBIT]     — the original dark glass + neon console.
- *   - [PORCELAIN] — a light palette: grey canvas, white raised cards.
+ * The mesh background is a low-contrast visual layer only. Real network state and
+ * measurements are always rendered by the connection and diagnostics components.
  *
- * ## Why a light palette is more than swapping ink for canvas
- *
- * The dark look builds depth out of a white specular highlight on the top edge
- * of every surface. On a white card that highlight is invisible, so a naive
- * inversion produces flat white rectangles floating on flat white. Depth on
- * light has to come from the opposite direction: a shadow below the surface, and
- * a card that is *lighter* than the page rather than darker.
- *
- * That inversion lives in [Sculpt.Lighting], carried on the palette, so every
- * surface in the app changes lighting model together instead of each call site
- * guessing. [load] installs it before any drawing happens.
- *
- * ## Text vs graphics accents
- *
- * `#4FE3C1` mint reads at 11:1 on the dark card and 3.4:1 on white — fine for a
- * dial arc, below the 4.5:1 floor for the letters of a label. So every accent
- * has a `…Text` sibling. On [ORBIT] the two are the same colour; on [PORCELAIN]
- * the text sibling is darkened until it clears 4.5:1 on both the card and the
- * canvas. Shapes keep the vivid colour, which is what makes the light theme
- * still look like MolidoVPN instead of a generic white app.
+ * Surface lighting remains palette-aware through [Sculpt.Lighting], so cards and
+ * controls keep consistent depth in both dark and light modes. Text-safe accent
+ * siblings are used wherever a vivid shape colour would not meet readable contrast.
  */
 object AppAppearance {
 
     /** Which palette the user picked. Persisted in the shared "settings" store. */
     enum class Mode(val key: String, val enLabel: String, val description: String) {
-        DARK("dark", "Dark", "Night — turquoise on deep navy"),
-        LIGHT("light", "Light — theme", "Turquoise on mist — white cards"),
+        DARK("dark", "Dark", "Mesh Night — teal and violet"),
+        LIGHT("light", "Light — theme", "Mesh Mist — cool light surfaces"),
         ;
 
         /** Localized at call time so a language switch refreshes the label. */
