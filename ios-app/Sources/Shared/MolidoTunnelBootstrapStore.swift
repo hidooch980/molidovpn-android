@@ -102,20 +102,21 @@ enum MolidoTunnelBootstrapStore {
             isDirectory: false
         )
         var isDirectory: ObjCBool = false
-        guard FileManager.default.fileExists(
-            atPath: fileURL.path,
-            isDirectory: &isDirectory
-        ), !isDirectory.boolValue else {
-            throw MolidoTunnelConfigurationError.bootstrapMissing
+        if FileManager.default.fileExists(atPath: fileURL.path, isDirectory: &isDirectory) {
+            guard !isDirectory.boolValue else {
+                throw MolidoTunnelConfigurationError.invalidConfigurationFile
+            }
+            let values = try fileURL.resourceValues(forKeys: [.isSymbolicLinkKey])
+            guard values.isSymbolicLink != true else {
+                throw MolidoTunnelConfigurationError.invalidConfigurationFile
+            }
+            try FileManager.default.setAttributes(
+                [.protectionKey: protectedFileClass, .posixPermissions: 0o600],
+                ofItemAtPath: fileURL.path
+            )
         }
-        let values = try fileURL.resourceValues(forKeys: [.isSymbolicLinkKey])
-        guard values.isSymbolicLink != true else {
-            throw MolidoTunnelConfigurationError.invalidConfigurationFile
-        }
-        try FileManager.default.setAttributes(
-            [.protectionKey: protectedFileClass, .posixPermissions: 0o600],
-            ofItemAtPath: fileURL.path
-        )
+        // The native prepare call creates this identity file on first launch.
+        // The containing engine directory is already private and data-protected.
         return fileURL
     }
 }
