@@ -64,8 +64,9 @@ class DeviceNetworkProfileTest {
             null, DeviceNetworkProfile.observe(listOf(Probe(true, 75, 5_000), Probe(true, 85, 6_000)), 1234L),
             link(transport = DeviceNetworkProfile.Transport.CELLULAR, metered = true), 1234L,
         )
-        assertEquals(profile, DeviceNetworkProfile.parse(DeviceNetworkProfile.toJson(profile)))
+        assertEquals(profile, DeviceNetworkProfile.parse(DeviceNetworkProfile.toJson(profile), now = 1234L))
         assertNull(DeviceNetworkProfile.parse("{bad"))
         assertNull(DeviceNetworkProfile.parse("""{"transport":"WIFI","updated_at_ms":0}"""))
+        assertNull(DeviceNetworkProfile.parse(DeviceNetworkProfile.toJson(profile), now = 1234L + 8L * 86_400_000L))
     }
 }
