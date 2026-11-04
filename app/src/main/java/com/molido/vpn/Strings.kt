@@ -686,6 +686,7 @@ object Strings {
         "Install ID" to Triple("Install ID", "شناسه نصب", "安装 ID"),
         "INSTALL_ID_BODY" to Triple("A random code for this install only. Give it to support so they can find this phone's connection errors. It contains nothing about you or your phone.", "یک کد تصادفی فقط برای همین نصب. آن را به پشتیبانی بدهید تا خطاهای اتصال همین گوشی را پیدا کنند. هیچ اطلاعاتی از شما یا گوشی‌تان در آن نیست.", "仅属于此安装的随机代码。提供给客服即可查到此手机的连接错误。不包含任何关于您或手机的信息。"),
         "Update ready" to Triple("Update ready", "بروزرسانی آماده نصب است", "更新已就绪"),
+        "What's changed:" to Triple("What's changed:", "تغییرات این نسخه:", "本次更新内容："),
         "Important update" to Triple("Important update", "بروزرسانی مهم", "重要更新"),
         "It is downloaded and verified. Install now?" to Triple("It is downloaded and verified. Install now?", "دانلود و بررسی شده است. همین حالا نصب شود؟", "已下载并验证。现在安装吗？"),
         "Install" to Triple("Install", "نصب", "安装"),
