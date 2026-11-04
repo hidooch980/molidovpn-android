@@ -68,6 +68,15 @@ object UpdateSources {
         var lastError: Exception? = null
         var successfulFetch = false
         var githubChecked = false
+        var best: Release? = null
+
+        fun consider(candidate: Release?) {
+            if (candidate != null && isNewer(candidate.version, installed) &&
+                (best == null || isNewer(candidate.version, best!!.version))) {
+                best = candidate
+            }
+        }
+
         for (url in urls) {
             val release = try {
                 fetch(url).also { successfulFetch = true }
@@ -77,25 +86,20 @@ object UpdateSources {
             }
             val static = url.startsWith(LiveSync.RAW) || url.startsWith(LiveSync.CDN) ||
                 url.startsWith(StaticFirst.RAW) || url.startsWith(StaticFirst.CDN)
-            if (static) {
-                // A static copy may be newer than the installed app but still lag the real release.
-                // Compare GitHub against the copy itself, then fall back to that copy if GitHub is down.
-                val baseline = release?.version ?: installed
-                val fresh = if (githubChecked) null else {
-                    githubChecked = true
-                    try {
-                        fetch(GITHUB_RELEASE_URL).also { successfulFetch = true }
-                    } catch (e: Exception) {
-                        lastError = e
-                        null
-                    }
+            consider(release)
+            if (static && !githubChecked) {
+                // Static copies may lag even when they already contain a version newer than installed.
+                githubChecked = true
+                val fresh = try {
+                    fetch(GITHUB_RELEASE_URL).also { successfulFetch = true }
+                } catch (e: Exception) {
+                    lastError = e
+                    null
                 }
-                if (fresh != null && isNewer(fresh.version, baseline)) return fresh
-                if (release != null && isNewer(release.version, installed)) return release
-                continue
+                consider(fresh)
             }
-            if (release != null && isNewer(release.version, installed)) return release
         }
+        if (best != null) return best
         if (!successfulFetch && lastError != null) throw lastError
         return null
     }
