@@ -54,17 +54,13 @@ final class VPNController: ObservableObject {
                         version: MolidoTunnelConfiguration.currentVersion,
                         engineProtocol: .masque,
                         engineConfigurationFile: "masque-identity.toml",
-                        keychainService: nil,
-                        keychainAccount: nil,
-                        ipv4CIDR: nil,
-                        ipv6CIDR: nil,
                         dnsServers: ["1.1.1.1", "1.0.0.1"],
                         mtu: 1280,
                         includeDefaultRoute: true
                     )
                     _ = try MolidoTunnelBootstrapStore.save(bootstrap)
                 } catch {
-                    self.message = "آماده‌سازی فضای امن موتور ناموفق بود: \\(error.localizedDescription)"
+                    self.message = "آماده‌سازی فضای امن موتور ناموفق بود: \(error.localizedDescription)"
                     return
                 }
 
