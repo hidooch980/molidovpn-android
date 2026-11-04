@@ -76,13 +76,20 @@ class Ikev2VpnActivity : Activity() {
         root.addView(Button(this).apply {
             text = Strings.t("Import server CA certificate (PEM)")
             setOnClickListener {
-                startActivityForResult(
-                    Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-                        addCategory(Intent.CATEGORY_OPENABLE)
-                        type = "*/*"
-                    },
-                    REQUEST_CA_CERTIFICATE,
-                )
+                android.app.AlertDialog.Builder(this)
+                    .setTitle(Strings.t("Trust server CA certificate?"))
+                    .setMessage(Strings.t("A CA certificate can authorize VPN server identities. Import only the certificate downloaded from the provider's official site; a malicious CA could impersonate the VPN server."))
+                    .setNegativeButton(Strings.t("Cancel"), null)
+                    .setPositiveButton(Strings.t("Choose certificate")) { _, _ ->
+                        startActivityForResult(
+                            Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                                addCategory(Intent.CATEGORY_OPENABLE)
+                                type = "*/*"
+                            },
+                            REQUEST_CA_CERTIFICATE,
+                        )
+                    }
+                    .show()
             }
         }, matchWidth())
         root.addView(Button(this).apply {
