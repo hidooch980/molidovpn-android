@@ -228,43 +228,50 @@ class AppUpdater(private val activity: Activity) {
         val dir = File(activity.cacheDir, "updates").apply { mkdirs() }
         dir.listFiles()?.forEach { it.delete() }
         val target = File(dir, "MolidoVPN-${release.version}.apk")
-        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
-            connectTimeout = 15_000
-            readTimeout = 60_000
-            useCaches = false
-            setRequestProperty("Cache-Control", "no-cache")
-            setRequestProperty("User-Agent", "MolidoVPN-Android")
-        }
         try {
-            check(connection.responseCode == HttpURLConnection.HTTP_OK) { "HTTP ${connection.responseCode}" }
-            check(connection.url.protocol.equals("https", ignoreCase = true)) { "HTTPS downgrade redirect rejected" }
-            val total = connection.contentLengthLong
-            var received = 0L
-            var lastPercent = -1
-            connection.inputStream.use { input ->
-                target.outputStream().use { output ->
-                    val buffer = ByteArray(64 * 1024)
-                    while (true) {
-                        val read = input.read(buffer)
-                        if (read < 0) break
-                        output.write(buffer, 0, read)
-                        received += read
-                        if (total > 0) {
-                            val percent = (received * 100 / total).toInt()
-                            if (percent != lastPercent) {
-                                lastPercent = percent
-                                activity.runOnUiThread { updateDownloadProgress(percent) }
+            val connection = (URL(url).openConnection() as HttpURLConnection).apply {
+                connectTimeout = 15_000
+                readTimeout = 60_000
+                useCaches = false
+                setRequestProperty("Cache-Control", "no-cache")
+                setRequestProperty("User-Agent", "MolidoVPN-Android")
+            }
+            try {
+                check(connection.responseCode == HttpURLConnection.HTTP_OK) { "HTTP ${connection.responseCode}" }
+                check(connection.url.protocol.equals("https", ignoreCase = true)) { "HTTPS downgrade redirect rejected" }
+                val total = connection.contentLengthLong
+                check(UpdateSources.withinApkSizeLimit(total, 0L)) { "APK exceeds maximum allowed size" }
+                var received = 0L
+                var lastPercent = -1
+                connection.inputStream.use { input ->
+                    target.outputStream().use { output ->
+                        val buffer = ByteArray(64 * 1024)
+                        while (true) {
+                            val read = input.read(buffer)
+                            if (read < 0) break
+                            received += read
+                            check(UpdateSources.withinApkSizeLimit(total, received)) { "APK exceeds maximum allowed size" }
+                            output.write(buffer, 0, read)
+                            if (total > 0) {
+                                val percent = (received * 100 / total).toInt()
+                                if (percent != lastPercent) {
+                                    lastPercent = percent
+                                    activity.runOnUiThread { updateDownloadProgress(percent) }
+                                }
                             }
                         }
                     }
                 }
+                check(total <= 0 || received == total) { "incomplete download ($received / $total)" }
+            } finally {
+                connection.disconnect()
             }
-            check(total <= 0 || received == total) { "incomplete download ($received / $total)" }
-        } finally {
-            connection.disconnect()
+            verify(target, release)
+            return target
+        } catch (error: Exception) {
+            target.delete()
+            throw error
         }
-        verify(target, release)
-        return target
     }
 
     /** Throws (and deletes [target]) unless it is a newer, same-signed build matching the listed hash. */
