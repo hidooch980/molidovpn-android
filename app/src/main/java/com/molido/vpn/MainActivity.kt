@@ -8365,8 +8365,21 @@ class MainActivity : Activity() {
             }
         },
         onSelected = { key ->
-            DnsSettings.setPreset(this, DnsSettings.byKey(key) ?: DnsSettings.Preset.AUTO)
-            onDone()
+            val selected = DnsSettings.byKey(key) ?: DnsSettings.Preset.AUTO
+            if (selected.gaming) {
+                android.app.AlertDialog.Builder(this)
+                    .setTitle(Strings.t("DNS bypass warning"))
+                    .setMessage(Strings.t("Gaming DNS sends DNS queries outside the VPN tunnel. This is not full-tunnel DNS protection and may expose DNS requests to the local network or ISP."))
+                    .setNegativeButton(Strings.t("Cancel"), null)
+                    .setPositiveButton(Strings.t("Continue anyway")) { _, _ ->
+                        DnsSettings.setPreset(this, selected)
+                        onDone()
+                    }
+                    .show()
+            } else {
+                DnsSettings.setPreset(this, selected)
+                onDone()
+            }
         }
     )
 
