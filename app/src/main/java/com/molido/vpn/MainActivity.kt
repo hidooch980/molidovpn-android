@@ -3909,6 +3909,19 @@ class MainActivity : Activity() {
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.WRAP_CONTENT,
         ).apply { topMargin = dp(8) })
+        content.addView(createToggleRow(
+            Strings.t("Secure gaming route scoring"),
+            Strings.t("Prioritize p95 latency, jitter and packet loss for Smart Connect. DNS remains inside the VPN tunnel; no direct DNS bypass."),
+            preferences().getBoolean(com.molido.vpn.engine.GamingQuality.PREF, false),
+        ) { enabled ->
+            preferences().edit()
+                .putBoolean(com.molido.vpn.engine.GamingQuality.PREF, enabled)
+                .apply()
+            ConnectionLog.record(
+                "Secure gaming route scoring " + (if (enabled) "on" else "off") +
+                    " — applies on the next Smart Connect run; DNS stays tunnel-routed"
+            )
+        }, mainParams())
         // The switch this writes existed before, fed only the removed proxy mode's
         // SOCKS bind, and was deleted because in VPN mode it changed nothing the
         // user could see. It changes something now: the service applies the
