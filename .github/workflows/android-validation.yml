@@ -61,8 +61,8 @@ jobs:
       - name: Fetch pinned native binaries with checksum verification
         run: bash tools/fetch-binaries.sh
 
-      - name: Refresh offline emergency defaults
-        run: python3 tools/refresh-emergency-configs.py || true
+      - name: Refresh and validate offline emergency defaults
+        run: python3 tools/refresh-emergency-configs.py 40 --strict
 
       - name: Run Android unit tests and build unsigned release APKs
         run: |
