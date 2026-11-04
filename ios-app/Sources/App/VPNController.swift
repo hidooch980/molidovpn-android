@@ -48,6 +48,26 @@ final class VPNController: ObservableObject {
                     return
                 }
 
+                do {
+                    _ = try MolidoTunnelBootstrapStore.prepareEngineStorage()
+                    let bootstrap = MolidoTunnelConfiguration(
+                        version: MolidoTunnelConfiguration.currentVersion,
+                        engineProtocol: .masque,
+                        engineConfigurationFile: "masque-identity.toml",
+                        keychainService: nil,
+                        keychainAccount: nil,
+                        ipv4CIDR: "172.16.0.2/32",
+                        ipv6CIDR: "2606:4700:110:8::2/128",
+                        dnsServers: ["1.1.1.1", "1.0.0.1"],
+                        mtu: 1280,
+                        includeDefaultRoute: true
+                    )
+                    _ = try MolidoTunnelBootstrapStore.save(bootstrap)
+                } catch {
+                    self.message = "آماده‌سازی فضای امن موتور ناموفق بود: \\(error.localizedDescription)"
+                    return
+                }
+
                 let existingMolidoManager = managers?.first(where: { manager in
                     (manager.protocolConfiguration as? NETunnelProviderProtocol)?.providerBundleIdentifier == self.providerBundleIdentifier
                 })
@@ -78,7 +98,7 @@ final class VPNController: ObservableObject {
                                 self.manager = manager
                                 self.profileInstalled = true
                                 self.status = manager.connection.status
-                                self.message = "پروفایل Molido آماده شد؛ فایل تنظیمات موتور و کلید امن حساب هنوز باید provision شوند."
+                                self.message = "پروفایل امن Molido آماده شد؛ موتور هنگام اتصال شناسه تونل را آماده می‌کند."
                             }
                         }
                     }
