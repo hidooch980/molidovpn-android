@@ -51,6 +51,23 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             build
 
+  test-rust-core:
+    name: Aether Rust unit tests
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+      - name: Install native build dependencies
+        run: brew install cmake ninja go nasm
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core/aether
+      - name: Run Aether unit tests, including packet-channel bridge tests
+        run: cargo test --manifest-path core/aether/Cargo.toml --locked --lib
+
   build-rust-core:
     name: Rust core — ${{ matrix.target }}
     runs-on: macos-15
