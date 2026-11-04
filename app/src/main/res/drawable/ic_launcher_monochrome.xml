@@ -1,19 +1,20 @@
-<!-- Monochrome layer for Android 13+ themed icons: the «Firoozeh & Shab» shield with
-     the Iranian arch and the "you" dot. Authored in the 512-unit artwork space and
-     scaled by 0.17 so the whole glyph sits inside the 66dp safe zone of the 108dp canvas. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <group
-        android:translateX="10.480"
-        android:translateY="9.120"
-        android:scaleX="0.17"
-        android:scaleY="0.17">
+    <group android:translateX="7" android:translateY="7">
         <path
-            android:fillColor="#FFFFFF"
-            android:fillType="evenOdd"
-            android:pathData="M256,100C300,124 350,138 396,140L396,252C396,340 338,398 256,428C174,398 116,340 116,252L116,140C162,138 212,124 256,100Z M204,364L308,364L308,274C308,240 278,226 263,198Q256,184 249,198C234,226 204,240 204,274Z M238,304a18,18 0,1 0,36 0a18,18 0,1 0,-36 0Z" />
+            android:fillColor="@android:color/transparent"
+            android:pathData="M18,62 L18,35 L37,51 L54,29 L71,51 L90,35 L90,62 M18,35 L54,29 L90,35 M37,51 L71,51 M18,62 Q54,84 90,62"
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="5"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+        <path android:fillColor="#FFFFFF" android:pathData="M12,35a6,6 0,1 0,12 0a6,6 0,1 0,-12 0Z" />
+        <path android:fillColor="#FFFFFF" android:pathData="M31,51a6,6 0,1 0,12 0a6,6 0,1 0,-12 0Z" />
+        <path android:fillColor="#FFFFFF" android:pathData="M48,29a6,6 0,1 0,12 0a6,6 0,1 0,-12 0Z" />
+        <path android:fillColor="#FFFFFF" android:pathData="M65,51a6,6 0,1 0,12 0a6,6 0,1 0,-12 0Z" />
+        <path android:fillColor="#FFFFFF" android:pathData="M84,35a6,6 0,1 0,12 0a6,6 0,1 0,-12 0Z" />
     </group>
 </vector>
