@@ -55,7 +55,7 @@ class Ikev2VpnActivity : Activity() {
         })
 
         server = field(root, "Server hostname or IP")
-        ikeIdentity = field(root, "IKE identity")
+        ikeIdentity = field(root, "Server identity (Remote ID)")
         username = field(root, "EAP username")
         password = field(root, "EAP password").apply {
             inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
@@ -104,7 +104,7 @@ class Ikev2VpnActivity : Activity() {
         val host = server.text.toString().trim().trimEnd('.')
         val eapUser = username.text.toString()
         val eapPass = password.text.toString()
-        val identity = ikeIdentity.text.toString().ifBlank { eapUser }.trim()
+        val identity = ikeIdentity.text.toString().ifBlank { host }.trim()
         if (!Ikev2ProfileValidation.isValidServer(host) ||
             !Ikev2ProfileValidation.hasEapCredentials(identity, eapUser, eapPass)) {
             message("Enter a valid server, IKE identity, EAP username and password.")
