@@ -74,19 +74,24 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
                             case .failure(let error):
                                 completion.finish(error)
                             case .success:
+                                guard let self else {
+                                    adapter.stop()
+                                    completion.finish(MolidoTunnelConfigurationError.invalidProviderProfile)
+                                    return
+                                }
                                 do {
                                     let settings = try MolidoAetherConfigurationBuilder.makeNetworkSettings(
                                         configuration: configuration,
                                         addresses: addresses
                                     )
-                                    self?.setTunnelNetworkSettings(settings) { settingsError in
+                                    self.setTunnelNetworkSettings(settings) { settingsError in
                                         if let settingsError {
                                             adapter.stop()
                                             completion.finish(settingsError)
                                             return
                                         }
                                         adapter.activatePacketFlow(
-                                            self?.packetFlow ?? NEPacketTunnelFlow(),
+                                            self.packetFlow,
                                             activated: { activation in
                                                 switch activation {
                                                 case .success:
@@ -98,7 +103,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
                                             },
                                             failed: { error in
                                                 completion.finish(error)
-                                                self?.cancelTunnelWithError(error)
+                                                self.cancelTunnelWithError(error)
                                             }
                                         )
                                     }
