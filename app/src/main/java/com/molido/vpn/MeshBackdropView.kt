@@ -49,7 +49,7 @@ class MeshBackdropView(
     init {
         isClickable = false
         isFocusable = false
-        importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
+        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
     }
 
     override fun onDraw(canvas: Canvas) {
