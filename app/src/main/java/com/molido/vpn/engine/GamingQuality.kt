@@ -41,7 +41,7 @@ object GamingQuality {
         val sorted = values.sorted()
         val mid = sorted.size / 2
         return if (sorted.size % 2 == 1) sorted[mid]
-        else (sorted[mid - 1] + sorted[mid]) / 2
+        else sorted[mid - 1] + (sorted[mid] - sorted[mid - 1]) / 2
     }
 
     /** Nearest-rank p95, preserving a conservative tail-latency signal. */
