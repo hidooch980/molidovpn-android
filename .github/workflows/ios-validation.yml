@@ -1,0 +1,44 @@
+name: iOS scaffold validation
+
+on:
+  pull_request:
+    paths:
+      - "ios-app/**"
+      - ".github/workflows/ios-validation.yml"
+  push:
+    branches:
+      - "ios-molido-swiftui-packet-tunnel-scaffold"
+    paths:
+      - "ios-app/**"
+      - ".github/workflows/ios-validation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-ios:
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate Xcode project
+        working-directory: ios-app
+        run: xcodegen generate
+      - name: Build iOS Simulator targets
+        working-directory: ios-app
+        run: |
+          xcodebuild \
+            -project MolidoMeshAI.xcodeproj \
+            -scheme MolidoMeshAI \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO \
+            build
