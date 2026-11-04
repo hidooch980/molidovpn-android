@@ -30,6 +30,8 @@ object UpdateSources {
         val sha256: String?,
         /** Owner marked the release "[critical]": prompt at once. */
         val critical: Boolean = false,
+        /** Human-readable release notes, shown before installation and once after upgrade. */
+        val notes: List<String> = emptyList(),
     )
 
     fun releaseJsonUrls(mirrors: List<String>): List<String> =
@@ -56,6 +58,17 @@ object UpdateSources {
         throw lastError ?: IllegalStateException("no release source")
     }
 
+    /** Extract concise, user-facing bullet points from GitHub release Markdown. */
+    fun releaseNotes(markdown: String): List<String> = markdown.lineSequence()
+        .map { it.trim() }
+        .filter { it.startsWith("- ") || it.startsWith("* ") || it.startsWith("• ") }
+        .map { it.drop(2).trim().replace(Regex("\\s+"), " ") }
+        .filter { it.isNotBlank() && !it.startsWith("http", ignoreCase = true) }
+        .map { if (it.length > 240) it.take(237).trimEnd() + "…" else it }
+        .distinct()
+        .take(8)
+        .toList()
+
     /** The release's own URL first, then the same file name on every mirror. */
     fun downloadUrls(release: Release, mirrors: List<String>): List<String> =
         (listOf(release.downloadUrl) + mirrors.map { "${it.trimEnd('/')}/${release.assetName}" }).distinct()
@@ -81,14 +94,16 @@ object UpdateSources {
         val json = JSONObject(text)
         val version = json.getString("tag_name").removePrefix("v")
         val assets: JSONArray = json.getJSONArray("assets")
-        val critical = json.optBoolean("critical", false) || json.optString("body").contains("[critical]", ignoreCase = true)
+        val body = json.optString("body", "")
+        val critical = json.optBoolean("critical", false) || body.contains("[critical]", ignoreCase = true)
+        val notes = releaseNotes(body)
         for (abi in abis + "universal") {
             val token = abiToken(abi)
             for (i in 0 until assets.length()) {
                 val asset = assets.getJSONObject(i)
                 val name = asset.getString("name")
                 if (name.endsWith(".apk") && name.contains(token, ignoreCase = true)) {
-                    return Release(version, name, asset.getString("browser_download_url"), assetSha256(asset), critical)
+                    return Release(version, name, asset.getString("browser_download_url"), assetSha256(asset), critical, notes)
                 }
             }
         }
