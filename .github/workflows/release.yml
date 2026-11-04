@@ -52,6 +52,9 @@ jobs:
 
       - name: Prebuilt Psiphon, Tor and Xray (our mirror, checksum verified)
         run: bash tools/fetch-binaries.sh
+      - name: Syntax-check release tooling
+        run: python3 -m py_compile tools/refresh-emergency-configs.py
+
       - name: Refresh and validate offline emergency configs
         run: python3 tools/refresh-emergency-configs.py 40 --strict
       - name: Signing key (preserve signing identity for existing MolidoVPN installs)
