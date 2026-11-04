@@ -113,8 +113,8 @@ class AppUpdater(private val activity: Activity) {
         busy = true
         worker.execute {
             val release = runCatching(::latestRelease).getOrNull()
-            val newer = release != null && isNewer(release.version, appVersion())
-            if (!newer || release == null) { busy = false; return@execute }
+            if (release == null) { busy = false; return@execute }
+            if (!isNewer(release.version, appVersion())) { busy = false; return@execute }
             val quiet = !release.critical && !isMetered()
             val apk = if (quiet) runCatching { prefetch(release) }.getOrNull() else null
             activity.runOnUiThread {
@@ -282,7 +282,7 @@ class AppUpdater(private val activity: Activity) {
         check(archive != null && archive.packageName == activity.packageName) { Strings.t("The downloaded file is damaged") }
         val current = pm.getPackageInfo(activity.packageName, 0)
         @Suppress("DEPRECATION")
-        val newCode = if (Build.VERSION.SDK_INT >= 28) archive!!.longVersionCode else archive!!.versionCode.toLong()
+        val newCode = if (Build.VERSION.SDK_INT >= 28) archive.longVersionCode else archive.versionCode.toLong()
         @Suppress("DEPRECATION")
         val oldCode = if (Build.VERSION.SDK_INT >= 28) current.longVersionCode else current.versionCode.toLong()
         check(newCode > oldCode) { Strings.t("The downloaded file is not newer than this version") }
@@ -401,7 +401,7 @@ class AppUpdater(private val activity: Activity) {
         false
     }
 
-    /** Our Cloudflare worker first (reachable where GitHub is filtered), then GitHub, then mirrors. */
+    /** Check the static mirrors first, then the GitHub release API, worker and configured mirrors. */
     private fun latestRelease(): Release? = UpdateSources.latest(
         UpdateSources.releaseJsonUrls(ResilienceConfig.updateMirrors(activity)), appVersion(), ::isNewer, ::fetchRelease,
     )
@@ -437,7 +437,7 @@ class AppUpdater(private val activity: Activity) {
                 check(declared <= 0L || received == declared) { "Incomplete release metadata" }
                 output.toString(Charsets.UTF_8.name())
             }
-            // MolidoVPN release assets are named MolidoVPN-android-arm64.apk / -armv7.apk / -universal.apk.
+            // Release assets use MolidoMeshAI-android-arm64.apk / -armv7.apk / -universal.apk.
             return UpdateSources.parseRelease(body, Build.SUPPORTED_ABIS.toList())
         } finally {
             connection.disconnect()

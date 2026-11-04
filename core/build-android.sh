@@ -78,12 +78,8 @@ if [[ -z "$NDK" || ! -d "$NDK" || ! -d "$BIN" || -z "$CMAKE" || ! -x "$CMAKE" ]]
   exit 1
 fi
 
-# Force fresh dependency resolution for rand 0.10 (avoid stale Cargo.lock from cache)
-rm -f "$CRATE/Cargo.lock"
-(
-  cd "$CRATE"
-  cargo generate-lockfile
-)
+# Use the checked-in lockfile so CI, release, Linux and Windows builds resolve
+# the exact same dependency graph. Update Cargo.lock deliberately in a reviewed change.
 
 export ANDROID_NDK_HOME="$NDK"
 export ANDROID_NDK_ROOT="$NDK"
@@ -104,7 +100,7 @@ fi
 set +e
 (
   cd "$CRATE"
-  cargo ndk -t "$ABI" --platform "$API" build --release --lib
+  cargo ndk -t "$ABI" --platform "$API" build --release --lib --locked
 )
 BOOTSTRAP_EXIT=$?
 set -e
@@ -141,7 +137,7 @@ export RUSTFLAGS="${RUSTFLAGS:-} -C link-arg=-Wl,-soname,libaether.so -C link-ar
 # the RELRO padding, so dropping it fixes the overhang with no 16K cost.
 
 cd "$CRATE"
-cargo build --release --lib --target "$TARGET_TRIPLE"
+cargo build --release --lib --target "$TARGET_TRIPLE" --locked
 
 LIBRARY="$TARGET/$TARGET_TRIPLE/release/libaether.so"
 for DESTINATION in "$ROOT/core/android-libs/$ABI" "$ROOT/app/src/main/jniLibs/$ABI"; do

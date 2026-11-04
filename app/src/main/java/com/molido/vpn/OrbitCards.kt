@@ -168,7 +168,7 @@ class ExitNodeCard(
         flagView.text = IpFormatter.flag(countryCode)
         val code = countryCode?.trim()?.uppercase().orEmpty()
             .takeIf { IpFormatter.isRealCountry(it) }.orEmpty()
-        val countryName = if (code.isBlank()) "" else java.util.Locale("", code)
+        val countryName = if (code.isBlank()) "" else java.util.Locale.Builder().setRegion(code).build()
             .getDisplayCountry(java.util.Locale.forLanguageTag(AppLanguage.current()))
             .ifBlank { code }
         val country = if (countryName == code) code else "$countryName ($code)"

@@ -28,7 +28,7 @@ object CountryFilter {
 
     /** Country name in the UI language (e.g. "ایالات متحده"), falling back to the code. */
     fun displayName(code: String): String = runCatching {
-        java.util.Locale("", code).getDisplayCountry(java.util.Locale(AppLanguage.current())).ifBlank { code }
+        java.util.Locale.Builder().setRegion(code).build().getDisplayCountry(java.util.Locale.forLanguageTag(AppLanguage.current())).ifBlank { code }
     }.getOrDefault(code)
 
     /** Shown when no server from the chosen country connected with an exit in that country. */

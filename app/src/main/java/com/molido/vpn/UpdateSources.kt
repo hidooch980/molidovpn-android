@@ -11,8 +11,8 @@ import java.net.URI
  * Where the in-app updater looks, and how it checks what it got. Pure (unit tested); the network
  * and PackageManager parts stay in [AppUpdater].
  *
- * Order: our worker → GitHub API → every configured mirror ([ResilienceConfig.updateMirrors], e.g. a
- * second worker on a custom domain, an R2 public bucket, an ArvanCloud bucket). A mirror is a plain
+ * Order: static subscription mirrors → GitHub API → our update worker → configured mirrors
+ * ([ResilienceConfig.updateMirrors], e.g. a second worker, R2 or ArvanCloud). A mirror is a plain
  * folder holding `latest.json` (GitHub "latest release" shape) next to the APK files.
  *
  * Trust: a mirror is never trusted. The APK must (1) include a valid SHA-256 in release metadata
@@ -60,23 +60,50 @@ object UpdateSources {
             mirrors.map { "${it.trimEnd('/')}/latest.json" }).filter(::isSecureHttpsUrl).distinct()
 
     /**
-     * The first source that answers wins, except that a static copy (live/sub branch, refreshed every few
-     * minutes by a cron job) saying "nothing newer" is double-checked once against GitHub's own API, so a
-     * just-published release is not hidden behind a stale copy. The Worker is never asked for that.
+     * Try every configured source until one has a release newer than the installed app.
+     * Static copies are double-checked against GitHub, but a stale or empty copy must not
+     * prevent the worker and user-configured mirrors from being tried.
      */
     fun latest(urls: List<String>, installed: String, isNewer: (String, String) -> Boolean, fetch: (String) -> Release?): Release? {
         var lastError: Exception? = null
+        var successfulFetch = false
+        var githubChecked = false
+        var best: Release? = null
+
+        fun consider(candidate: Release?) {
+            val currentBest = best
+            if (candidate != null && isNewer(candidate.version, installed) &&
+                (currentBest == null || isNewer(candidate.version, currentBest.version))) {
+                best = candidate
+            }
+        }
+
         for (url in urls) {
-            val release = try { fetch(url) } catch (e: Exception) { lastError = e; continue }
+            if (url == GITHUB_RELEASE_URL && githubChecked) continue
+            val release = try {
+                fetch(url).also { successfulFetch = true }
+            } catch (e: Exception) {
+                lastError = e
+                continue
+            }
             val static = url.startsWith(LiveSync.RAW) || url.startsWith(LiveSync.CDN) ||
                 url.startsWith(StaticFirst.RAW) || url.startsWith(StaticFirst.CDN)
-            if (static && (release == null || !isNewer(release.version, installed))) {
-                val fresh = runCatching { fetch(GITHUB_RELEASE_URL) }.getOrNull()
-                if (fresh != null && isNewer(fresh.version, installed)) return fresh
+            consider(release)
+            if (static && !githubChecked) {
+                // Static copies may lag even when they already contain a version newer than installed.
+                githubChecked = true
+                val fresh = try {
+                    fetch(GITHUB_RELEASE_URL).also { successfulFetch = true }
+                } catch (e: Exception) {
+                    lastError = e
+                    null
+                }
+                consider(fresh)
             }
-            return release
         }
-        throw lastError ?: IllegalStateException("no release source")
+        if (best != null) return best
+        if (!successfulFetch && lastError != null) throw lastError
+        return null
     }
 
     /** Extract concise, user-facing bullet points from GitHub release Markdown. */

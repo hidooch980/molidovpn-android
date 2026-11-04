@@ -11,6 +11,7 @@ on:
       - "build.gradle.kts"
       - "settings.gradle.kts"
       - ".github/workflows/android-validation.yml"
+      - ".github/workflows/release.yml"
   push:
     branches: [main]
     paths:
@@ -61,8 +62,11 @@ jobs:
       - name: Fetch pinned native binaries with checksum verification
         run: bash tools/fetch-binaries.sh
 
-      - name: Refresh offline emergency defaults
-        run: python3 tools/refresh-emergency-configs.py || true
+      - name: Syntax-check release tooling
+        run: python3 -m py_compile tools/refresh-emergency-configs.py
+
+      - name: Refresh and validate offline emergency defaults
+        run: python3 tools/refresh-emergency-configs.py 40 --strict
 
       - name: Run Android unit tests and build unsigned release APKs
         run: |

@@ -1,10 +1,14 @@
 name: Build Molido Mesh AI Android
 
 on:
-  push:
-    branches: [main]
-    paths-ignore: ['**.md']
-  workflow_dispatch: {}
+  # Publishing is explicit: ordinary code pushes must never overwrite the same v4.0.0 tag.
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (for example 4.0.1)"
+        required: true
+        default: "4.0.1"
+        type: string
 
 permissions:
   contents: write
@@ -16,7 +20,7 @@ concurrency:
 env:
   # First release in the 4.x line. Bump VERSION explicitly for each subsequent release.
   VERSION_CODE: ${{ github.run_number }}
-  VERSION: 4.0.0
+  VERSION: ${{ github.event.inputs.version || '4.0.0' }}
 
 jobs:
   android:
@@ -48,12 +52,31 @@ jobs:
 
       - name: Prebuilt Psiphon, Tor and Xray (our mirror, checksum verified)
         run: bash tools/fetch-binaries.sh
-      - name: Offline emergency configs + bundled resilience defaults (never fails the build)
-        run: python3 tools/refresh-emergency-configs.py || true
+      - name: Syntax-check release tooling
+        run: python3 -m py_compile tools/refresh-emergency-configs.py
+
+      - name: Refresh and validate offline emergency configs
+        run: python3 tools/refresh-emergency-configs.py 40 --strict
+      - name: Validate release version and prevent tag overwrite
+        run: |
+          set -euo pipefail
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid release version: $VERSION" >&2
+            exit 1
+          fi
+          if git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null 2>&1; then
+            echo "Release tag v$VERSION already exists; refusing to overwrite it." >&2
+            exit 1
+          fi
+
       - name: Signing key (preserve signing identity for existing MolidoVPN installs)
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-        run: echo "$KEYSTORE_BASE64" | base64 -d > release.keystore
+        run: |
+          set -euo pipefail
+          test -n "$KEYSTORE_BASE64" || { echo "ANDROID_KEYSTORE_BASE64 secret is missing" >&2; exit 1; }
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > release.keystore
+          test -s release.keystore || { echo "Release keystore is empty" >&2; exit 1; }
 
       - name: Build APKs
         env:
@@ -76,6 +99,51 @@ jobs:
             esac
           done
           ls -la dist
+
+      - name: Verify APK package, version and signing identity
+        env:
+          AETHERY_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          AETHERY_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          APKSIGNER="$ANDROID_HOME/build-tools/36.0.0/apksigner"
+          AAPT="$ANDROID_HOME/build-tools/36.0.0/aapt"
+          test -x "$APKSIGNER"
+          test -x "$AAPT"
+          for name in MolidoMeshAI-android-arm64.apk MolidoMeshAI-android-armv7.apk MolidoMeshAI-android-universal.apk; do
+            test -s "dist/$name"
+          done
+          expected_code=$((400000 + VERSION_CODE))
+          expected_cert=$(keytool -exportcert -keystore release.keystore -alias "$AETHERY_KEY_ALIAS" \
+            -storepass "$AETHERY_KEYSTORE_PASSWORD" | sha256sum | awk '{print $1}')
+
+          # Prove the configured key is the same signer as the already-published 4.0.0 APK.
+          # This prevents a changed/misconfigured GitHub secret from producing an un-upgradable APK.
+          baseline_url="https://github.com/hidooch980/molidovpn-android/releases/download/v4.0.0/MolidoMeshAI-android-arm64.apk"
+          curl --fail --location --retry 3 --silent --show-error "$baseline_url" -o baseline-v4.0.0.apk
+          "$APKSIGNER" verify --verbose baseline-v4.0.0.apk
+          baseline_cert=$("$APKSIGNER" verify --print-certs baseline-v4.0.0.apk | \
+            awk -F': ' '/Signer #1 certificate SHA-256 digest:/ {print tolower($2); exit}')
+          test -n "$baseline_cert"
+          if [[ "$baseline_cert" != "$expected_cert" ]]; then
+            echo "Configured keystore does not match the published v4.0.0 signing certificate; refusing upgrade release." >&2
+            exit 1
+          fi
+          "$AAPT" dump badging baseline-v4.0.0.apk | grep -F "package: name='com.mobin.mobin_vpn'"
+
+          for apk in dist/*.apk; do
+            "$APKSIGNER" verify --verbose "$apk"
+            actual_cert=$("$APKSIGNER" verify --print-certs "$apk" | \
+              awk -F': ' '/Signer #1 certificate SHA-256 digest:/ {print tolower($2); exit}')
+            test -n "$actual_cert"
+            if [[ "$actual_cert" != "$expected_cert" ]]; then
+              echo "Signing certificate mismatch in $apk" >&2
+              exit 1
+            fi
+            "$AAPT" dump badging "$apk" | grep -F \
+              "package: name='com.mobin.mobin_vpn' versionCode='$expected_code' versionName='$VERSION'"
+          done
+          (cd dist && sha256sum *.apk > SHA256SUMS.txt)
 
       - uses: actions/upload-artifact@v6
         with:

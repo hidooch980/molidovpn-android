@@ -124,4 +124,122 @@ class UpdateReleaseNotesTest {
     }
 
 
+    @Test fun releaseParserSelectsArm64ForV400AndRequiresThePublishedDigest() {
+        val hash = "b".repeat(64)
+        val json = """{
+            "tag_name":"v4.0.0",
+            "assets":[
+                {"name":"MolidoMeshAI-android-universal.apk","browser_download_url":"https://cdn.example/universal.apk","digest":"sha256:$hash"},
+                {"name":"MolidoMeshAI-android-arm64.apk","browser_download_url":"https://cdn.example/arm64.apk","digest":"sha256:$hash"},
+                {"name":"MolidoMeshAI-android-armv7.apk","browser_download_url":"https://cdn.example/armv7.apk","digest":"sha256:$hash"}
+            ]
+        }"""
+        val release = UpdateSources.parseRelease(json, listOf("arm64-v8a"))
+        assertEquals("4.0.0", release?.version)
+        assertEquals("MolidoMeshAI-android-arm64.apk", release?.assetName)
+        assertEquals(hash, release?.sha256)
+    }
+
+
+    private fun release(version: String) = UpdateSources.Release(
+        version = version,
+        assetName = "MolidoMeshAI-android-arm64.apk",
+        downloadUrl = "https://updates.example/$version.apk",
+        sha256 = null,
+    )
+
+    private fun isNewer(remote: String, installed: String): Boolean {
+        val remoteParts = remote.split('.').map { it.toIntOrNull() ?: 0 }
+        val installedParts = installed.split('.').map { it.toIntOrNull() ?: 0 }
+        for (index in 0 until maxOf(remoteParts.size, installedParts.size)) {
+            val comparison = (remoteParts.getOrElse(index) { 0 })
+                .compareTo(installedParts.getOrElse(index) { 0 })
+            if (comparison != 0) return comparison > 0
+        }
+        return false
+    }
+
+    @Test fun staleStaticCopyDoesNotBlockWorkerRelease() {
+        val staticUrl = LiveSync.RAW + "latest.json"
+        val calls = mutableListOf<String>()
+        val result = UpdateSources.latest(
+            listOf(staticUrl, UpdateSources.WORKER_RELEASE_URL),
+            "3.3.60",
+            ::isNewer,
+        ) { url ->
+            calls += url
+            when (url) {
+                staticUrl -> release("3.3.60")
+                UpdateSources.GITHUB_RELEASE_URL -> null
+                UpdateSources.WORKER_RELEASE_URL -> release("4.0.0")
+                else -> null
+            }
+        }
+        assertEquals("4.0.0", result?.version)
+        assertTrue(calls.contains(UpdateSources.WORKER_RELEASE_URL))
+    }
+
+    @Test fun githubNewerThanStaleStaticReleaseWins() {
+        val staticUrl = LiveSync.RAW + "latest.json"
+        val result = UpdateSources.latest(
+            listOf(staticUrl, UpdateSources.WORKER_RELEASE_URL),
+            "3.2.161",
+            ::isNewer,
+        ) { url ->
+            when (url) {
+                staticUrl -> release("3.3.60")
+                UpdateSources.GITHUB_RELEASE_URL -> release("4.0.0")
+                UpdateSources.WORKER_RELEASE_URL -> release("4.0.0")
+                else -> null
+            }
+        }
+        assertEquals("4.0.0", result?.version)
+    }
+
+    @Test fun failedGithubFreshnessCheckDoesNotBlockWorkerRelease() {
+        val staticUrl = LiveSync.RAW + "latest.json"
+        val result = UpdateSources.latest(
+            listOf(staticUrl, UpdateSources.WORKER_RELEASE_URL),
+            "3.3.60",
+            ::isNewer,
+        ) { url ->
+            when (url) {
+                staticUrl -> null
+                UpdateSources.GITHUB_RELEASE_URL -> throw IllegalStateException("GitHub unavailable")
+                UpdateSources.WORKER_RELEASE_URL -> release("4.0.0")
+                else -> null
+            }
+        }
+        assertEquals("4.0.0", result?.version)
+    }
+
+    @Test fun workerCanSupersedeStaticCopyWhenGithubIsUnavailable() {
+        val staticUrl = LiveSync.RAW + "latest.json"
+        val result = UpdateSources.latest(
+            listOf(staticUrl, UpdateSources.WORKER_RELEASE_URL),
+            "3.2.161",
+            ::isNewer,
+        ) { url ->
+            when (url) {
+                staticUrl -> release("3.3.60")
+                UpdateSources.GITHUB_RELEASE_URL -> throw IllegalStateException("GitHub unavailable")
+                UpdateSources.WORKER_RELEASE_URL -> release("4.0.0")
+                else -> null
+            }
+        }
+        assertEquals("4.0.0", result?.version)
+    }
+
+    @Test fun allReachableSourcesWithoutANewerReleaseReturnNull() {
+        val staticUrl = LiveSync.RAW + "latest.json"
+        val result = UpdateSources.latest(
+            listOf(staticUrl, UpdateSources.WORKER_RELEASE_URL),
+            "4.0.0",
+            ::isNewer,
+        ) { null }
+        assertEquals(null, result)
+    }
+
+
+
 }

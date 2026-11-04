@@ -6,8 +6,8 @@
 
 **VPN رایگان کل دستگاه برای خانواده‌های ایرانی — هستهٔ Rust، رابط بومی اندروید، حالت‌های اتصال متعدد**
 
-[![Release](https://img.shields.io/github/v/release/hidooch980/molidovpn?style=for-the-badge&color=5CE68F)](https://github.com/hidooch980/molidovpn/releases/latest)
-[![Android](https://img.shields.io/badge/Android-8.0%2B-3A4FB0?style=for-the-badge&logo=android&logoColor=white)](https://github.com/hidooch980/molidovpn/releases/latest)
+[![Release](https://img.shields.io/github/v/release/hidooch980/molidovpn-android?style=for-the-badge&color=5CE68F)](https://github.com/hidooch980/molidovpn-android/releases/latest)
+[![Android](https://img.shields.io/badge/Android-8.0%2B-3A4FB0?style=for-the-badge&logo=android&logoColor=white)](https://github.com/hidooch980/molidovpn-android/releases/latest)
 [![License](https://img.shields.io/badge/license-AGPL--3.0-6c5ce7?style=for-the-badge)](LICENSE)
 [![Transports](https://img.shields.io/badge/%D9%85%D8%B3%DB%8C%D8%B1%D9%87%D8%A7-MASQUE%20%C2%B7%20WireGuard%20%C2%B7%20WARP%C2%B7WARP%20%C2%B7%20Psiphon%20%C2%B7%20Tor-1f6f4a?style=for-the-badge)](#مسیرهای-ترابری)
 
@@ -213,7 +213,7 @@
 
 ## نصب
 
-آخرین APK را از [بخش Releases](https://github.com/hidooch980/molidovpn/releases/latest) بگیرید؛ خود برنامه هم آپدیت را از همان‌جا چک می‌کند. پشتیبانی: تلگرام [@Molido_Vpn](https://t.me/Molido_Vpn).
+آخرین APK را از [بخش Releases](https://github.com/hidooch980/molidovpn-android/releases/latest) بگیرید؛ خود برنامه هم آپدیت را از همان‌جا چک می‌کند. پشتیبانی: تلگرام [@Molido_Vpn](https://t.me/Molido_Vpn).
 
 | معماری دستگاه | فایل |
 |---|---|
