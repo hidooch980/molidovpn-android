@@ -57,10 +57,18 @@ jobs:
 
       - name: Refresh and validate offline emergency configs
         run: python3 tools/refresh-emergency-configs.py 40 --strict
+      - name: Validate release version and prevent tag overwrite
+        run: |
+          set -euo pipefail
+
       - name: Signing key (preserve signing identity for existing MolidoVPN installs)
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-        run: echo "$KEYSTORE_BASE64" | base64 -d > release.keystore
+        run: |
+          set -euo pipefail
+          test -n "$KEYSTORE_BASE64" || { echo "ANDROID_KEYSTORE_BASE64 secret is missing" >&2; exit 1; }
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > release.keystore
+          test -s release.keystore || { echo "Release keystore is empty" >&2; exit 1; }
 
       - name: Build APKs
         env:
