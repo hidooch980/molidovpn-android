@@ -2,6 +2,12 @@
 
 Molido's Android IKEv2 path uses the platform `Ikev2VpnProfile` and `VpnManager` APIs (Android 11 / API 30+). It is a system-managed VPN profile, separate from the app's VpnService tunnel; Android permits only one active VPN at a time.
 
+## GitHub mirror and refresh cadence
+
+The repository includes a public metadata mirror at `data/ikev2/free-servers.json`. GitHub Actions refreshes it every 5 minutes (and supports manual workflow dispatch), commits only when the validated list changes, and refuses to replace the last-known-good file when the provider index is empty or parsing fails. Scheduled GitHub workflows run from the repository's default branch, so this schedule becomes active after the workflow is merged there. GitHub does not support a one-second scheduled workflow cadence.
+
+The Android app tries the provider directly first and falls back to the GitHub raw mirror if the provider cannot be reached. This reduces dependence on one source, but GitHub's raw content can lag by the workflow interval and CDN propagation time. The app's local last-known-good cache remains the final fallback. A GitHub mirror is not a live health check of an endpoint and does not prove that an IKEv2 login will succeed.
+
 ## Free community directory
 
 The in-app directory reads the public VPN Jantit IKEv2 country index and the linked country pages over HTTPS. It follows only links on `www.vpnjantit.com`, extracts public hostnames and the matching account-creation URL, and caches only non-secret metadata (country, hostname, IKE identity, provider URL and the page's availability label).
