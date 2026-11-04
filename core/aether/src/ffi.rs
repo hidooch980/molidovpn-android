@@ -359,7 +359,13 @@ impl Drop for RunningGuard {
 /// The Android caller must invoke this on a worker thread.
 #[no_mangle]
 pub unsafe extern "C" fn aether_start_json(json: *const c_char) -> i32 {
-    unsafe { aether_start_json_inner(json, None) }
+    unsafe { aether_start_json_inner(json, None, false) }
+}
+
+/// Starts Aether using the bounded iOS packet queues; no Unix fd is accepted.
+#[no_mangle]
+pub unsafe extern "C" fn aether_start_json_with_packet_channel(json: *const c_char) -> i32 {
+    unsafe { aether_start_json_inner(json, None, true) }
 }
 
 /// Starts Aether in Android TUN mode. The caller retains ownership of `tun_fd`.
@@ -369,10 +375,10 @@ pub unsafe extern "C" fn aether_start_json_with_tun(json: *const c_char, tun_fd:
         set_last_error("TUN file descriptor is invalid");
         return -1;
     }
-    unsafe { aether_start_json_inner(json, Some(tun_fd)) }
+    unsafe { aether_start_json_inner(json, Some(tun_fd), false) }
 }
 
-unsafe fn aether_start_json_inner(json: *const c_char, tun_fd: Option<i32>) -> i32 {
+unsafe fn aether_start_json_inner(json: *const c_char, tun_fd: Option<i32>, packet_channel: bool) -> i32 {
     let result = catch_unwind(AssertUnwindSafe(|| {
         let mut options = match unsafe { options_from_json(json) } {
             Ok(options) => options,
@@ -382,6 +388,7 @@ unsafe fn aether_start_json_inner(json: *const c_char, tun_fd: Option<i32>) -> i
             }
         };
         options.tun_fd = tun_fd;
+        options.packet_channel = packet_channel;
 
         if RUNNING
             .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
