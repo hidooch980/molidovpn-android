@@ -571,6 +571,9 @@ class MainActivity : Activity() {
         ShardSubscription.refreshIfDue(this)
         // V2Ray servers pool: hourly floor, background thread.
         V2raySubscription.refreshIfDue(this)
+        // Refresh the user's own subscription URLs on foreground entry too; the
+        // JobScheduler repeats this while the app is closed, with the same hourly floor.
+        MyConfigs.refreshIfDue(this)
         // Same trigger for the edge and geo-blocked lists. Separate file, separate
         // ETag, same 6-hour floor — see [RemotePolicy]. Cheap enough to sit next to
         // the subscription fetch: a 304 is a few hundred bytes.
