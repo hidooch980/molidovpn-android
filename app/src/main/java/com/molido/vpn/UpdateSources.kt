@@ -67,6 +67,7 @@ object UpdateSources {
     fun latest(urls: List<String>, installed: String, isNewer: (String, String) -> Boolean, fetch: (String) -> Release?): Release? {
         var lastError: Exception? = null
         var successfulFetch = false
+        var githubChecked = false
         for (url in urls) {
             val release = try {
                 fetch(url).also { successfulFetch = true }
@@ -80,11 +81,14 @@ object UpdateSources {
                 // A static copy may be newer than the installed app but still lag the real release.
                 // Compare GitHub against the copy itself, then fall back to that copy if GitHub is down.
                 val baseline = release?.version ?: installed
-                val fresh = try {
-                    fetch(GITHUB_RELEASE_URL).also { successfulFetch = true }
-                } catch (e: Exception) {
-                    lastError = e
-                    null
+                val fresh = if (githubChecked) null else {
+                    githubChecked = true
+                    try {
+                        fetch(GITHUB_RELEASE_URL).also { successfulFetch = true }
+                    } catch (e: Exception) {
+                        lastError = e
+                        null
+                    }
                 }
                 if (fresh != null && isNewer(fresh.version, baseline)) return fresh
                 if (release != null && isNewer(release.version, installed)) return release
