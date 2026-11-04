@@ -12,7 +12,7 @@ DB = Path(os.getenv("MOLIDO_DISCOVERY_DB", "community-discovery.sqlite3"))
 PEPPER = os.getenv("MOLIDO_TOKEN_PEPPER", "")
 KEY = os.getenv("MOLIDO_DIRECTORY_SIGNING_KEY", "")
 MIN_REPORTERS = max(3, int(os.getenv("MOLIDO_MIN_REPORTERS", "3")))
-HOST_RE = re.compile(r"^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$")
+HOST_RE = re.compile(r"^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$")
 app = FastAPI(title="Molido Community Discovery", version="1.0.0", docs_url=None, redoc_url=None)
 
 class Observation(BaseModel):
