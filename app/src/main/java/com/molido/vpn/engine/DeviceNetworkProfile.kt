@@ -111,7 +111,10 @@ object DeviceNetworkProfile {
             blend(previous?.jitterMedianMs, observation.jitterMedianMs),
             blendRate(previous?.packetLoss, observation.packetLoss),
             blend(previous?.throughputMedianKbps, observation.throughputMedianKbps),
-            observation.successfulProbes.coerceAtLeast(0), observation.totalProbes.coerceAtLeast(0),
+            ((previous?.successfulProbes ?: 0).toLong() + observation.successfulProbes.coerceAtLeast(0))
+                .coerceAtMost(10_000L).toInt(),
+            ((previous?.totalProbes ?: 0).toLong() + observation.totalProbes.coerceAtLeast(0))
+                .coerceAtMost(10_000L).toInt(),
             now.coerceAtLeast(observation.observedAtMs).coerceAtLeast(0L),
         )
     }
