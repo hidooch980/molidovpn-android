@@ -1,20 +1,36 @@
+import Foundation
 import NetworkExtension
 
-/// Safe scaffold only. The Android Rust transport is not yet compiled for iOS;
-/// refusing to create a default route prevents a false "connected" state or
-/// accidental black-holing of all device traffic.
+/// The provider deliberately fails closed until a validated bootstrap exists
+/// and the native packet-channel adapter is ready.
 final class PacketTunnelProvider: NEPacketTunnelProvider {
     override func startTunnel(
         options: [String: NSObject]?,
         completionHandler: @escaping (Error?) -> Void
     ) {
-        let error = NSError(
-            domain: "ai.molido.meshai.tunnel",
-            code: 1001,
-            userInfo: [NSLocalizedDescriptionKey:
-                "Molido iOS transport core is not integrated yet. No traffic was routed."]
-        )
-        completionHandler(error)
+        do {
+            guard
+                let tunnelProtocol = protocolConfiguration as? NETunnelProviderProtocol,
+                let providerConfiguration = tunnelProtocol.providerConfiguration,
+                let version = providerConfiguration["profileVersion"] as? Int,
+                version == MolidoTunnelConfiguration.currentVersion,
+                let groupID = providerConfiguration["appGroupIdentifier"] as? String,
+                groupID == MolidoTunnelConfiguration.appGroupIdentifier
+            else {
+                throw MolidoTunnelConfigurationError.invalidProviderProfile
+            }
+
+            guard FileManager.default.containerURL(
+                forSecurityApplicationGroupIdentifier: groupID
+            ) != nil else {
+                throw MolidoTunnelConfigurationError.sharedContainerUnavailable
+            }
+
+            _ = try MolidoTunnelConfiguration.load(from: groupID)
+            throw MolidoTunnelConfigurationError.nativePacketAdapterNotReady
+        } catch {
+            completionHandler(error as NSError)
+        }
     }
 
     override func stopTunnel(
