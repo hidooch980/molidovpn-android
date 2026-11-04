@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import Network
 import NetworkExtension
 
 @MainActor
@@ -7,8 +8,12 @@ final class VPNController: ObservableObject {
     @Published private(set) var status: NEVPNStatus = .invalid
     @Published private(set) var message = "آماده‌سازی اتصال"
     @Published private(set) var profileInstalled = false
+    @Published private(set) var egressIP: String?
+    @Published private(set) var egressVerified = false
 
     private var manager: NETunnelProviderManager?
+    private var egressVerificationTask: Task<Void, Never>?
+    private var lastVerificationAttempt: Date?
     private let providerBundleIdentifier = "com.molido.meshai.PacketTunnel"
 
     init() {
@@ -34,6 +39,7 @@ final class VPNController: ObservableObject {
                 })
                 self.profileInstalled = self.manager != nil
                 self.status = self.manager?.connection.status ?? .invalid
+                self.handleStatusChange()
             }
         }
     }
@@ -108,15 +114,22 @@ final class VPNController: ObservableObject {
             message = "ابتدا پروفایل VPN را آماده کنید."
             return
         }
+        egressIP = nil
+        egressVerified = false
+        lastVerificationAttempt = nil
         do {
             try manager.connection.startVPNTunnel()
-            message = "درخواست اتصال ارسال شد؛ افزونه اعتبارسنجی تنظیمات را انجام می‌دهد."
+            message = "درخواست اتصال ارسال شد؛ مسیر IPv4/IPv6 و DNS پس از آماده‌شدن موتور فعال می‌شود."
         } catch {
             message = "اتصال برقرار نشد: \(error.localizedDescription)"
         }
     }
 
     func disconnect() {
+        egressVerificationTask?.cancel()
+        egressVerificationTask = nil
+        egressIP = nil
+        egressVerified = false
         manager?.connection.stopVPNTunnel()
         message = "درخواست قطع اتصال ارسال شد."
     }
@@ -125,14 +138,90 @@ final class VPNController: ObservableObject {
         refresh()
     }
 
+    private func handleStatusChange() {
+        switch status {
+        case .connected:
+            verifyRealEgressIfNeeded()
+        case .connecting, .reasserting:
+            message = "در حال برقراری تونل رمزگذاری‌شده…"
+        case .disconnecting, .disconnected, .invalid:
+            egressVerificationTask?.cancel()
+            egressVerificationTask = nil
+            egressIP = nil
+            egressVerified = false
+        @unknown default:
+            break
+        }
+    }
+
+    /// This is a real HTTPS request through the system's default route after the
+    /// packet tunnel reports connected. We only display a verified IP when the
+    /// Cloudflare trace confirms both a public egress address and WARP routing.
+    private func verifyRealEgressIfNeeded() {
+        guard egressVerificationTask == nil,
+              lastVerificationAttempt == nil ||
+              Date().timeIntervalSince(lastVerificationAttempt!) > 15 else { return }
+        lastVerificationAttempt = Date()
+        message = "تونل فعال است؛ در حال آزمایش عبور واقعی اینترنت و IP خروجی…"
+
+        egressVerificationTask = Task { [weak self] in
+            defer { self?.egressVerificationTask = nil }
+            do {
+                var request = URLRequest(url: URL(string: "https://www.cloudflare.com/cdn-cgi/trace")!)
+                request.httpMethod = "GET"
+                request.timeoutInterval = 12
+                request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
+                let (data, response) = try await URLSession.shared.data(for: request)
+                guard let http = response as? HTTPURLResponse, http.statusCode == 200,
+                      let body = String(data: data, encoding: .utf8) else {
+                    throw EgressVerificationError.invalidResponse
+                }
+                let fields = Dictionary(
+                    body.split(whereSeparator: \.isNewline).compactMap { line -> (String, String)? in
+                        let parts = line.split(separator: "=", maxSplits: 1)
+                        guard parts.count == 2 else { return nil }
+                        return (String(parts[0]), String(parts[1]))
+                    },
+                    uniquingKeysWith: { _, latest in latest }
+                )
+                guard let ip = fields["ip"],
+                      IPv4Address(ip) != nil || IPv6Address(ip) != nil,
+                      fields["warp"] == "on" else {
+                    throw EgressVerificationError.tunnelNotVerified
+                }
+                guard !Task.isCancelled else { return }
+                self?.egressIP = ip
+                self?.egressVerified = true
+                self?.message = "عبور واقعی تأیید شد؛ IP خروجی: \(ip) — WARP فعال"
+            } catch {
+                guard !Task.isCancelled else { return }
+                self?.egressIP = nil
+                self?.egressVerified = false
+                self?.message = "تونل گزارش اتصال داده، اما عبور واقعی هنوز تأیید نشده است: \(error.localizedDescription)"
+            }
+        }
+    }
+
     var statusLabel: String {
         switch status {
-        case .connected: return "متصل"
+        case .connected: return egressVerified ? "اتصال و عبور تأیید شد" : "تونل متصل؛ بررسی عبور"
         case .connecting, .reasserting: return "در حال اتصال"
         case .disconnecting: return "در حال قطع"
         case .disconnected: return "قطع"
         case .invalid: return "پروفایل نصب نشده"
         @unknown default: return "نامشخص"
+        }
+    }
+
+    private enum EgressVerificationError: LocalizedError {
+        case invalidResponse
+        case tunnelNotVerified
+
+        var errorDescription: String? {
+            switch self {
+            case .invalidResponse: return "پاسخ سرویس بررسی IP معتبر نبود."
+            case .tunnelNotVerified: return "IP خروجی معتبر یا نشانگر WARP فعال دریافت نشد."
+            }
         }
     }
 }
