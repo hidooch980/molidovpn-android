@@ -155,12 +155,10 @@ final class MolidoPacketChannelAdapter {
 
             if count == 0 { break }
             if count < 0 {
-                if count == -1 {
-                    fail(MolidoPacketAdapterError.nativeQueueFailure(count))
-                }
-                // A too-small buffer is not expected: native queue maximum is
-                // the same as this buffer. Do not spin on a malformed queue.
-                break
+                // The native queue accepts at most 65,535 bytes, exactly this
+                // buffer's capacity. Any negative result is therefore fatal.
+                fail(MolidoPacketAdapterError.nativeQueueFailure(count))
+                return
             }
             guard count <= bytes.count,
                   (family == 4 || family == 6),
