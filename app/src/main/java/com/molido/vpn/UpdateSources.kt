@@ -22,6 +22,11 @@ import java.net.URI
 object UpdateSources {
 
     const val MAX_APK_BYTES: Long = 300L * 1024L * 1024L
+    const val MAX_METADATA_BYTES: Long = 2L * 1024L * 1024L
+    fun withinMetadataSizeLimit(declaredBytes: Long, receivedBytes: Long): Boolean =
+        (declaredBytes < 0L || declaredBytes <= MAX_METADATA_BYTES) &&
+            receivedBytes in 0L..MAX_METADATA_BYTES
+
     fun withinApkSizeLimit(declaredBytes: Long, receivedBytes: Long): Boolean =
         (declaredBytes < 0L || declaredBytes <= MAX_APK_BYTES) &&
             receivedBytes in 0L..MAX_APK_BYTES
