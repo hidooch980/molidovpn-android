@@ -11,8 +11,8 @@ import java.net.URI
  * Where the in-app updater looks, and how it checks what it got. Pure (unit tested); the network
  * and PackageManager parts stay in [AppUpdater].
  *
- * Order: our worker → GitHub API → every configured mirror ([ResilienceConfig.updateMirrors], e.g. a
- * second worker on a custom domain, an R2 public bucket, an ArvanCloud bucket). A mirror is a plain
+ * Order: static subscription mirrors → GitHub API → our update worker → configured mirrors
+ * ([ResilienceConfig.updateMirrors], e.g. a second worker, R2 or ArvanCloud). A mirror is a plain
  * folder holding `latest.json` (GitHub "latest release" shape) next to the APK files.
  *
  * Trust: a mirror is never trusted. The APK must (1) include a valid SHA-256 in release metadata
