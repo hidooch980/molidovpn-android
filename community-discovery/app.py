@@ -6,7 +6,7 @@ from pathlib import Path
 from fastapi import FastAPI, Header, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat, PrivateFormat, NoEncryption
 
 DB = Path(os.getenv("MOLIDO_DISCOVERY_DB", "community-discovery.sqlite3"))
 PEPPER = os.getenv("MOLIDO_TOKEN_PEPPER", "")
@@ -101,12 +101,12 @@ def get_directory(response: Response):
     entries=[]
     for r in rows:
         entries.append({"id":r["endpoint_id"],"protocol":r["protocol"],"host":r["host"],
-          "port":r["port"],"confidence":"corroborated","success_rate":round(r["ok"]/max(1,r["total"]),3),
+          "port":r["port"],"confidence":"community_reported","success_rate":round(r["ok"]/max(1,r["total"]),3),
           "avg_rtt_ms":round(r["avg_rtt"]) if r["avg_rtt"] is not None else None,
           "last_seen":r["last_seen"],"expires_at":r["last_seen"]+86400})
     payload={"schema_version":1,"generated_at":now,"expires_at":now+900,"entries":entries}
     canonical=json.dumps(payload,sort_keys=True,separators=(",",":")).encode()
     pub=key.public_key().public_bytes(Encoding.Raw,PublicFormat.Raw)
-    response.headers["Cache-Control"]="public, max-age=60, stale-while-revalidate=300"
+    response.headers["Cache-Control"]="public, max-age=60, stale-while-revalidate=300"\n    response.headers["X-Content-Type-Options"]="nosniff"
     return {"payload":payload,"signature":base64.b64encode(key.sign(canonical)).decode(),
       "algorithm":"Ed25519","public_key":base64.b64encode(pub).decode()}
