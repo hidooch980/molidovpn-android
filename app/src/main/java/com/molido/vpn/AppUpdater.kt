@@ -36,6 +36,7 @@ class AppUpdater(private val activity: Activity) {
     var onHomeUpdate: ((version: String, critical: Boolean, ready: Boolean) -> Unit)? = null
 
     private fun publishHomeUpdate(release: Release, ready: Boolean) {
+        if (availableRelease?.version != release.version) readyApk = null
         availableRelease = release
         if (ready) readyApk = File(File(activity.cacheDir, "updates"), "MolidoVPN-${release.version}.apk")
         onHomeUpdate?.invoke(release.version, release.critical, ready)
