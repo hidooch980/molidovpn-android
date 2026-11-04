@@ -42,6 +42,8 @@ object AppLanguage {
         return if (tag in SUPPORTED) tag else "en"
     }
 
+    fun isRtl(language: String = current()): Boolean = language == "fa" || language == "ar"
+
     fun set(context: Context, code: String) {
         if (code != "system" && code !in SUPPORTED) return
         context.getSharedPreferences("settings", Context.MODE_PRIVATE)
