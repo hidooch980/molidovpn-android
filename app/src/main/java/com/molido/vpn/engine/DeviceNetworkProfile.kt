@@ -139,8 +139,11 @@ object DeviceNetworkProfile {
             if (value <= 0L || value > max) return null
             return value
         }
-        val loss = if (o.isNull("packet_loss")) null else o.optDouble("packet_loss")
-            .takeIf { it.isFinite() && it in 0.0..1.0 } ?: if (o.isNull("packet_loss")) null else return null
+        val loss: Double? = if (o.isNull("packet_loss")) null else {
+            val value = o.optDouble("packet_loss", Double.NaN)
+            if (!value.isFinite() || value !in 0.0..1.0) return null
+            value
+        }
         val successful = o.optInt("successful_probes", 0)
         val total = o.optInt("total_probes", 0)
         if (successful < 0 || total < 0 || successful > total || total > 10_000) return null
