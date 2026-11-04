@@ -194,7 +194,7 @@ object Strings {
         "Android 11+ system VPN; requires your own server and account" to Triple("Android 11+ system VPN; requires your own server and account", "VPN سیستمی اندروید ۱۱ به بالا؛ نیازمند سرور و حساب خودتان", "Android 11+ 系统 VPN；需要自有服务器和账户"),
         "Uses Android's built-in IKEv2/IPsec engine (Android 11+). Bring your own IKEv2 server and account. This is a separate system VPN and cannot run alongside another VPN." to Triple("Uses Android's built-in IKEv2/IPsec engine (Android 11+). Bring your own IKEv2 server and account. This is a separate system VPN and cannot run alongside another VPN.", "از موتور داخلی IKEv2/IPsec اندروید ۱۱ به بالا استفاده می‌کند. سرور و حساب IKEv2 خودتان لازم است. این یک VPN سیستمی جداگانه است و هم‌زمان با VPN دیگر اجرا نمی‌شود.", "使用 Android 11+ 内置 IKEv2/IPsec 引擎。需要自备 IKEv2 服务器和账户。这是独立的系统 VPN，不能与其他 VPN 同时运行。"),
         "Server hostname or IP" to Triple("Server hostname or IP", "نام میزبان یا IP سرور", "服务器主机名或 IP"),
-        "IKE identity" to Triple("IKE identity", "شناسه IKE", "IKE 身份"),
+        "Server identity (Remote ID)" to Triple("Server identity (Remote ID)", "شناسه سرور (Remote ID)", "服务器身份（Remote ID）"),
         "EAP username" to Triple("EAP username", "نام کاربری EAP", "EAP 用户名"),
         "EAP password" to Triple("EAP password", "گذرواژه EAP", "EAP 密码"),
         "Credentials are not saved by MolidoVPN. Android stores the provisioned system VPN profile." to Triple("Credentials are not saved by MolidoVPN. Android stores the provisioned system VPN profile.", "مولیدووی‌پی‌ان اطلاعات ورود را ذخیره نمی‌کند؛ اندروید پروفایل VPN سیستمی را نگه می‌دارد.", "MolidoVPN 不保存凭据；Android 系统保存已配置的 VPN 配置文件。"),
