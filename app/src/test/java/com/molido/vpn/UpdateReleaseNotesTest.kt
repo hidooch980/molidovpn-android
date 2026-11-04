@@ -73,6 +73,14 @@ class UpdateReleaseNotesTest {
         ))
     }
 
+    @Test fun releaseMetadataSizeIsBoundedEvenWithoutContentLength() {
+        val max = UpdateSources.MAX_METADATA_BYTES
+        assertTrue(UpdateSources.withinMetadataSizeLimit(max, max))
+        assertTrue(!UpdateSources.withinMetadataSizeLimit(max + 1, 0))
+        assertTrue(UpdateSources.withinMetadataSizeLimit(-1, max))
+        assertTrue(!UpdateSources.withinMetadataSizeLimit(-1, max + 1))
+    }
+
     @Test fun apkDownloadSizeIsBoundedEvenWithoutContentLength() {
         val max = UpdateSources.MAX_APK_BYTES
         assertTrue(UpdateSources.withinApkSizeLimit(max, max))
