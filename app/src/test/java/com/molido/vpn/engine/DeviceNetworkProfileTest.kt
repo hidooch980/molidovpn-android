@@ -60,6 +60,32 @@ class DeviceNetworkProfileTest {
         assertEquals(2_500L, o.throughputMedianKbps)
     }
 
+    @Test fun sampleCountersAccumulateAcrossOldAndNewObservations() {
+        val old = DeviceNetworkProfile.Profile(
+            DeviceNetworkProfile.Transport.WIFI, true, false, false, 20_000, 5_000,
+            100, 10, 0.02, 3_000, 2, 3, 1_000,
+        )
+        val fresh = DeviceNetworkProfile.observe(
+            listOf(Probe(true, 120, 4_000), Probe(false)), 2_000L,
+        )
+        val merged = DeviceNetworkProfile.merge(old, fresh, link(), 2_000L)
+        assertEquals(3, merged.successfulProbes)
+        assertEquals(5, merged.totalProbes)
+        assertEquals(0.02 * 0.65 + 0.5 * 0.35, merged.packetLoss!!, 0.0001)
+    }
+
+    @Test fun countersAreBoundedAgainstCorruptOrHugeHistory() {
+        val old = DeviceNetworkProfile.Profile(
+            DeviceNetworkProfile.Transport.WIFI, true, false, false, 20_000, 5_000,
+            100, 10, 0.02, 3_000, Int.MAX_VALUE, Int.MAX_VALUE, 1_000,
+        )
+        val merged = DeviceNetworkProfile.merge(
+            old, DeviceNetworkProfile.observe(listOf(Probe(true, 100, 2_000)), 2_000L), link(), 2_000L,
+        )
+        assertEquals(10_000, merged.successfulProbes)
+        assertEquals(10_000, merged.totalProbes)
+    }
+
     @Test fun missingSamplesDoNotErasePreviousMeasurements() {
         val previous = DeviceNetworkProfile.Profile(
             DeviceNetworkProfile.Transport.CELLULAR, true, true, false, 10_000, 2_000,
