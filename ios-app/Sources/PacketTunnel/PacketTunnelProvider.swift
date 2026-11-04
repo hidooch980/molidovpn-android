@@ -1,13 +1,34 @@
 import Foundation
 import NetworkExtension
 
-/// The provider deliberately fails closed until a validated bootstrap, engine
-/// configuration, shared Keychain credential, and native packet adapter exist.
+/// Calls the NetworkExtension start completion at most once across asynchronous
+/// preparation, engine startup, network-settings application, and packet activation.
+private final class MolidoStartCompletion {
+    private let lock = NSLock()
+    private var handler: ((Error?) -> Void)?
+
+    init(_ handler: @escaping (Error?) -> Void) {
+        self.handler = handler
+    }
+
+    func finish(_ error: Error?) {
+        lock.lock()
+        let callback = handler
+        handler = nil
+        lock.unlock()
+        callback?(error)
+    }
+}
+
 final class PacketTunnelProvider: NEPacketTunnelProvider {
+    private var packetAdapter: MolidoAetherPacketAdapter?
+
     override func startTunnel(
         options: [String: NSObject]?,
         completionHandler: @escaping (Error?) -> Void
     ) {
+        let completion = MolidoStartCompletion(completionHandler)
+
         do {
             guard
                 let tunnelProtocol = protocolConfiguration as? NETunnelProviderProtocol,
@@ -27,24 +48,77 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
             }
 
             let configuration = try MolidoTunnelConfiguration.load(from: groupID)
-            _ = try MolidoTunnelBootstrapStore.engineConfigurationURL(
+            let engineURL = try MolidoTunnelBootstrapStore.engineConfigurationURL(
                 for: configuration,
                 in: groupID
             )
-            let credential = try MolidoKeychainStore.load(
-                service: configuration.keychainService,
-                account: configuration.keychainAccount
+            let optionsJSON = try MolidoAetherConfigurationBuilder.makeOptionsJSON(
+                for: configuration,
+                engineConfigurationURL: engineURL
             )
-            guard !credential.isEmpty else {
-                throw MolidoTunnelConfigurationError.credentialMissing
-            }
 
-            // Never copy credentials into providerConfiguration or bootstrap JSON.
-            // The Aether packet-channel bridge remains a hard gate before routes
-            // can be installed or the provider can report a working tunnel.
-            throw MolidoTunnelConfigurationError.nativePacketAdapterNotReady
+            let adapter = MolidoAetherPacketAdapter()
+            packetAdapter = adapter
+
+            // Identity provisioning and the native start call are blocking FFI
+            // operations. Keep both off NetworkExtension's lifecycle queue.
+            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+                do {
+                    let addresses = try MolidoAetherConfigurationBuilder.prepare(
+                        optionsJSON: optionsJSON
+                    )
+                    adapter.start(
+                        engineOptionsJSON: optionsJSON,
+                        ready: { result in
+                            switch result {
+                            case .failure(let error):
+                                completion.finish(error)
+                            case .success:
+                                do {
+                                    let settings = try MolidoAetherConfigurationBuilder.makeNetworkSettings(
+                                        configuration: configuration,
+                                        addresses: addresses
+                                    )
+                                    self?.setTunnelNetworkSettings(settings) { settingsError in
+                                        if let settingsError {
+                                            adapter.stop()
+                                            completion.finish(settingsError)
+                                            return
+                                        }
+                                        adapter.activatePacketFlow(
+                                            self?.packetFlow ?? NEPacketTunnelFlow(),
+                                            activated: { activation in
+                                                switch activation {
+                                                case .success:
+                                                    completion.finish(nil)
+                                                case .failure(let error):
+                                                    adapter.stop()
+                                                    completion.finish(error)
+                                                }
+                                            },
+                                            failed: { error in
+                                                completion.finish(error)
+                                                self?.cancelTunnelWithError(error)
+                                            }
+                                        )
+                                    }
+                                } catch {
+                                    adapter.stop()
+                                    completion.finish(error)
+                                }
+                            }
+                        },
+                        failed: { [weak self] error in
+                            completion.finish(error)
+                            self?.cancelTunnelWithError(error)
+                        }
+                    )
+                } catch {
+                    completion.finish(error)
+                }
+            }
         } catch {
-            completionHandler(error as NSError)
+            completion.finish(error)
         }
     }
 
@@ -52,6 +126,11 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         with reason: NEProviderStopReason,
         completionHandler: @escaping () -> Void
     ) {
-        completionHandler()
+        guard let adapter = packetAdapter else {
+            completionHandler()
+            return
+        }
+        packetAdapter = nil
+        adapter.stop(completion: completionHandler)
     }
 }
