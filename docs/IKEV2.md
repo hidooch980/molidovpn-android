@@ -12,7 +12,7 @@ The in-app directory reads the public VPN Jantit IKEv2 country index and the lin
 - The last successful cache remains visible if the provider cannot be reached.
 - Provider availability text is informational and is not an IKE negotiation, authentication, latency, throughput, DNS, IPv4/IPv6 or leak test.
 
-VPN Jantit states that its free IKEv2 accounts are temporary (up to 7 days) and are reset daily. Users must create their own account on the provider site. Molido does not create accounts, store EAP usernames/passwords, or send credentials to the directory service. The user must review the provider's current terms and privacy notice before registration.
+VPN Jantit states that its free IKEv2 accounts are temporary (up to 7 days) and are reset daily. Users must create their own account on the provider site. Molido does not create accounts, store EAP usernames/passwords, or send credentials to the directory service. The provider's published privacy notice says it may collect information users submit, including usernames and passwords. The user must review the provider's current terms and privacy notice before registration; Molido does not audit or endorse this third-party provider.
 
 ## Certificate and credentials
 
