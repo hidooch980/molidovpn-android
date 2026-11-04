@@ -11,6 +11,10 @@ Rank available routes for interactive games using measured latency distribution,
 - Missing optional metrics are neutral; an empty/all-failed probe window scores zero.
 - This component does not yet collect probes, change routes, identify games or expose a UI. Those require separate integration and device tests.
 
+## Existing Android DNS preset safeguard
+
+Selecting one of the legacy Iranian Gaming DNS presets now requires an explicit confirmation. The confirmation explains that DNS requests are routed outside the VPN tunnel and may be visible to the local network or ISP. This is a disclosure safeguard only; it does not make direct DNS leak-free and does not alter the legacy routing behavior after consent.
+
 ## Recommended operating modes
 
 1. **Secure Game (default):** retain full-tunnel routes, DNS inside the tunnel, IPv4/IPv6 leak protection and kill switch. Do not use `VpnService.Builder.excludeRoute` for game DNS destinations.
