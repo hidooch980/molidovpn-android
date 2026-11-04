@@ -26,13 +26,13 @@ object DeviceNetworkProfile {
 
     /** allNetworks ordering is unspecified: prefer active, validated, default-route physical links. */
     fun choose(candidates: List<Candidate>): Link? = candidates
+        .asSequence()
         .filter { it.link.hasDefaultRoute || it.isActive }
         .maxWithOrNull(compareBy<Candidate> { if (it.link.validated) 1 else 0 }
             .thenBy { if (it.link.hasDefaultRoute) 1 else 0 }
             .thenBy { if (it.isActive) 1 else 0 }
             .thenBy { if (it.link.transport == Transport.OTHER) 0 else 1 })
-        ?.link ?: candidates.maxWithOrNull(compareBy<Candidate> { if (it.link.validated) 1 else 0 }
-            .thenBy { if (it.link.hasDefaultRoute) 1 else 0 })?.link
+        ?.link
 
     /** Conservative caps for current link state and recent local quality history. */
     fun policy(
