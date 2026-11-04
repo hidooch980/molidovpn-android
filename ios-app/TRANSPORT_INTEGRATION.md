@@ -22,7 +22,7 @@ The Android-only `aether_start_json_with_tun(json, fd)` API is not used by iOS. 
 - IPv4 and IPv6 default routes and catch-all DNS are installed only after native readiness. The initial iOS route policy is full tunnel only; unsupported split routing is rejected rather than allowed to leak.
 - Inbound queue saturation is handled as backpressure: already-read packets are retained in a bounded local queue and retried. The tunnel fails closed if that bounded handoff buffer itself is exhausted.
 - Native exit after readiness, loss of readiness, malformed packets, queue errors and packet-flow write failures terminate the tunnel.
-- After NetworkExtension reports connected, the app uses a fresh ephemeral HTTPS session to Cloudflare trace and only marks egress verified when a valid exit IP and `warp=on` are returned.
+- Before connecting and after NetworkExtension reports connected, the app uses fresh ephemeral HTTPS sessions to Cloudflare trace and compares the public IP. It does not require the WARP-only flag. A changed IP is supporting evidence, not proof of packet routing or zero leaks; if the baseline is missing or unchanged, the UI explicitly leaves egress unverified.
 - Shutdown requests native stop and waits for the blocking FFI worker to return before completing provider teardown.
 
 ## Confirmed validation
