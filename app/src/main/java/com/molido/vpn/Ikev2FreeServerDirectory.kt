@@ -28,14 +28,18 @@ object Ikev2FreeServerDirectory {
             .timeout(12_000)
             .maxBodySize(2 * 1024 * 1024)
             .get()
+        require(index.location().startsWith("https://$PROVIDER_HOST/")) {
+            "IKEv2 directory redirected outside the provider domain"
+        }
 
         val countryPages = index.select("a[href]")
             .mapNotNull { link ->
                 val href = link.attr("href")
                 val absolute = link.absUrl("href")
-                val slug = href.substringBefore('?').trimEnd('/')
-                if (!slug.matches(Regex("^/free-ikev2-[a-z0-9-]+$"))) return@mapNotNull null
                 if (!absolute.startsWith("https://$PROVIDER_HOST/")) return@mapNotNull null
+                val slug = try { java.net.URI(absolute).path?.trimEnd('/') ?: "" }
+                    catch (_: Exception) { return@mapNotNull null }
+                if (!slug.matches(Regex("^/free-ikev2-[a-z0-9-]+$"))) return@mapNotNull null
                 val country = link.text().trim().removePrefix("IKEV2 MSCHPv2 ").trim()
                 if (country.isBlank()) return@mapNotNull null
                 country to absolute
@@ -88,6 +92,9 @@ object Ikev2FreeServerDirectory {
             .timeout(10_000)
             .maxBodySize(2 * 1024 * 1024)
             .get()
+        require(doc.location().startsWith("https://$PROVIDER_HOST/")) {
+            "IKEv2 country page redirected outside the provider domain"
+        }
         return parseCountryHtml(country, url, doc.html())
     }
 }
