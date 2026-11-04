@@ -136,6 +136,27 @@ object UpdateSources {
 
     fun sha256Hex(file: File): String = file.inputStream().use { sha256Hex(it) }
 
+    /**
+     * Accept only the installed current signer or a cryptographically verified Android signing
+     * lineage that explicitly carries it forward. Multi-signer APKs must match the complete signer
+     * set; a shared certificate is never enough in that case.
+     */
+    fun isValidSignerTransition(
+        installedCurrent: List<ByteArray>,
+        installedHasMultipleSigners: Boolean,
+        candidateCurrent: List<ByteArray>,
+        candidateHistory: List<ByteArray>,
+        candidateHasMultipleSigners: Boolean,
+    ): Boolean {
+        if (installedCurrent.isEmpty() || candidateCurrent.isEmpty()) return false
+        if (installedHasMultipleSigners || candidateHasMultipleSigners) {
+            return installedHasMultipleSigners && candidateHasMultipleSigners &&
+                sameSigners(installedCurrent, candidateCurrent)
+        }
+        if (installedCurrent.size != 1 || candidateCurrent.size != 1) return false
+        return candidateHistory.any { it.contentEquals(installedCurrent.single()) }
+    }
+
     /** Same signer set, compared as SHA-256 of each certificate. Empty on either side = no match. */
     fun sameSigners(a: List<ByteArray>, b: List<ByteArray>): Boolean {
         if (a.isEmpty() || b.isEmpty()) return false
