@@ -73,6 +73,14 @@ class UpdateReleaseNotesTest {
         ))
     }
 
+    @Test fun apkDownloadSizeIsBoundedEvenWithoutContentLength() {
+        val max = UpdateSources.MAX_APK_BYTES
+        assertTrue(UpdateSources.withinApkSizeLimit(max, max))
+        assertTrue(!UpdateSources.withinApkSizeLimit(max + 1, 0))
+        assertTrue(UpdateSources.withinApkSizeLimit(-1, max))
+        assertTrue(!UpdateSources.withinApkSizeLimit(-1, max + 1))
+    }
+
     @Test fun multiSignerPackagesRequireExactSignerSet() {
         val a = byteArrayOf(1)
         val b = byteArrayOf(2)
