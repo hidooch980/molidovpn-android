@@ -8372,7 +8372,11 @@ class MainActivity : Activity() {
                     .setMessage(Strings.t("Gaming DNS sends DNS queries outside the VPN tunnel. This is not full-tunnel DNS protection and may expose DNS requests to the local network or ISP."))
                     .setNegativeButton(Strings.t("Cancel"), null)
                     .setPositiveButton(Strings.t("Continue anyway")) { _, _ ->
-                        DnsSettings.setPreset(this, selected)
+                        DnsSettings.setPreset(
+                            this,
+                            selected,
+                            explicitlyAllowDirectGamingDns = true,
+                        )
                         onDone()
                     }
                     .show()
