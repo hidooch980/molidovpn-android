@@ -1,7 +1,7 @@
 //! Bounded packet queues for the future iOS NEPacketTunnelFlow adapter.
 //!
-//! This is only the FFI-safe queue primitive. It is deliberately not wired into
-//! the live Aether transport yet; the current Android fd bridge remains unchanged.
+//! The iOS packet-channel mode connects these queues to Aether's live transport.
+//! The Android fd bridge remains a separate, unchanged path.
 use std::collections::VecDeque;
 use std::ffi::c_int;
 use std::ptr;
@@ -293,5 +293,44 @@ mod tests {
         assert!(queue.packets.is_empty());
         queue.push(PacketFamily::Ipv4, &[0x45]).unwrap();
         assert_eq!(queue.bytes, 1);
+    }
+
+    #[tokio::test]
+    async fn bridge_forwards_packets_in_both_directions() {
+        aether_packet_channel_reset();
+        let (core_tx, mut core_rx) = mpsc::channel(4);
+        let (reply_tx, reply_rx) = mpsc::channel(4);
+        let bridge = spawn_bridge(core_tx, reply_rx);
+
+        {
+            let mut channel = CHANNEL.lock().unwrap();
+            channel.inbound.push(PacketFamily::Ipv4, &[0x45, 1, 2]).unwrap();
+        }
+        let inbound = tokio::time::timeout(Duration::from_secs(1), core_rx.recv())
+            .await
+            .expect("inbound packet should reach Aether")
+            .expect("bridge should keep the core channel open");
+        assert_eq!(inbound, vec![0x45, 1, 2]);
+
+        reply_tx.send(vec![0x60, 3, 4]).await.unwrap();
+        let outbound = tokio::time::timeout(Duration::from_secs(1), async {
+            loop {
+                let mut buffer = [0u8; 16];
+                let mut family = 0u8;
+                let length = unsafe {
+                    aether_packet_pop_outbound(buffer.as_mut_ptr(), buffer.len(), &mut family)
+                };
+                if length > 0 {
+                    break (buffer[..length as usize].to_vec(), family);
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("outbound packet should reach the iOS queue");
+        assert_eq!(outbound, (vec![0x60, 3, 4], 6));
+
+        bridge.abort();
+        aether_packet_channel_reset();
     }
 }
