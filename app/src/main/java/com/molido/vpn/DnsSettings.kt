@@ -8,6 +8,8 @@ import android.content.Context
  * Gaming DNS is direct by design on Android 13+ and therefore bypasses the VPN
  * for those resolver IPs. That behavior is separately gated by an explicit
  * per-device consent bit; selecting/migrating a preset alone is not consent.
+ * Any selection path that omits the explicit flag clears consent, including
+ * automation/import flows. Secure tunnel DNS remains the default.
  */
 object DnsSettings {
 
