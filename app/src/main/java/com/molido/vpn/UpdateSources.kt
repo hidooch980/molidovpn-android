@@ -33,7 +33,7 @@ object UpdateSources {
             receivedBytes in 0L..MAX_APK_BYTES
 
     const val WORKER_RELEASE_URL = "https://molido-sub.hidooch980.workers.dev/app/latest.json"
-    const val GITHUB_RELEASE_URL = "https://api.github.com/repos/hidooch980/molidovpn/releases/latest"
+    const val GITHUB_RELEASE_URL = "https://api.github.com/repos/hidooch980/molidovpn-android/releases/latest"
 
     data class Release(
         val version: String,
