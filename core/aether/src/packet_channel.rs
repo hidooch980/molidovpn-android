@@ -83,7 +83,7 @@ pub fn spawn_bridge(
     mut core_rx: mpsc::Receiver<Vec<u8>>,
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
-        let inbound_task = tokio::spawn(async move {
+        let mut inbound_task = tokio::spawn(async move {
             let mut buffer = vec![0u8; MAX_PACKET_BYTES];
             loop {
                 let packet = {
@@ -101,7 +101,7 @@ pub fn spawn_bridge(
             }
         });
 
-        let outbound_task = tokio::spawn(async move {
+        let mut outbound_task = tokio::spawn(async move {
             while let Some(packet) = core_rx.recv().await {
                 let family = match packet.first().map(|byte| byte >> 4) {
                     Some(4) => PacketFamily::Ipv4,
@@ -120,8 +120,8 @@ pub fn spawn_bridge(
         });
 
         tokio::select! {
-            _ = inbound_task => {},
-            _ = outbound_task => {},
+            _ = &mut inbound_task => {},
+            _ = &mut outbound_task => {},
         }
         inbound_task.abort();
         outbound_task.abort();
