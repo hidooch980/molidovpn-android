@@ -647,8 +647,11 @@ async fn handle_tcp(
         let conns_clone = Arc::clone(&conns);
         tokio::spawn(async move {
             if tun_fd_clone < 0 { return; }
+            // SAFETY: tun_fd_clone is a successful dup and ownership transfers to tun_file.
             let tun_file = unsafe { std::fs::File::from_raw_fd(tun_fd_clone) };
-            let tun_async = match tokio::io::unix::AsyncFd::new(tun_file) {
+            // SAFETY: tun_file owns the duplicated descriptor and remains open and unchanged
+            // until the AsyncFd is dropped.
+            let tun_async = match unsafe { tokio::io::unix::AsyncFd::register(tun_file) } {
                 Ok(a) => a,
                 Err(_) => return,
             };
@@ -696,21 +699,42 @@ async fn handle_tcp(
                     let tun_reader_fd = unsafe { libc::dup(tun_async.as_raw_fd()) };
                     let ack_for_reader = Arc::clone(&ack_shared);
                     let seq_for_reader = Arc::clone(&seq_shared);
-                    if tun_reader_fd >= 0 {
-                        let tun_reader_file = unsafe { std::fs::File::from_raw_fd(tun_reader_fd) };
-                        let tun_reader = tokio::io::unix::AsyncFd::new(tun_reader_file).unwrap();
-                        let conns_reader = Arc::clone(&conns_clone);
-                        tokio::spawn(async move {
-                            tun_response_reader(
-                                read_half, tun_reader,
-                                src_ip, dst_ip,
-                                sport, dport,
-                                seq_for_reader,
-                                ack_for_reader,
-                                conns_reader,
-                            ).await;
-                        });
+                    if tun_reader_fd < 0 {
+                        ffi::record_log("[tun2socks] failed to duplicate TUN fd for response reader".into());
+                        let _ = send_tcp(
+                            &tun_async, dst_ip, src_ip,
+                            dport, sport, 0, seq_num.wrapping_add(1), 0x04, &[],
+                        ).await;
+                        conns_clone.lock().await.remove(&sport);
+                        return;
                     }
+                    // SAFETY: tun_reader_fd is a successful dup and ownership transfers to this File.
+                    let tun_reader_file = unsafe { std::fs::File::from_raw_fd(tun_reader_fd) };
+                    // SAFETY: tun_reader_file owns the duplicate and stays open and unchanged
+                    // for the lifetime of the registered AsyncFd.
+                    let tun_reader = match unsafe { tokio::io::unix::AsyncFd::register(tun_reader_file) } {
+                        Ok(reader) => reader,
+                        Err(error) => {
+                            ffi::record_log(format!("[tun2socks] TUN reader registration failed: {error}"));
+                            let _ = send_tcp(
+                                &tun_async, dst_ip, src_ip,
+                                dport, sport, 0, seq_num.wrapping_add(1), 0x04, &[],
+                            ).await;
+                            conns_clone.lock().await.remove(&sport);
+                            return;
+                        }
+                    };
+                    let conns_reader = Arc::clone(&conns_clone);
+                    tokio::spawn(async move {
+                        tun_response_reader(
+                            read_half, tun_reader,
+                            src_ip, dst_ip,
+                            sport, dport,
+                            seq_for_reader,
+                            ack_for_reader,
+                            conns_reader,
+                        ).await;
+                    });
 
                     // Spawn SOCKS writer task
                     tokio::spawn(socks_writer_task(write_half, data_rx));
@@ -865,8 +889,11 @@ pub async fn serve(upstream: SocketAddr, tun_fd: i32) -> Result<()> {
         return Err(AetherError::Other(format!("fcntl nonblock: {e}")));
     }
 
+    // SAFETY: fd is a successful duplicate and ownership transfers to file.
     let file = unsafe { std::fs::File::from_raw_fd(fd) };
-    let tun: TunW = Arc::new(tokio::io::unix::AsyncFd::new(file)?);
+    // SAFETY: file owns the duplicated descriptor and remains open and unchanged
+    // for the lifetime of the AsyncFd, which owns file.
+    let tun: TunW = Arc::new(unsafe { tokio::io::unix::AsyncFd::register(file) }?);
 
     let conns: Arc<Mutex<HashMap<u16, TcpConn>>> = Arc::new(Mutex::new(HashMap::new()));
     let dns_cache: DnsCache = Arc::new(Mutex::new(HashMap::new()));
