@@ -2,6 +2,9 @@ package com.molido.vpn
 
 import org.junit.Assert.*
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 import java.net.URLEncoder
 
 /**
@@ -10,6 +13,8 @@ import java.net.URLEncoder
  * These are synthetic documentation fixtures, not donated/private server
  * credentials. Parsing a link is not evidence that its endpoint is reachable.
  */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [35], manifest = Config.NONE)
 class MahsaNgCompatibilityTest {
     private val uuid = "11111111-1111-4111-8111-111111111111"
     private fun enc(value: String) = URLEncoder.encode(value, "UTF-8").replace("+", "%20")
