@@ -21,8 +21,9 @@ import android.widget.TextView
 import android.widget.Toast
 import android.os.Handler
 import android.os.Looper
-import org.json.JSONArray
-import org.json.JSONObject
+import android.app.job.JobInfo
+import android.app.job.JobScheduler
+import android.content.ComponentName
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -129,6 +130,7 @@ class Ikev2VpnActivity : Activity() {
         freeServerList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(freeServerList, matchWidth())
         renderCachedDirectory()
+        scheduleBackgroundDirectoryRefresh()
 
         root.addView(Button(this).apply {
             text = Strings.t("Connect with IKEv2")
@@ -191,45 +193,23 @@ class Ikev2VpnActivity : Activity() {
     }
 
     private fun saveDirectoryCache(servers: List<Ikev2FreeServer>) {
-        val rows = JSONArray()
-        servers.forEach { item ->
-            rows.put(JSONObject().apply {
-                put("country", item.country)
-                put("host", item.host)
-                put("identity", item.identity)
-                put("accountUrl", item.accountUrl)
-                put("available", item.listedAvailable)
-            })
-        }
-        getSharedPreferences(DIRECTORY_PREFS, MODE_PRIVATE).edit()
-            .putString(DIRECTORY_JSON, rows.toString())
-            .putLong(DIRECTORY_UPDATED_AT, System.currentTimeMillis())
-            .apply()
+        Ikev2FreeServerCache.save(this, servers)
     }
 
-    private fun loadDirectoryCache(): Pair<List<Ikev2FreeServer>, Long> {
-        val prefs = getSharedPreferences(DIRECTORY_PREFS, MODE_PRIVATE)
-        val raw = prefs.getString(DIRECTORY_JSON, null) ?: return emptyList<Ikev2FreeServer>() to 0L
-        return try {
-            val rows = JSONArray(raw)
-            val result = (0 until rows.length()).mapNotNull { index ->
-                val row = rows.optJSONObject(index) ?: return@mapNotNull null
-                val host = row.optString("host")
-                val url = row.optString("accountUrl")
-                if (!Ikev2ProfileValidation.isValidServer(host) ||
-                    !url.startsWith("https://www.vpnjantit.com/")) return@mapNotNull null
-                Ikev2FreeServer(
-                    country = row.optString("country"),
-                    host = host,
-                    identity = row.optString("identity", "vpnjantit"),
-                    accountUrl = url,
-                    listedAvailable = row.optBoolean("available", false),
-                )
-            }
-            result to prefs.getLong(DIRECTORY_UPDATED_AT, 0L)
-        } catch (_: Exception) {
-            emptyList<Ikev2FreeServer>() to 0L
-        }
+    private fun loadDirectoryCache(): Pair<List<Ikev2FreeServer>, Long> =
+        Ikev2FreeServerCache.load(this)
+
+    private fun scheduleBackgroundDirectoryRefresh() {
+        val scheduler = getSystemService(JobScheduler::class.java) ?: return
+        val job = JobInfo.Builder(
+            DIRECTORY_REFRESH_JOB_ID,
+            ComponentName(this, Ikev2DirectoryRefreshJob::class.java),
+        )
+            .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
+            .setPersisted(true)
+            .setPeriodic(DIRECTORY_BACKGROUND_REFRESH_INTERVAL_MS)
+            .build()
+        scheduler.schedule(job)
     }
 
     private fun renderCachedDirectory() {
@@ -429,6 +409,8 @@ class Ikev2VpnActivity : Activity() {
         private const val DIRECTORY_PREFS = "ikev2_free_directory"
         private const val DIRECTORY_JSON = "servers_json"
         private const val DIRECTORY_UPDATED_AT = "updated_at"
+        private const val DIRECTORY_REFRESH_JOB_ID = 80421
+        private const val DIRECTORY_BACKGROUND_REFRESH_INTERVAL_MS = 15 * 60 * 1000L
         private const val REQUEST_CA_CERTIFICATE = 7302
         private const val MAX_CA_BYTES = 256 * 1024
     }
