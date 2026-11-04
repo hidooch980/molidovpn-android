@@ -7,6 +7,9 @@ use std::ffi::c_int;
 use std::ptr;
 use std::slice;
 use std::sync::{LazyLock, Mutex};
+use tokio::sync::mpsc;
+use tokio::task::JoinHandle;
+use tokio::time::{sleep, Duration};
 
 const MAX_PACKET_BYTES: usize = 65_535;
 const MAX_QUEUED_PACKETS: usize = 256;
@@ -71,6 +74,59 @@ struct PacketChannel {
 
 static CHANNEL: LazyLock<Mutex<PacketChannel>> =
     LazyLock::new(|| Mutex::new(PacketChannel::default()));
+
+/// Connects the iOS queues to Aether's existing packet channels.
+/// `core_tx` carries packets from the device toward the remote transport;
+/// `core_rx` carries decrypted packets back toward the device.
+pub fn spawn_bridge(
+    core_tx: mpsc::Sender<Vec<u8>>,
+    mut core_rx: mpsc::Receiver<Vec<u8>>,
+) -> JoinHandle<()> {
+    tokio::spawn(async move {
+        let inbound_task = tokio::spawn(async move {
+            let mut buffer = vec![0u8; MAX_PACKET_BYTES];
+            loop {
+                let packet = {
+                    let Ok(mut channel) = CHANNEL.lock() else { break };
+                    match channel.inbound.pop(&mut buffer) {
+                        Ok(Some((length, _family))) => Some(buffer[..length].to_vec()),
+                        Ok(None) | Err(_) => None,
+                    }
+                };
+                if let Some(packet) = packet {
+                    if core_tx.send(packet).await.is_err() { break; }
+                } else {
+                    sleep(Duration::from_millis(2)).await;
+                }
+            }
+        });
+
+        let outbound_task = tokio::spawn(async move {
+            while let Some(packet) = core_rx.recv().await {
+                let family = match packet.first().map(|byte| byte >> 4) {
+                    Some(4) => PacketFamily::Ipv4,
+                    Some(6) => PacketFamily::Ipv6,
+                    _ => continue,
+                };
+                loop {
+                    let queued = {
+                        let Ok(mut channel) = CHANNEL.lock() else { return };
+                        channel.outbound.push(family, &packet).is_ok()
+                    };
+                    if queued { break; }
+                    sleep(Duration::from_millis(2)).await;
+                }
+            }
+        });
+
+        tokio::select! {
+            _ = inbound_task => {},
+            _ = outbound_task => {},
+        }
+        inbound_task.abort();
+        outbound_task.abort();
+    })
+}
 
 /// Clears both directions before a new provider session.
 #[no_mangle]
