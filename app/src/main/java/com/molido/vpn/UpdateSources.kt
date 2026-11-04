@@ -76,14 +76,18 @@ object UpdateSources {
             }
             val static = url.startsWith(LiveSync.RAW) || url.startsWith(LiveSync.CDN) ||
                 url.startsWith(StaticFirst.RAW) || url.startsWith(StaticFirst.CDN)
-            if (static && (release == null || !isNewer(release.version, installed))) {
+            if (static) {
+                // A static copy may be newer than the installed app but still lag the real release.
+                // Compare GitHub against the copy itself, then fall back to that copy if GitHub is down.
+                val baseline = release?.version ?: installed
                 val fresh = try {
                     fetch(GITHUB_RELEASE_URL).also { successfulFetch = true }
                 } catch (e: Exception) {
                     lastError = e
                     null
                 }
-                if (fresh != null && isNewer(fresh.version, installed)) return fresh
+                if (fresh != null && isNewer(fresh.version, baseline)) return fresh
+                if (release != null && isNewer(release.version, installed)) return release
                 continue
             }
             if (release != null && isNewer(release.version, installed)) return release
