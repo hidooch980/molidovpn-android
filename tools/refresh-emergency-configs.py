@@ -60,10 +60,10 @@ def main():
         if not isinstance(resilience, dict):
             raise ValueError("resilience defaults must be a JSON object")
         os.makedirs(ASSETS, exist_ok=True)
-        with tempfile.NamedTemporaryFile("w", encoding="utf-8", newline="\\n",
+        with tempfile.NamedTemporaryFile("w", encoding="utf-8", newline="\n",
                                          dir=ASSETS, delete=False) as tmp:
             json.dump(resilience, tmp, ensure_ascii=False, separators=(",", ":"))
-            tmp.write("\\n")
+            tmp.write("\n")
             temp_path = tmp.name
         os.replace(temp_path, resilience_target)
         resilience_ok = True
@@ -99,12 +99,12 @@ def main():
         os.makedirs(ASSETS, exist_ok=True)
         temp_path = None
         try:
-            with tempfile.NamedTemporaryFile("w", encoding="utf-8", newline="\\n",
+            with tempfile.NamedTemporaryFile("w", encoding="utf-8", newline="\n",
                                              dir=ASSETS, delete=False) as tmp:
                 temp_path = tmp.name
-                tmp.write(f"# MolidoVPN offline emergency set — {len(picked)} servers from {url} at {stamp}\\n")
-                tmp.write("# Generated at build time; used only when no live list can be fetched.\\n")
-                tmp.write("\\n".join(picked) + "\\n")
+                tmp.write(f"# MolidoVPN offline emergency set — {len(picked)} servers from {url} at {stamp}\n")
+                tmp.write("# Generated at build time; used only when no live list can be fetched.\n")
+                tmp.write("\n".join(picked) + "\n")
             os.replace(temp_path, OUT)
         except Exception:
             if temp_path and os.path.exists(temp_path):
