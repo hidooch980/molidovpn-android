@@ -1,10 +1,14 @@
 name: Build Molido Mesh AI Android
 
 on:
-  push:
-    branches: [main]
-    paths-ignore: ['**.md']
-  workflow_dispatch: {}
+  # Publishing is explicit: ordinary code pushes must never overwrite the same v4.0.0 tag.
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (for example 4.0.1)"
+        required: true
+        default: "4.0.1"
+        type: string
 
 permissions:
   contents: write
@@ -16,7 +20,7 @@ concurrency:
 env:
   # First release in the 4.x line. Bump VERSION explicitly for each subsequent release.
   VERSION_CODE: ${{ github.run_number }}
-  VERSION: 4.0.0
+  VERSION: ${{ github.event.inputs.version || '4.0.0' }}
 
 jobs:
   android:
@@ -48,8 +52,8 @@ jobs:
 
       - name: Prebuilt Psiphon, Tor and Xray (our mirror, checksum verified)
         run: bash tools/fetch-binaries.sh
-      - name: Offline emergency configs + bundled resilience defaults (never fails the build)
-        run: python3 tools/refresh-emergency-configs.py || true
+      - name: Refresh and validate offline emergency configs
+        run: python3 tools/refresh-emergency-configs.py 40 --strict
       - name: Signing key (preserve signing identity for existing MolidoVPN installs)
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -67,6 +71,14 @@ jobs:
             -PaetheryKeystore=release.keystore \
             -PmolidoVersionCode=$((400000 + VERSION_CODE)) \
             -PmolidoVersionName=$VERSION
+          if [[ ! "$VERSION" =~ ^[0-9]+\\.[0-9]+\\.[0-9]+$ ]]; then
+            echo "Invalid release version: $VERSION" >&2
+            exit 1
+          fi
+          if git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null 2>&1; then
+            echo "Release tag v$VERSION already exists; refusing to overwrite it." >&2
+            exit 1
+          fi
           mkdir dist
           for f in app/build/outputs/apk/release/*.apk; do
             case "$f" in
@@ -76,6 +88,36 @@ jobs:
             esac
           done
           ls -la dist
+
+      - name: Verify APK package, version and signing identity
+        env:
+          AETHERY_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          AETHERY_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          APKSIGNER="$ANDROID_HOME/build-tools/36.0.0/apksigner"
+          AAPT="$ANDROID_HOME/build-tools/36.0.0/aapt"
+          test -x "$APKSIGNER"
+          test -x "$AAPT"
+          for name in MolidoMeshAI-android-arm64.apk MolidoMeshAI-android-armv7.apk MolidoMeshAI-android-universal.apk; do
+            test -s "dist/$name"
+          done
+          expected_code=$((400000 + VERSION_CODE))
+          expected_cert=$(keytool -exportcert -keystore release.keystore -alias "$AETHERY_KEY_ALIAS" \
+            -storepass "$AETHERY_KEYSTORE_PASSWORD" | sha256sum | awk '{print $1}')
+          for apk in dist/*.apk; do
+            "$APKSIGNER" verify --verbose "$apk"
+            actual_cert=$("$APKSIGNER" verify --print-certs "$apk" | \
+              awk -F': ' '/Signer #1 certificate SHA-256 digest:/ {print tolower($2); exit}')
+            test -n "$actual_cert"
+            if [[ "$actual_cert" != "$expected_cert" ]]; then
+              echo "Signing certificate mismatch in $apk" >&2
+              exit 1
+            fi
+            "$AAPT" dump badging "$apk" | grep -F \
+              "package: name='com.mobin.mobin_vpn' versionCode='$expected_code' versionName='$VERSION'"
+          done
+          (cd dist && sha256sum *.apk > SHA256SUMS.txt)
 
       - uses: actions/upload-artifact@v6
         with:
