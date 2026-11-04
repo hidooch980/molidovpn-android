@@ -98,6 +98,20 @@ class DeviceNetworkProfileTest {
         assertEquals(4_000L, merged.throughputMedianKbps)
     }
 
+    @Test fun parserRejectsInconsistentCountersAndImpossibleMetrics() {
+        val prefix = """{"transport":"WIFI","updated_at_ms":1000,"downstream_hint_kbps":20000,"upstream_hint_kbps":5000,"rtt_median_ms":50,"jitter_median_ms":5,"throughput_median_kbps":1000,"packet_loss":"""
+        val suffix = ""","successful_probes":4,"total_probes":3}"""
+        assertNull(DeviceNetworkProfile.parse(prefix + "0.1" + suffix, now = 1000L))
+        assertNull(DeviceNetworkProfile.parse(
+            """{"transport":"WIFI","updated_at_ms":1000,"packet_loss":1.5,"successful_probes":1,"total_probes":1}""",
+            now = 1000L,
+        ))
+        assertNull(DeviceNetworkProfile.parse(
+            """{"transport":"WIFI","updated_at_ms":1000,"downstream_hint_kbps":-10,"successful_probes":1,"total_probes":1}""",
+            now = 1000L,
+        ))
+    }
+
     @Test fun profileRoundTripsAndRejectsCorruptData() {
         val profile = DeviceNetworkProfile.merge(
             null, DeviceNetworkProfile.observe(listOf(Probe(true, 75, 5_000), Probe(true, 85, 6_000)), 1234L),
