@@ -493,7 +493,7 @@ class AppUpdater(private val activity: Activity) {
 
 
     private companion object {
-        const val RELEASES_PAGE_URL = "https://github.com/hidooch980/molidovpn/releases/latest"
+        const val RELEASES_PAGE_URL = "https://github.com/hidooch980/molidovpn-android/releases/latest"
 
         fun isNewer(remote: String, local: String): Boolean {
             val remoteParts = remote.split('.', '-', '+').map { it.toIntOrNull() ?: 0 }
