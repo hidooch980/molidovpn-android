@@ -2,17 +2,20 @@
 
 ## Status: profile metadata only — not connectable
 
-Molido now has a strict SSTP gateway parser and regression tests. It does **not**
+Molido now has a strict SSTP gateway parser, gaming-path scoring helper and regression tests. It does **not**
 yet contain an SSTP tunnel engine or PPP backend. Consequently SSTP is deliberately
 not registered in Smart Connect, is not shown as a working protocol, and cannot
-be selected as a live gaming fallback. The capability gate in
+be selected as a live gaming fallback. The pure `GamingFallbackPolicy` is a tested
+selection-policy component only; it is not wired to live probes or route switching. The capability gate in
 `SstpTransport` must remain closed until both components are packaged.
 
 ## Intended gaming policy
 
 1. Prefer WireGuard over a measured UDP path.
 2. Measure candidate RTT distribution, jitter, packet loss and route stability;
-   generic internet probes are not in-game ping.
+   `GamingFallbackPolicy` rejects missing/invalid metrics and requires verified
+   payload. Its inputs must come from a real tunnel path probe; generic internet
+   probes are not in-game ping.
 3. Consider SSTP only when UDP paths are blocked/unusable and a user-configured
    SSTP gateway passes TLS certificate validation and an authenticated tunnel
    transfer test.
