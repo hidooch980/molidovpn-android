@@ -105,7 +105,7 @@ final class MolidoPacketChannelAdapter {
 
             for (packet, proto) in zip(packets, protocols) {
                 guard let family = Self.addressFamily(packet),
-                      Self.protocolNumber(for: family) == proto.intValue else {
+                      Int(Self.protocolNumber(for: family)) == proto.intValue else {
                     self.fail(MolidoPacketAdapterError.invalidProtocolMetadata)
                     return
                 }
