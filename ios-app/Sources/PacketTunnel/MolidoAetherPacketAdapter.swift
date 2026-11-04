@@ -3,57 +3,53 @@ import NetworkExtension
 import AetherFFI
 import Darwin
 
-/// Owns the blocking Aether lifecycle and the NEPacketTunnelFlow <-> bounded
-/// native packet queues. Network settings are intentionally owned by the provider.
+/// Owns the blocking Aether lifecycle and the NEPacketTunnelFlow packet pumps.
 final class MolidoAetherPacketAdapter {
     enum AdapterError: LocalizedError {
         case invalidStartOptions
         case nativeStartFailed(String)
         case readinessTimeout
         case malformedPacket
-        case nativeQueueBackpressure
+        case inboundBufferLimit
         case nativeQueueFailure(Int)
         case packetFlowWriteFailed
 
         var errorDescription: String? {
             switch self {
-            case .invalidStartOptions:
-                return "Aether start options are empty or contain a NUL byte."
-            case .nativeStartFailed(let message):
-                return "Aether failed to start: \(message)"
-            case .readinessTimeout:
-                return "Aether did not become ready before the startup deadline."
-            case .malformedPacket:
-                return "The packet flow returned an invalid IPv4/IPv6 packet."
-            case .nativeQueueBackpressure:
-                return "The bounded Aether packet queue is full."
-            case .nativeQueueFailure(let code):
-                return "Aether packet queue failed (\(code))."
-            case .packetFlowWriteFailed:
-                return "NetworkExtension rejected an outbound packet batch."
+            case .invalidStartOptions: return "Aether start options are empty or contain a NUL byte."
+            case .nativeStartFailed(let message): return "Aether failed: \(message)"
+            case .readinessTimeout: return "Aether did not become ready before the startup deadline."
+            case .malformedPacket: return "The packet flow returned an invalid IPv4/IPv6 packet."
+            case .inboundBufferLimit: return "The bounded packet handoff buffer is full; tunnel stopped without dropping traffic."
+            case .nativeQueueFailure(let code): return "Aether packet queue failed (\(code))."
+            case .packetFlowWriteFailed: return "NetworkExtension rejected an outbound packet batch."
             }
         }
     }
 
+    private struct PendingPacket {
+        let data: Data
+        let family: UInt8
+    }
+
     private let controlQueue = DispatchQueue(label: "com.molido.aether.control")
-    private let workerQueue = DispatchQueue(
-        label: "com.molido.aether.worker",
-        qos: .userInitiated
-    )
+    private let workerQueue = DispatchQueue(label: "com.molido.aether.worker", qos: .userInitiated)
     private var readinessTimer: DispatchSourceTimer?
+    private var inboundRetryTimer: DispatchSourceTimer?
     private var outboundTimer: DispatchSourceTimer?
-    private var healthTimer: DispatchSourceTimer?
     private weak var packetFlow: NEPacketTunnelFlow?
     private var readyHandler: ((Result<Void, Error>) -> Void)?
     private var failureHandler: ((Error) -> Void)?
+    private var stopHandlers: [() -> Void] = []
     private var startupDeadline: DispatchTime = .now() + 20
     private var started = false
     private var stopping = false
     private var pumpsActive = false
+    private var pendingInbound: [PendingPacket] = []
+    private var pendingInboundBytes = 0
+    private let maxPendingPackets = 256
+    private let maxPendingBytes = 2 * 1024 * 1024
 
-    /// Starts the blocking C ABI on a dedicated worker. The supplied JSON must
-    /// be produced by a protocol-specific, validated config translator; never
-    /// put raw credentials in a file or providerConfiguration.
     func start(
         engineOptionsJSON: String,
         ready: @escaping (Result<Void, Error>) -> Void,
@@ -64,8 +60,7 @@ final class MolidoAetherPacketAdapter {
                 ready(.failure(AdapterError.nativeStartFailed("Adapter is already active.")))
                 return
             }
-            guard !engineOptionsJSON.isEmpty,
-                  !engineOptionsJSON.contains("\0") else {
+            guard !engineOptionsJSON.isEmpty, !engineOptionsJSON.contains("\0") else {
                 ready(.failure(AdapterError.invalidStartOptions))
                 return
             }
@@ -82,27 +77,20 @@ final class MolidoAetherPacketAdapter {
             }
 
             self.workerQueue.async {
-                let result = engineOptionsJSON.withCString {
-                    aether_start_json_with_packet_channel($0)
-                }
+                let result = engineOptionsJSON.withCString { aether_start_json_with_packet_channel($0) }
                 let nativeMessage: String = {
-                    guard let pointer = aether_last_error() else {
-                        return "Native start returned \(result)."
-                    }
+                    guard let pointer = aether_last_error() else { return "Native start returned \(result)." }
                     let value = String(cString: pointer)
                     return value.isEmpty ? "Native start returned \(result)." : value
                 }()
-
                 self.controlQueue.async {
                     self.cancelReadinessTimer()
-                    if !self.stopping && !self.pumpsActive {
-                        self.finishStartup(
-                            .failure(AdapterError.nativeStartFailed(nativeMessage))
-                        )
+                    // A native exit at any point after readiness is a tunnel failure,
+                    // not a successful disconnect hidden behind an active packet pump.
+                    if !self.stopping {
+                        self.fail(AdapterError.nativeStartFailed(nativeMessage))
                     }
                     self.started = false
-                    // Rust's RunningGuard resets the channel on return. This
-                    // explicit reset makes the next provider session deterministic.
                     _ = aether_packet_channel_reset()
                 }
             }
@@ -116,13 +104,7 @@ final class MolidoAetherPacketAdapter {
                     self.finishStartup(.success(()))
                 } else if DispatchTime.now() >= self.startupDeadline {
                     self.cancelReadinessTimer()
-                    let error = AdapterError.readinessTimeout
-                    if self.readyHandler != nil {
-                        self.finishStartup(.failure(error))
-                        self.stop()
-                    } else {
-                        self.fail(error)
-                    }
+                    self.fail(AdapterError.readinessTimeout)
                 }
             }
             self.readinessTimer = timer
@@ -130,19 +112,11 @@ final class MolidoAetherPacketAdapter {
         }
     }
 
-    /// Call only after validated NEPacketTunnelNetworkSettings have been applied.
-    func activatePacketFlow(
-        _ flow: NEPacketTunnelFlow,
-        activated: @escaping (Result<Void, Error>) -> Void,
-        failed: @escaping (Error) -> Void
-    ) {
+    /// Activate only after the provider has installed validated full-tunnel routes and DNS.
+    func activatePacketFlow(_ flow: NEPacketTunnelFlow, failed: @escaping (Error) -> Void) {
         controlQueue.async {
-            guard self.started, !self.stopping, !self.pumpsActive,
-                  aether_is_running() == 1, aether_is_ready() == 1 else {
-                let error = AdapterError.nativeStartFailed(
-                    "Packet flow activation attempted before engine readiness."
-                )
-                activated(.failure(error))
+            guard self.started, !self.stopping, !self.pumpsActive, aether_is_ready() == 1 else {
+                failed(AdapterError.nativeStartFailed("Packet flow activation attempted before engine readiness."))
                 return
             }
             self.packetFlow = flow
@@ -150,25 +124,37 @@ final class MolidoAetherPacketAdapter {
             self.pumpsActive = true
             self.readNextPacketBatch()
             self.startOutboundPump()
-            self.startHealthMonitor()
-            activated(.success(()))
         }
     }
 
-    func stop() {
+    /// Waits for the serial native worker to leave the blocking FFI before completing.
+    func stop(completion: (() -> Void)? = nil) {
         controlQueue.async {
+            if let completion { self.stopHandlers.append(completion) }
             guard !self.stopping else { return }
             self.stopping = true
             self.cancelReadinessTimer()
+            self.inboundRetryTimer?.cancel()
+            self.inboundRetryTimer = nil
             self.outboundTimer?.cancel()
             self.outboundTimer = nil
-            self.healthTimer?.cancel()
-            self.healthTimer = nil
             self.pumpsActive = false
             self.packetFlow = nil
             self.readyHandler = nil
             self.failureHandler = nil
+            self.pendingInbound.removeAll(keepingCapacity: false)
+            self.pendingInboundBytes = 0
             _ = aether_stop()
+
+            self.workerQueue.async {
+                self.controlQueue.async {
+                    _ = aether_packet_channel_reset()
+                    self.started = false
+                    let handlers = self.stopHandlers
+                    self.stopHandlers.removeAll()
+                    handlers.forEach { $0() }
+                }
+            }
         }
     }
 
@@ -191,7 +177,7 @@ final class MolidoAetherPacketAdapter {
     }
 
     private func readNextPacketBatch() {
-        guard pumpsActive, !stopping, let flow = packetFlow else { return }
+        guard pumpsActive, !stopping, pendingInbound.isEmpty, let flow = packetFlow else { return }
         flow.readPackets { [weak self] packets, protocols in
             guard let self else { return }
             self.controlQueue.async {
@@ -200,7 +186,6 @@ final class MolidoAetherPacketAdapter {
                     self.fail(AdapterError.malformedPacket)
                     return
                 }
-
                 for (packet, proto) in zip(packets, protocols) {
                     guard let first = packet.first else {
                         self.fail(AdapterError.malformedPacket)
@@ -208,61 +193,62 @@ final class MolidoAetherPacketAdapter {
                     }
                     let family = first >> 4
                     let expectedProtocol = family == 4 ? AF_INET : (family == 6 ? AF_INET6 : 0)
-                    guard expectedProtocol != 0,
-                          proto.int32Value == Int32(expectedProtocol) else {
+                    guard expectedProtocol != 0, proto.int32Value == Int32(expectedProtocol) else {
                         self.fail(AdapterError.malformedPacket)
                         return
                     }
-
-                    let queued = packet.withUnsafeBytes { bytes -> Int32 in
-                        guard let base = bytes.bindMemory(to: UInt8.self).baseAddress else {
-                            return -1
-                        }
-                        return aether_packet_push_inbound(
-                            base,
-                            packet.count,
-                            family
-                        )
-                    }
-                    if queued == 0 {
-                        self.fail(AdapterError.nativeQueueBackpressure)
+                    guard self.pendingInbound.count < self.maxPendingPackets,
+                          self.pendingInboundBytes + packet.count <= self.maxPendingBytes else {
+                        self.fail(AdapterError.inboundBufferLimit)
                         return
                     }
-                    if queued < 0 {
-                        self.fail(AdapterError.nativeQueueFailure(Int(queued)))
-                        return
-                    }
+                    self.pendingInbound.append(PendingPacket(data: packet, family: family))
+                    self.pendingInboundBytes += packet.count
                 }
-                self.readNextPacketBatch()
+                self.pumpInboundQueue()
             }
         }
+    }
+
+    /// A full native queue is backpressure, not packet loss: retain the consumed
+    /// NetworkExtension batch and retry until Aether drains its inbound queue.
+    private func pumpInboundQueue() {
+        guard pumpsActive, !stopping else { return }
+        while let pending = pendingInbound.first {
+            let result = pending.data.withUnsafeBytes { bytes -> Int32 in
+                guard let base = bytes.bindMemory(to: UInt8.self).baseAddress else { return -1 }
+                return aether_packet_push_inbound(base, pending.data.count, pending.family)
+            }
+            if result == 0 {
+                scheduleInboundRetry()
+                return
+            }
+            if result < 0 {
+                fail(AdapterError.nativeQueueFailure(Int(result)))
+                return
+            }
+            pendingInbound.removeFirst()
+            pendingInboundBytes -= pending.data.count
+        }
+        inboundRetryTimer?.cancel()
+        inboundRetryTimer = nil
+        readNextPacketBatch()
+    }
+
+    private func scheduleInboundRetry() {
+        guard inboundRetryTimer == nil else { return }
+        let timer = DispatchSource.makeTimerSource(queue: controlQueue)
+        timer.schedule(deadline: .now() + .milliseconds(2), repeating: .milliseconds(2))
+        timer.setEventHandler { [weak self] in self?.pumpInboundQueue() }
+        inboundRetryTimer = timer
+        timer.resume()
     }
 
     private func startOutboundPump() {
         let timer = DispatchSource.makeTimerSource(queue: controlQueue)
         timer.schedule(deadline: .now(), repeating: .milliseconds(2))
-        timer.setEventHandler { [weak self] in
-            self?.drainOutboundPackets()
-        }
+        timer.setEventHandler { [weak self] in self?.drainOutboundPackets() }
         outboundTimer = timer
-        timer.resume()
-    }
-
-    /// Detects an engine exit after the initial ready signal. Without this
-    /// watchdog, a dead native runtime could leave iOS reporting a stale tunnel.
-    private func startHealthMonitor() {
-        let timer = DispatchSource.makeTimerSource(queue: controlQueue)
-        timer.schedule(deadline: .now() + .milliseconds(250), repeating: .milliseconds(250))
-        timer.setEventHandler { [weak self] in
-            guard let self, self.pumpsActive, !self.stopping else { return }
-            guard aether_is_running() == 1, aether_is_ready() == 1 else {
-                self.fail(AdapterError.nativeStartFailed(
-                    "Aether stopped or lost readiness while the packet tunnel was active."
-                ))
-                return
-            }
-        }
-        healthTimer = timer
         timer.resume()
     }
 
@@ -272,22 +258,17 @@ final class MolidoAetherPacketAdapter {
         var protocols: [NSNumber] = []
         packets.reserveCapacity(32)
         protocols.reserveCapacity(32)
+        // Reuse one maximum-sized buffer for the whole batch; allocating 32 x
+        // 65 KB on every 2 ms tick caused avoidable memory churn on iPhones.
+        var buffer = [UInt8](repeating: 0, count: 65_535)
 
         for _ in 0..<32 {
-            var buffer = [UInt8](repeating: 0, count: 65_535)
             var family: UInt8 = 0
             let length = buffer.withUnsafeMutableBufferPointer { output in
-                aether_packet_pop_outbound(
-                    output.baseAddress,
-                    output.count,
-                    &family
-                )
+                aether_packet_pop_outbound(output.baseAddress, output.count, &family)
             }
-
             if length == 0 { break }
             if length < 0 {
-                // A packet larger than the maximum buffer or an invalid queue
-                // result is fatal; never silently drop native outbound traffic.
                 fail(AdapterError.nativeQueueFailure(Int(length)))
                 return
             }
