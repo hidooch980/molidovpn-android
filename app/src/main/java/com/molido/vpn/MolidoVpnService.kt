@@ -6568,24 +6568,26 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
     }
 
     /**
-     * The user's DNS choice for this session. Null means Automatic (callers keep
-     * today's resolvers). Gaming presets need excludeRoute (API 33+); below that
-     * they fall back to Automatic and the reason is logged.
+     * Null means Automatic (callers keep their tunnel-routed resolvers). A gaming
+     * preset is honored only after separate explicit consent and only on Android
+     * 13+, where the per-resolver direct route can be installed. Otherwise fail
+     * closed to the connection mode's normal tunnel DNS.
      */
     private fun chosenDns(path: String): Pair<List<String>, Boolean>? {
         val preset = DnsSettings.preset(this)
         val servers = preset.servers
         if (preset == DnsSettings.Preset.AUTO || servers.isEmpty()) return null
-        if (preset.gaming && !DnsSettings.directGamingDnsAllowed(this)) {
+        val directConsent = DnsSettings.directGamingDnsAllowed(this)
+        if (preset.gaming && !directConsent) {
             ConnectionLog.record("DNS ${preset.key}: direct gaming DNS not explicitly allowed; using tunnel DNS")
             Log.i("MolidoDns", "path=$path preset=${preset.key} fallback=secure reason=no-explicit-consent")
             return null
         }
-        if (DnsSettings.shouldBypassTunnelForGamingDns(
-                gamingPreset = preset.gaming,
-                explicitConsent = DnsSettings.directGamingDnsAllowed(this),
+        if (preset.gaming && !DnsSettings.shouldBypassTunnelForGamingDns(
+                gamingPreset = true,
+                explicitConsent = directConsent,
                 sdkInt = Build.VERSION.SDK_INT,
-            ).not() && preset.gaming) {
+            )) {
             ConnectionLog.record("DNS ${preset.key}: direct route unavailable; using tunnel DNS")
             Log.i("MolidoDns", "path=$path preset=${preset.key} fallback=secure reason=api<33")
             return null
