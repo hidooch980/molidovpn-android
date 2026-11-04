@@ -14,6 +14,7 @@ final class VPNController: ObservableObject {
     private var manager: NETunnelProviderManager?
     private var egressVerificationTask: Task<Void, Never>?
     private var lastVerificationAttempt: Date?
+    private var preTunnelEgressIP: String?
     private let providerBundleIdentifier = "com.molido.meshai.PacketTunnel"
 
     init() {
@@ -127,6 +128,7 @@ final class VPNController: ObservableObject {
         egressIP = nil
         egressVerified = false
         lastVerificationAttempt = nil
+        preTunnelEgressIP = nil
 
         // Re-assert fail-closed routing on every connect, including profiles
         // created by older app versions. Never start with a legacy bypass policy.
@@ -151,11 +153,15 @@ final class VPNController: ObservableObject {
                             return
                         }
                         self.manager = manager
-                        do {
-                            try manager.connection.startVPNTunnel()
-                            self.message = "درخواست اتصال امن ارسال شد؛ مسیر IPv4/IPv6 و DNS پس از آماده‌شدن موتور فعال می‌شود."
-                        } catch {
-                            self.message = "اتصال برقرار نشد: \(error.localizedDescription)"
+                        Task { [weak self] in
+                            guard let self else { return }
+                            self.preTunnelEgressIP = try? await Self.fetchPublicEgressIP()
+                            do {
+                                try manager.connection.startVPNTunnel()
+                                self.message = "درخواست اتصال امن ارسال شد؛ مسیر IPv4/IPv6 و DNS پس از آماده‌شدن موتور فعال می‌شود."
+                            } catch {
+                                self.message = "اتصال برقرار نشد: \(error.localizedDescription)"
+                            }
                         }
                     }
                 }
@@ -192,60 +198,33 @@ final class VPNController: ObservableObject {
         }
     }
 
-    /// This is a real HTTPS request through the system's default route after the
-    /// packet tunnel reports connected. We only display a verified IP when the
-    /// Cloudflare trace confirms both a public egress address and WARP routing.
+    /// Compare a fresh public IP before and after connection. Do not require Cloudflare's
+    /// WARP-specific flag: generic MASQUE/WireGuard exits are not necessarily WARP exits.
     private func verifyRealEgressIfNeeded() {
         guard egressVerificationTask == nil,
               lastVerificationAttempt == nil ||
               Date().timeIntervalSince(lastVerificationAttempt!) > 15 else { return }
         lastVerificationAttempt = Date()
-        message = "تونل فعال است؛ در حال آزمایش عبور واقعی اینترنت و IP خروجی…"
+        message = "تونل فعال است؛ در حال مقایسه IP خروجی با وضعیت پیش از اتصال…"
 
         egressVerificationTask = Task { [weak self] in
             defer { self?.egressVerificationTask = nil }
             do {
-                var components = URLComponents(string: "https://www.cloudflare.com/cdn-cgi/trace")!
-                components.queryItems = [URLQueryItem(name: "nonce", value: UUID().uuidString)]
-                var request = URLRequest(url: components.url!)
-                request.httpMethod = "GET"
-                request.timeoutInterval = 12
-                request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
-                request.setValue("no-cache, no-store", forHTTPHeaderField: "Cache-Control")
-                request.setValue("close", forHTTPHeaderField: "Connection")
-
-                // Use a fresh ephemeral session so an earlier pooled HTTP connection
-                // cannot make a pre-tunnel egress look like a successful tunnel test.
-                let sessionConfiguration = URLSessionConfiguration.ephemeral
-                sessionConfiguration.urlCache = nil
-                sessionConfiguration.httpCookieStorage = nil
-                sessionConfiguration.httpShouldSetCookies = false
-                sessionConfiguration.requestCachePolicy = .reloadIgnoringLocalCacheData
-                sessionConfiguration.timeoutIntervalForResource = 15
-                let session = URLSession(configuration: sessionConfiguration)
-                defer { session.invalidateAndCancel() }
-                let (data, response) = try await session.data(for: request)
-                guard let http = response as? HTTPURLResponse, http.statusCode == 200,
-                      let body = String(data: data, encoding: .utf8) else {
-                    throw EgressVerificationError.invalidResponse
-                }
-                let fields = Dictionary(
-                    body.split(whereSeparator: \.isNewline).compactMap { line -> (String, String)? in
-                        let parts = line.split(separator: "=", maxSplits: 1)
-                        guard parts.count == 2 else { return nil }
-                        return (String(parts[0]), String(parts[1]))
-                    },
-                    uniquingKeysWith: { _, latest in latest }
-                )
-                guard let ip = fields["ip"],
-                      IPv4Address(ip) != nil || IPv6Address(ip) != nil,
-                      fields["warp"] == "on" else {
-                    throw EgressVerificationError.tunnelNotVerified
-                }
+                let ip = try await Self.fetchPublicEgressIP()
                 guard !Task.isCancelled else { return }
                 self?.egressIP = ip
+                guard let baseline = self?.preTunnelEgressIP else {
+                    self?.egressVerified = false
+                    self?.message = "IP خروجی دریافت شد، اما IP پیش از اتصال ثبت نشده بود؛ مسیر VPN مستقلأ تأیید نشد."
+                    return
+                }
+                guard baseline != ip else {
+                    self?.egressVerified = false
+                    self?.message = "IP خروجی با IP پیش از اتصال یکسان است؛ عبور از تونل مستقلأ قابل تأیید نیست."
+                    return
+                }
                 self?.egressVerified = true
-                self?.message = "عبور واقعی تأیید شد؛ IP خروجی: \(ip) — WARP فعال"
+                self?.message = "تغییر IP خروجی پس از اتصال تأیید شد: \(ip)"
             } catch {
                 guard !Task.isCancelled else { return }
                 self?.egressIP = nil
@@ -253,6 +232,46 @@ final class VPNController: ObservableObject {
                 self?.message = "تونل گزارش اتصال داده، اما عبور واقعی هنوز تأیید نشده است: \(error.localizedDescription)"
             }
         }
+    }
+
+    /// Fresh ephemeral HTTPS request with caches/cookies disabled.
+    private static func fetchPublicEgressIP() async throws -> String {
+        var components = URLComponents(string: "https://www.cloudflare.com/cdn-cgi/trace")!
+        components.queryItems = [URLQueryItem(name: "nonce", value: UUID().uuidString)]
+        var request = URLRequest(url: components.url!)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 8
+        request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
+        request.setValue("no-cache, no-store", forHTTPHeaderField: "Cache-Control")
+        request.setValue("close", forHTTPHeaderField: "Connection")
+
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.urlCache = nil
+        configuration.httpCookieStorage = nil
+        configuration.httpShouldSetCookies = false
+        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+        configuration.timeoutIntervalForResource = 10
+        let session = URLSession(configuration: configuration)
+        defer { session.invalidateAndCancel() }
+
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200,
+              let body = String(data: data, encoding: .utf8) else {
+            throw EgressVerificationError.invalidResponse
+        }
+        let fields = Dictionary(
+            body.split(whereSeparator: \.isNewline).compactMap { line -> (String, String)? in
+                let parts = line.split(separator: "=", maxSplits: 1)
+                guard parts.count == 2 else { return nil }
+                return (String(parts[0]), String(parts[1]))
+            },
+            uniquingKeysWith: { _, latest in latest }
+        )
+        guard let ip = fields["ip"],
+              IPv4Address(ip) != nil || IPv6Address(ip) != nil else {
+            throw EgressVerificationError.invalidResponse
+        }
+        return ip
     }
 
     var statusLabel: String {
