@@ -1,3 +1,8 @@
+package com.molido.vpn
+
+import android.content.Context
+import android.graphics.Color
+
 /**
  * Molido Mesh AI's two coordinated visual palettes.
  *
