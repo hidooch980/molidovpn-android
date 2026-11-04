@@ -288,12 +288,10 @@ final class VPNController: ObservableObject {
 
     private enum EgressVerificationError: LocalizedError {
         case invalidResponse
-        case tunnelNotVerified
 
         var errorDescription: String? {
             switch self {
             case .invalidResponse: return "پاسخ سرویس بررسی IP معتبر نبود."
-            case .tunnelNotVerified: return "IP خروجی معتبر یا نشانگر WARP فعال دریافت نشد."
             }
         }
     }
