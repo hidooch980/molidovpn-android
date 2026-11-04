@@ -6,9 +6,11 @@
 ## Lifecycle contract
 
 1. Validate the App Group bootstrap and resolve the engine configuration.
-2. Load the referenced secret from the shared Keychain; never persist it in the
-   bootstrap or `NETunnelProviderProtocol.providerConfiguration`.
-3. Prepare and start Aether on a dedicated worker queue using a validated
+2. Resolve the non-secret engine configuration path from the validated App Group
+   bootstrap. Aether provisions/loads its own MASQUE or WireGuard identity under
+   the protected engine directory; credentials are never placed in the bootstrap
+   or `NETunnelProviderProtocol.providerConfiguration`.
+3. Prepare and start Aether on a dedicated worker queue using the validated
    protocol-specific options document.
 4. Wait for `aether_is_ready() == 1` with a bounded startup deadline.
 5. Apply `NEPacketTunnelNetworkSettings` only after the prepared address/DNS/MTU
@@ -30,10 +32,13 @@
   readiness. Those remain the provider's responsibility after successful native
   preparation and readiness checks.
 
-## Remaining integration gate
+## Remaining integration gates
 
-The Rust start API accepts a JSON `NativeStartOptions` document. Its
-protocol-specific config paths and credential fields must be mapped from the
-validated bootstrap and Keychain data before invoking it. That mapping and
-blocking start/stop worker lifecycle are not yet wired into
-`PacketTunnelProvider`; until then the provider intentionally fails closed.
+- Physical-device testing must validate the Swift packet pumps against the real
+  MASQUE/WireGuard transport on iPhone hardware; Rust queue unit tests and
+  Simulator builds do not prove real network reachability.
+- The initial app profile defaults to MASQUE. A user-facing iOS WireGuard import
+  flow and editable server/profile management are not included yet.
+- `MolidoKeychainStore` is a reusable shared-Keychain helper, but the current
+  Aether-managed identity flow stores its own identity material in the protected
+  App Group engine directory and does not call this helper.
