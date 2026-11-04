@@ -34,8 +34,14 @@ object DeviceNetworkProfile {
         ?.link ?: candidates.maxWithOrNull(compareBy<Candidate> { if (it.link.validated) 1 else 0 }
             .thenBy { if (it.link.hasDefaultRoute) 1 else 0 })?.link
 
-    /** Conservative caps for unvalidated, metered, roaming, slow or unknown links. */
-    fun policy(link: Link?, configuredParallel: Int, configuredDownloadBytes: Int): Policy {
+    /** Conservative caps for current link state and recent local quality history. */
+    fun policy(
+        link: Link?,
+        configuredParallel: Int,
+        configuredDownloadBytes: Int,
+        history: Profile? = null,
+        now: Long = System.currentTimeMillis(),
+    ): Policy {
         val parallel = configuredParallel.coerceIn(1, 16)
         val download = configuredDownloadBytes.coerceIn(0, 4_000_000)
         if (link == null) return Policy(parallel.coerceAtMost(3), download.coerceAtMost(512_000))
@@ -43,7 +49,30 @@ object DeviceNetworkProfile {
         if (link.metered || link.roaming) return Policy(parallel.coerceAtMost(2), 0)
         if (link.downstreamKbps in 1..1_500) return Policy(parallel.coerceAtMost(2), download.coerceAtMost(256_000))
         if (link.downstreamKbps == 0) return Policy(parallel.coerceAtMost(3), download.coerceAtMost(512_000))
+        val freshHistory = history?.takeIf {
+            it.totalProbes >= 3 && it.updatedAtMs > 0L &&
+                now >= it.updatedAtMs && now - it.updatedAtMs <= 7L * 86_400_000L
+        }
+        if (freshHistory?.packetLoss?.let { it >= 0.20 } == true) {
+            return Policy(parallel.coerceAtMost(2), download.coerceAtMost(256_000))
+        }
+        if (freshHistory?.rttMedianMs?.let { it >= 900L } == true) {
+            return Policy(parallel.coerceAtMost(3), download.coerceAtMost(512_000))
+        }
+        if (freshHistory?.throughputMedianKbps?.let { it <= 1_000L } == true) {
+            return Policy(parallel.coerceAtMost(2), download.coerceAtMost(256_000))
+        }
         return Policy(parallel.coerceAtMost(6), download)
+    }
+
+    /** Confidence is zero for stale/empty data and rises with fresh successful samples. */
+    fun confidence(profile: Profile?, now: Long, ttlMs: Long = 7L * 86_400_000L): Double {
+        if (profile == null || profile.totalProbes <= 0 || profile.updatedAtMs <= 0L ||
+            now < profile.updatedAtMs || now - profile.updatedAtMs > ttlMs
+        ) return 0.0
+        val sampleFactor = (profile.totalProbes / 9.0).coerceIn(0.0, 1.0)
+        val freshness = (1.0 - (now - profile.updatedAtMs).toDouble() / ttlMs.coerceAtLeast(1L)).coerceIn(0.0, 1.0)
+        return (sampleFactor * freshness).coerceIn(0.0, 1.0)
     }
 
     fun observe(probes: List<Probe>, now: Long): Observation {
