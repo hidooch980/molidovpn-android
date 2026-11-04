@@ -14,6 +14,7 @@ data class Ikev2FreeServer(
 
 object Ikev2FreeServerDirectory {
     const val DIRECTORY_URL = "https://www.vpnjantit.com/free-ikev2"
+    const val GITHUB_MIRROR_URL = "https://raw.githubusercontent.com/hidooch980/molidovpn-android/main/data/ikev2/free-servers.json"
     private const val PROVIDER_HOST = "www.vpnjantit.com"
     private val serverPattern = Regex("(?i)\\b([a-z0-9-]+\\.vpnjantit\\.com)\\b")
 
@@ -23,6 +24,49 @@ object Ikev2FreeServerDirectory {
      * requested, generated, uploaded or cached by this directory.
      */
     fun refresh(): List<Ikev2FreeServer> {
+        return try {
+            refreshProvider()
+        } catch (providerError: Exception) {
+            try {
+                refreshGitHubMirror()
+            } catch (mirrorError: Exception) {
+                providerError.addSuppressed(mirrorError)
+                throw providerError
+            }
+        }
+    }
+
+    private fun refreshGitHubMirror(): List<Ikev2FreeServer> {
+        val raw = Jsoup.connect(GITHUB_MIRROR_URL)
+            .userAgent("MolidoVPN-IKEv2-directory/1.0")
+            .timeout(10_000)
+            .maxBodySize(2 * 1024 * 1024)
+            .ignoreContentType(true)
+            .execute()
+            .body()
+        val root = org.json.JSONObject(raw)
+        val rows = root.optJSONArray("servers")
+            ?: throw IllegalStateException("GitHub IKEv2 mirror has no server list")
+        val servers = (0 until rows.length()).mapNotNull { index ->
+            val row = rows.optJSONObject(index) ?: return@mapNotNull null
+            val host = row.optString("host").lowercase()
+            val accountUrl = row.optString("accountUrl")
+            if (!Ikev2ProfileValidation.isValidServer(host) ||
+                !host.endsWith(".vpnjantit.com") ||
+                !accountUrl.startsWith("https://$PROVIDER_HOST/")) return@mapNotNull null
+            Ikev2FreeServer(
+                country = row.optString("country"),
+                host = host,
+                identity = row.optString("identity", "vpnjantit"),
+                accountUrl = accountUrl,
+                listedAvailable = row.optBoolean("available", false),
+            )
+        }.distinctBy { it.host }
+        require(servers.isNotEmpty()) { "GitHub IKEv2 mirror contains no validated servers" }
+        return servers
+    }
+
+    private fun refreshProvider(): List<Ikev2FreeServer> {
         val index = Jsoup.connect(DIRECTORY_URL)
             .userAgent("MolidoVPN-IKEv2-directory/1.0")
             .timeout(12_000)
