@@ -347,6 +347,7 @@ struct RunningGuard;
 
 impl Drop for RunningGuard {
     fn drop(&mut self) {
+        let _ = aether_packet_channel_reset();
         RUNNING.store(false, Ordering::Release);
         READY.store(false, Ordering::Release);
     }
@@ -400,6 +401,12 @@ unsafe fn aether_start_json_inner(json: *const c_char, tun_fd: Option<i32>, pack
         let _running = RunningGuard;
         STOP_REQUESTED.store(false, Ordering::Release);
         READY.store(false, Ordering::Release);
+        if packet_channel {
+            if aether_packet_channel_reset() != 0 {
+                set_last_error("could not reset iOS packet channel");
+                return -2;
+            }
+        }
         set_last_error("");
         clear_logs();
         emit_status("starting", None);
