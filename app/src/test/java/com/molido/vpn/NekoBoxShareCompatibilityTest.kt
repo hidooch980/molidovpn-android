@@ -47,8 +47,7 @@ class NekoBoxShareCompatibilityTest {
         val stream = outbound.getJSONObject("streamSettings")
         assertEquals("ws", stream.getString("network"))
         assertEquals("/gateway", stream.getJSONObject("wsSettings").getString("path"))
-        assertEquals("cdn.example", stream.getJSONObject("wsSettings").getString("headers")
-            .getString("Host"))
+        assertEquals("cdn.example", stream.getJSONObject("wsSettings").getString("host"))
     }
 
     @Test fun rejectsUnsupportedOrUnsafeShareLinkInsteadOfSilentlyDowngrading() {
