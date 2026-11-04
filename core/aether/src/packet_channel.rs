@@ -35,6 +35,11 @@ struct DirectionQueue {
     bytes: usize,
 }
 
+fn family_matches(bytes: &[u8], family: PacketFamily) -> bool {
+    matches!((bytes.first().map(|byte| byte >> 4), family),
+        (Some(4), PacketFamily::Ipv4) | (Some(6), PacketFamily::Ipv6))
+}
+
 impl DirectionQueue {
     fn push(&mut self, family: PacketFamily, bytes: &[u8]) -> Result<(), ()> {
         if bytes.is_empty()
@@ -154,6 +159,7 @@ pub unsafe extern "C" fn aether_packet_push_inbound(
         _ => return -1,
     };
     let bytes = unsafe { slice::from_raw_parts(packet, length) };
+    if !family_matches(bytes, family) { return -1; }
     let Ok(mut channel) = CHANNEL.lock() else { return -1 };
     if channel.inbound.push(family, bytes).is_ok() { 1 } else { 0 }
 }
@@ -193,6 +199,7 @@ pub unsafe extern "C" fn aether_packet_push_outbound(
         _ => return -1,
     };
     let bytes = unsafe { slice::from_raw_parts(packet, length) };
+    if !family_matches(bytes, family) { return -1; }
     let Ok(mut channel) = CHANNEL.lock() else { return -1 };
     if channel.outbound.push(family, bytes).is_ok() { 1 } else { 0 }
 }
@@ -220,6 +227,14 @@ pub unsafe extern "C" fn aether_packet_pop_outbound(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rejects_family_metadata_that_disagrees_with_ip_header() {
+        assert!(!family_matches(&[0x45, 0, 0, 0], PacketFamily::Ipv6));
+        assert!(!family_matches(&[0x60, 0, 0, 0], PacketFamily::Ipv4));
+        assert!(family_matches(&[0x45, 0, 0, 0], PacketFamily::Ipv4));
+        assert!(family_matches(&[0x60, 0, 0, 0], PacketFamily::Ipv6));
+    }
 
     #[test]
     fn preserves_packet_bytes_and_family_in_both_directions() {
