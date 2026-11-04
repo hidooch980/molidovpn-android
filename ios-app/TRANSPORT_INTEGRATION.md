@@ -10,18 +10,18 @@ Important distinction:
 - `aether_start_json(json)` starts the userspace/SOCKS mode; it does not attach iOS system packet flow.
 - `NEPacketTunnelFlow` exposes packet reads/writes through NetworkExtension and cannot be substituted with a file descriptor.
 
-## Rust packet-channel bridge implemented; Swift adapter still required
+## Rust packet-channel bridge and Swift adapter implemented; provider integration remains gated
 
 A bounded, thread-safe FFI queue primitive now exists in `core/aether/src/packet_channel.rs` and is declared in `core/aether/include/aether.h`. It carries IPv4/IPv6 family metadata, limits each packet to 65,535 bytes, caps each direction at 256 packets / 2 MiB, reports backpressure, and does not consume a packet when the caller's output buffer is too small. Unit tests cover byte/family preservation, buffer sizing, and queue bounds.
 
-The queue primitive is connected to Aether's existing packet channels through `packet_channel::spawn_bridge`. The dedicated `aether_start_json_with_packet_channel` C ABI starts MASQUE or WireGuard without accepting a Unix fd. The bridge forwards device-originated packets into the native transport and queues decrypted packets for the provider, with bounded backpressure and task cancellation. Rust-side queue and bridge tests are present, but Swift does not yet call this API. The iOS CI pipeline now cross-compiles the Rust static library for iPhone arm64 and both simulator architectures, packages the device and universal simulator slices into `Aether.xcframework`, publishes it as a workflow artifact, and links that artifact into the Packet Tunnel extension through XcodeGen. The `AetherFFI` Clang module map exposes `aether.h`. This is a build/link milestone only, not yet a functioning iOS VPN.
+The queue primitive is connected to Aether's existing packet channels through `packet_channel::spawn_bridge`. The dedicated `aether_start_json_with_packet_channel` C ABI starts MASQUE or WireGuard without accepting a Unix fd. The bridge forwards device-originated packets into the native transport and queues decrypted packets for the provider, with bounded backpressure and task cancellation. Rust-side queue and bridge tests are present, and the new `MolidoAetherPacketAdapter` imports `AetherFFI`, runs the blocking start call on a dedicated worker, waits for native readiness with a startup deadline, moves IPv4/IPv6 packets through `NEPacketTunnelFlow`, handles bounded-queue backpressure as a fatal condition, and requests deterministic native shutdown. The adapter is not yet wired into `PacketTunnelProvider`; it must only be activated after validated `NEPacketTunnelNetworkSettings` are applied. The iOS CI pipeline now cross-compiles the Rust static library for iPhone arm64 and both simulator architectures, packages the device and universal simulator slices into `Aether.xcframework`, publishes it as a workflow artifact, and links that artifact into the Packet Tunnel extension through XcodeGen. The `AetherFFI` Clang module map exposes `aether.h`. This is a build/link milestone only, not yet a functioning iOS VPN.
 
 Remaining work:
 
 1. Verify the new XCFramework packaging and extension-linking jobs pass on macOS CI; retain the artifact for reproducible local Xcode builds.
-2. Import `AetherFFI` in the Packet Tunnel target and define and validate the iOS tunnel configuration contract, including MASQUE/WireGuard credentials, config-file locations, assigned IPv4/IPv6 addresses, DNS, MTU, and routes. Do not assume Android filesystem paths or Android-only configuration fields.
-4. In `NEPacketTunnelProvider`, call `aether_start_json_with_packet_channel` on a dedicated worker thread. The FFI start call blocks until shutdown, so it must never run on the provider's main/control queue.
-5. Read packets using `packetFlow.readPackets`, enqueue them with `aether_packet_push_inbound`, dequeue native outbound packets with `aether_packet_pop_outbound`, and write them using `packetFlow.writePackets` with the correct address-family metadata.
+2. Complete the protocol-specific config translator that maps validated MASQUE/WireGuard profiles and Keychain-held credentials into the exact `NativeStartOptions` JSON contract. Never assume Android filesystem paths or Android-only configuration fields.
+4. Wire `MolidoAetherPacketAdapter` into `NEPacketTunnelProvider` after the protocol-specific config translator is complete. Its blocking FFI call already runs on a dedicated worker thread.
+5. Apply validated network settings only after native readiness, then call `activatePacketFlow`; the adapter uses `packetFlow.readPackets` / `writePackets` and the bounded inbound/outbound FFI queues.
 6. Preserve IPv4/IPv6 policy and DNS routing; configure `NEPacketTunnelNetworkSettings` only from validated address and route data. Do not install a default route before the native data path is ready.
 7. Implement socket protection/routing behavior required by NetworkExtension to prevent recursive tunnel routing.
 8. Stop packet pumps and the Rust runtime deterministically from `stopTunnel`; drain/cancel worker tasks and prevent callbacks after provider teardown.
@@ -29,7 +29,7 @@ Remaining work:
 
 ## Current safety state
 
-The Swift Packet Tunnel provider intentionally fails closed. The app can install a VPN profile, but the provider does not claim a live connection, configure a default route, or black-hole device traffic until the packet adapter and transport are complete.
+The Swift Packet Tunnel provider intentionally fails closed. The packet adapter is implemented as an isolated component but is not yet invoked by the provider. The app can install a VPN profile, but the provider does not claim a live connection or configure routes until protocol-specific config translation, provider lifecycle integration, and physical-device leak testing are complete.
 
 ## Validation gates
 
