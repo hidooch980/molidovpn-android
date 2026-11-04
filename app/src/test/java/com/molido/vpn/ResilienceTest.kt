@@ -120,7 +120,7 @@ class UpdateSourcesTest {
     private val github = """{"tag_name":"v3.0.126","assets":[
         {"name":"changelog.json","browser_download_url":"https://x/changelog.json"},
         {"name":"MolidoVPN-android-arm64.apk","browser_download_url":"https://gh/arm64.apk","digest":"sha256:$sha"},
-        {"name":"MolidoVPN-android-universal.apk","browser_download_url":"https://gh/uni.apk"}]}"""
+        {"name":"MolidoVPN-android-universal.apk","browser_download_url":"https://gh/uni.apk","digest":"sha256:$sha"}]}"""
 
     @Test
     fun staleStaticCopyIsDoubleCheckedOnGithubNotTheWorker() {
@@ -148,7 +148,7 @@ class UpdateSourcesTest {
         // armv7 phone: no armv7 asset → universal, no hash listed.
         val u = UpdateSources.parseRelease(github, listOf("armeabi-v7a"))!!
         assertEquals("MolidoVPN-android-universal.apk", u.assetName)
-        assertNull(u.sha256)
+        assertEquals(sha, u.sha256)
     }
 
     @Test
@@ -164,9 +164,9 @@ class UpdateSourcesTest {
         assertNull(ResilienceConfig.parseLivePush(JSONObject().put("push", false)))
         assertEquals("https://ntfy.example/t", ResilienceConfig.parseLivePush(JSONObject().put("url", "https://ntfy.example/t/")))
         assertEquals(LivePush.DEFAULT_URL, ResilienceConfig.parseLivePush(JSONObject().put("url", "http://plain/t")))
-        val rel = """{"tag_name":"v3.2.200","body":"Fix [critical] leak","assets":[{"name":"MolidoVPN-android-arm64.apk","browser_download_url":"https://x/a.apk"}]}"""
+        val rel = """{"tag_name":"v3.2.200","body":"Fix [critical] leak","assets":[{"name":"MolidoVPN-android-arm64.apk","browser_download_url":"https://x/a.apk","digest":"sha256:$sha"}]}"""
         assertTrue(UpdateSources.parseRelease(rel, listOf("arm64-v8a"))!!.critical)
-        val flagged = """{"tag_name":"v3.2.200","critical":true,"assets":[{"name":"MolidoVPN-android-universal.apk","browser_download_url":"https://x/a.apk"}]}"""
+        val flagged = """{"tag_name":"v3.2.200","critical":true,"assets":[{"name":"MolidoVPN-android-universal.apk","browser_download_url":"https://x/a.apk","digest":"sha256:$sha"}]}"""
         assertTrue(UpdateSources.parseRelease(flagged, listOf("x86"))!!.critical)
         assertFalse(UpdateSources.parseRelease(flagged.replace("true", "false"), listOf("x86"))!!.critical)
         assertTrue(StaticFirst.liveUrls("flags.json", "/app/flags.json").first().startsWith(LiveSync.RAW))
