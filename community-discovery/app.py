@@ -107,6 +107,7 @@ def get_directory(response: Response):
     payload={"schema_version":1,"generated_at":now,"expires_at":now+900,"entries":entries}
     canonical=json.dumps(payload,sort_keys=True,separators=(",",":")).encode()
     pub=key.public_key().public_bytes(Encoding.Raw,PublicFormat.Raw)
-    response.headers["Cache-Control"]="public, max-age=60, stale-while-revalidate=300"\n    response.headers["X-Content-Type-Options"]="nosniff"
+    response.headers["Cache-Control"]="public, max-age=60, stale-while-revalidate=300"
+    response.headers["X-Content-Type-Options"]="nosniff"
     return {"payload":payload,"signature":base64.b64encode(key.sign(canonical)).decode(),
       "algorithm":"Ed25519","public_key":base64.b64encode(pub).decode()}
