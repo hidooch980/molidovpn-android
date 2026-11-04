@@ -48,6 +48,7 @@ final class MolidoAetherPacketAdapter {
     private var pumpsActive = false
     private var pendingInbound: [PendingPacket] = []
     private var pendingInboundBytes = 0
+    private var outboundBuffer = [UInt8](repeating: 0, count: 65_535)
     private let maxPendingPackets = 256
     private let maxPendingBytes = 2 * 1024 * 1024
 
@@ -74,6 +75,7 @@ final class MolidoAetherPacketAdapter {
             let reset = aether_packet_channel_reset()
             guard reset == 0 else {
                 self.finishStartup(.failure(AdapterError.nativeQueueFailure(Int(reset))))
+                self.stop()
                 return
             }
 
@@ -300,13 +302,11 @@ final class MolidoAetherPacketAdapter {
         var protocols: [NSNumber] = []
         packets.reserveCapacity(32)
         protocols.reserveCapacity(32)
-        // Reuse one maximum-sized buffer for the whole batch; allocating 32 x
-        // 65 KB on every 2 ms tick caused avoidable memory churn on iPhones.
-        var buffer = [UInt8](repeating: 0, count: 65_535)
-
+        // Reuse one maximum-sized buffer across ticks; allocating 65 KB every
+        // 2 ms would create avoidable memory churn on iPhones.
         for _ in 0..<32 {
             var family: UInt8 = 0
-            let length = buffer.withUnsafeMutableBufferPointer { output in
+            let length = outboundBuffer.withUnsafeMutableBufferPointer { output in
                 aether_packet_pop_outbound(output.baseAddress, output.count, &family)
             }
             if length == 0 { break }
@@ -315,13 +315,13 @@ final class MolidoAetherPacketAdapter {
                 return
             }
             let count = Int(length)
-            guard count <= buffer.count,
-                  (family == 4 && buffer[0] >> 4 == 4) ||
-                  (family == 6 && buffer[0] >> 4 == 6) else {
+            guard count <= outboundBuffer.count,
+                  (family == 4 && outboundBuffer[0] >> 4 == 4) ||
+                  (family == 6 && outboundBuffer[0] >> 4 == 6) else {
                 fail(AdapterError.malformedPacket)
                 return
             }
-            packets.append(Data(buffer[0..<count]))
+            packets.append(Data(outboundBuffer[0..<count]))
             protocols.append(NSNumber(value: family == 4 ? AF_INET : AF_INET6))
         }
 
