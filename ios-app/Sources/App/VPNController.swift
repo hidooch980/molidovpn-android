@@ -81,6 +81,9 @@ final class VPNController: ObservableObject {
                 // while this VPN is disconnected/reconnecting (apart from Apple-defined
                 // control-plane and captive-portal exceptions), preventing direct fallback.
                 tunnel.includeAllNetworks = true
+                tunnel.excludeLocalNetworks = false
+                tunnel.excludeAPNs = false
+                tunnel.excludeCellularServices = false
                 tunnel.providerConfiguration = [
                     "profileVersion": MolidoTunnelConfiguration.currentVersion,
                     "appGroupIdentifier": MolidoTunnelConfiguration.appGroupIdentifier
