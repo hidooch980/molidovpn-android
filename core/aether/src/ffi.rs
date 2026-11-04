@@ -8,6 +8,7 @@ use std::sync::{LazyLock, Mutex, OnceLock, RwLock};
 use serde::{Deserialize, Serialize};
 use tokio::sync::Notify;
 
+use crate::packet_channel::aether_packet_channel_reset;
 use crate::{
     platform, EndpointDiscovery, IpScan, MasqueTransport, Protocol, ScanMode, StartOptions,
     TlsCurvePreset, TunnelAddresses,
