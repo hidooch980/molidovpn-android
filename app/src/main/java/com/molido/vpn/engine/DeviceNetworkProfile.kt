@@ -133,15 +133,26 @@ object DeviceNetworkProfile {
         val transport = runCatching { Transport.valueOf(o.optString("transport")) }.getOrNull() ?: return null
         val updated = o.optLong("updated_at_ms", 0L)
         if (updated <= 0L || updated > now + 60_000L || now - updated > ttlMs.coerceAtLeast(0L)) return null
-        fun nullableLong(k: String): Long? = if (o.isNull(k)) null else o.optLong(k).takeIf { it > 0L }
+        fun nullableLong(k: String, max: Long): Long? {
+            if (o.isNull(k)) return null
+            val value = o.optLong(k, -1L)
+            if (value <= 0L || value > max) return null
+            return value
+        }
         val loss = if (o.isNull("packet_loss")) null else o.optDouble("packet_loss")
-            .takeIf { it.isFinite() && it in 0.0..1.0 }
+            .takeIf { it.isFinite() && it in 0.0..1.0 } ?: if (o.isNull("packet_loss")) null else return null
+        val successful = o.optInt("successful_probes", 0)
+        val total = o.optInt("total_probes", 0)
+        if (successful < 0 || total < 0 || successful > total || total > 10_000) return null
+        val downstream = o.optInt("downstream_hint_kbps", 0)
+        val upstream = o.optInt("upstream_hint_kbps", 0)
+        if (downstream !in 0..10_000_000 || upstream !in 0..10_000_000) return null
         Profile(
             transport, o.optBoolean("validated", false), o.optBoolean("metered", true),
-            o.optBoolean("roaming", false), o.optInt("downstream_hint_kbps", 0).coerceAtLeast(0),
-            o.optInt("upstream_hint_kbps", 0).coerceAtLeast(0), nullableLong("rtt_median_ms"),
-            nullableLong("jitter_median_ms"), loss, nullableLong("throughput_median_kbps"),
-            o.optInt("successful_probes", 0).coerceAtLeast(0), o.optInt("total_probes", 0).coerceAtLeast(0), updated,
+            o.optBoolean("roaming", false), downstream, upstream,
+            nullableLong("rtt_median_ms", 600_000L), nullableLong("jitter_median_ms", 600_000L),
+            loss, nullableLong("throughput_median_kbps", 10_000_000L),
+            successful, total, updated,
         )
     } catch (_: Exception) { null }
 }
