@@ -1,0 +1,80 @@
+name: Android validation
+
+on:
+  pull_request:
+    paths:
+      - "app/**"
+      - "core/**"
+      - "tools/**"
+      - "gradle/**"
+      - "gradlew"
+      - "build.gradle.kts"
+      - "settings.gradle.kts"
+      - ".github/workflows/android-validation.yml"
+  push:
+    branches: [main]
+    paths:
+      - "app/**"
+      - "core/**"
+      - "tools/**"
+      - "gradle/**"
+      - "gradlew"
+      - "build.gradle.kts"
+      - "settings.gradle.kts"
+      - ".github/workflows/android-validation.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-validation-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: platform-tools
+
+      - name: Install NDK and CMake
+        run: sdkmanager "ndk;26.3.11579264" "cmake;3.22.1"
+
+      - name: Install Rust Android targets
+        run: |
+          rustup target add aarch64-linux-android armv7-linux-androideabi
+          cargo install cargo-ndk --locked
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core/aether -> target
+
+      - name: Fetch pinned native binaries with checksum verification
+        run: bash tools/fetch-binaries.sh
+
+      - name: Refresh offline emergency defaults
+        run: python3 tools/refresh-emergency-configs.py
+
+      - name: Run Android unit tests and build unsigned release APKs
+        run: |
+          chmod +x gradlew
+          ./gradlew testReleaseUnitTest assembleRelease --no-daemon \
+            -PtargetAbi=arm64-v8a,armeabi-v7a \
+            -PmolidoVersionCode=49999 \
+            -PmolidoVersionName=0.0.0-ci
+
+      - name: Upload unsigned validation APKs
+        uses: actions/upload-artifact@v6
+        with:
+          name: molido-mesh-ai-android-validation
+          path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
