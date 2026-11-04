@@ -34,6 +34,8 @@ targets:
     platform: iOS
     sources:
       - path: Sources/PacketTunnel
+    dependencies:
+      - framework: Frameworks/Aether.xcframework
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.molido.meshai.PacketTunnel
