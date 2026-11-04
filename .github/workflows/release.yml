@@ -116,6 +116,21 @@ jobs:
           expected_code=$((400000 + VERSION_CODE))
           expected_cert=$(keytool -exportcert -keystore release.keystore -alias "$AETHERY_KEY_ALIAS" \
             -storepass "$AETHERY_KEYSTORE_PASSWORD" | sha256sum | awk '{print $1}')
+
+          # Prove the configured key is the same signer as the already-published 4.0.0 APK.
+          # This prevents a changed/misconfigured GitHub secret from producing an un-upgradable APK.
+          baseline_url="https://github.com/hidooch980/molidovpn-android/releases/download/v4.0.0/MolidoMeshAI-android-arm64.apk"
+          curl --fail --location --retry 3 --silent --show-error "$baseline_url" -o baseline-v4.0.0.apk
+          "$APKSIGNER" verify --verbose baseline-v4.0.0.apk
+          baseline_cert=$("$APKSIGNER" verify --print-certs baseline-v4.0.0.apk | \
+            awk -F': ' '/Signer #1 certificate SHA-256 digest:/ {print tolower($2); exit}')
+          test -n "$baseline_cert"
+          if [[ "$baseline_cert" != "$expected_cert" ]]; then
+            echo "Configured keystore does not match the published v4.0.0 signing certificate; refusing upgrade release." >&2
+            exit 1
+          fi
+          "$AAPT" dump badging baseline-v4.0.0.apk | grep -F "package: name='com.mobin.mobin_vpn'"
+
           for apk in dist/*.apk; do
             "$APKSIGNER" verify --verbose "$apk"
             actual_cert=$("$APKSIGNER" verify --print-certs "$apk" | \
