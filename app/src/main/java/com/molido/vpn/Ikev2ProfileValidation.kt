@@ -15,7 +15,7 @@ object Ikev2ProfileValidation {
         }
         val ipv4Parts = host.split('.')
         if (ipv4Parts.size == 4 && ipv4Parts.all { it.isNotEmpty() && it.all(Char::isDigit) }) {
-            return ipv4Parts.all { it.toIntOrNull() in 0..255 }
+            return ipv4Parts.all { part -> part.toIntOrNull()?.let { it in 0..255 } == true }
         }
         val ascii = try { IDN.toASCII(host) } catch (_: IllegalArgumentException) { return false }
         if (ascii.length > 253 || !ascii.contains('.')) return false
