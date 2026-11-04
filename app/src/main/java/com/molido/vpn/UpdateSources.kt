@@ -5,6 +5,7 @@ import org.json.JSONObject
 import java.io.File
 import java.io.InputStream
 import java.security.MessageDigest
+import java.net.URI
 
 /**
  * Where the in-app updater looks, and how it checks what it got. Pure (unit tested); the network
@@ -34,9 +35,18 @@ object UpdateSources {
         val notes: List<String> = emptyList(),
     )
 
+    /** Reject plaintext, credential-bearing, malformed, and non-web URLs before network access. */
+    fun isSecureHttpsUrl(value: String): Boolean = try {
+        val uri = URI(value)
+        uri.scheme.equals("https", ignoreCase = true) &&
+            !uri.host.isNullOrBlank() && uri.userInfo == null && uri.fragment == null
+    } catch (_: Exception) {
+        false
+    }
+
     fun releaseJsonUrls(mirrors: List<String>): List<String> =
         (listOf(LiveSync.RAW + "latest.json", LiveSync.CDN + "latest.json", StaticFirst.RAW + "latest.json", StaticFirst.CDN + "latest.json", GITHUB_RELEASE_URL, WORKER_RELEASE_URL) +
-            mirrors.map { "${it.trimEnd('/')}/latest.json" }).distinct()
+            mirrors.map { "${it.trimEnd('/')}/latest.json" }).filter(::isSecureHttpsUrl).distinct()
 
     /**
      * The first source that answers wins, except that a static copy (live/sub branch, refreshed every few
@@ -71,7 +81,8 @@ object UpdateSources {
 
     /** The release's own URL first, then the same file name on every mirror. */
     fun downloadUrls(release: Release, mirrors: List<String>): List<String> =
-        (listOf(release.downloadUrl) + mirrors.map { "${it.trimEnd('/')}/${release.assetName}" }).distinct()
+        (listOf(release.downloadUrl) + mirrors.map { "${it.trimEnd('/')}/${release.assetName}" })
+            .filter(::isSecureHttpsUrl).distinct()
 
     private val HEX64 = Regex("^[0-9a-f]{64}$")
 
@@ -103,7 +114,9 @@ object UpdateSources {
                 val asset = assets.getJSONObject(i)
                 val name = asset.getString("name")
                 if (name.endsWith(".apk") && name.contains(token, ignoreCase = true)) {
-                    return Release(version, name, asset.getString("browser_download_url"), assetSha256(asset), critical, notes)
+                    val downloadUrl = asset.optString("browser_download_url", "")
+                    if (!isSecureHttpsUrl(downloadUrl)) continue
+                    return Release(version, name, downloadUrl, assetSha256(asset), critical, notes)
                 }
             }
         }
