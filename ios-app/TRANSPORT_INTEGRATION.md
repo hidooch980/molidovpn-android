@@ -10,9 +10,11 @@ Important distinction:
 - `aether_start_json(json)` starts the userspace/SOCKS mode; it does not attach iOS system packet flow.
 - `NEPacketTunnelFlow` exposes packet reads/writes through NetworkExtension and cannot be substituted with a file descriptor.
 
-## Required iOS packet adapter (not yet implemented)
+## Packet queue primitive added; transport adapter still required
 
-A real iOS tunnel requires a native packet-channel API in Aether, then a Swift adapter:
+A bounded, thread-safe FFI queue primitive now exists in `core/aether/src/packet_channel.rs` and is declared in `core/aether/include/aether.h`. It carries IPv4/IPv6 family metadata, limits each packet to 65,535 bytes, caps each direction at 256 packets / 2 MiB, reports backpressure, and does not consume a packet when the caller's output buffer is too small. Unit tests cover byte/family preservation, buffer sizing, and queue bounds.
+
+This primitive is **not yet wired into the Aether live transport** and the Swift provider does not call it. A real iOS tunnel still requires the native packet-channel adapter:
 
 1. Extend Aether start options with an explicit packet-channel mode. Never overload a valid fd or silently fall back to SOCKS.
 2. Add bounded, back-pressured packet queues across the FFI boundary. Define ownership, packet-size limits (IPv4/IPv6 maximum), cancellation, and queue-full behavior.
