@@ -53,8 +53,8 @@ class AppUpdater(private val activity: Activity) {
         val apk = readyApk
         if (apk != null && apk.exists()) {
             runCatching { verify(apk, release) }
-                .onSuccess { install(apk) }
-                .onFailure { readyApk = null; openDownload(release) }
+                .onSuccess { announceReady(release, apk) }
+                .onFailure { readyApk = null; announceUpdate(release) }
         } else {
             announceUpdate(release)
         }
