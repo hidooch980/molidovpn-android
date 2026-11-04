@@ -12,7 +12,7 @@ class Ikev2ProfileValidationTest {
     }
 
     @Test fun rejectsMalformedOrUnsafeServerInputs() {
-        listOf("", " https://vpn.example.org", "vpn.example.org/path", "bad host", "-bad.example", "vpn..example", "256.1.1.1", "vpn").forEach {
+        listOf("", " https://vpn.example.org", "vpn.example.org/path", "bad host", "-bad.example", "vpn..example", "256.1.1.1", "2001:db8:::10", "vpn").forEach {
             assertFalse("Expected rejection: $it", Ikev2ProfileValidation.isValidServer(it))
         }
     }
