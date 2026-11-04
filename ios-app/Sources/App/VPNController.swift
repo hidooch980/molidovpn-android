@@ -54,7 +54,7 @@ final class VPNController: ObservableObject {
                         version: MolidoTunnelConfiguration.currentVersion,
                         engineProtocol: .masque,
                         engineConfigurationFile: "masque-identity.toml",
-                        dnsServers: ["1.1.1.1", "1.0.0.1"],
+                        dnsServers: ["1.1.1.1", "1.0.0.1", "2606:4700:4700::1111"],
                         mtu: 1280,
                         includeDefaultRoute: true
                     )
