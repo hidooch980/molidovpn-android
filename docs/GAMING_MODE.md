@@ -8,7 +8,7 @@ Rank available routes for interactive games using measured latency distribution,
 
 - `GamingQuality` is a deterministic scoring component with unit tests and is now used by Android Smart Connect when **Secure gaming route scoring** is enabled in Settings.
 - Smart Connect adapts its existing ordered candidate probe window into gaming observations and ranks candidates using nearest-rank p95 RTT, median absolute consecutive RTT variation, packet-loss percentage and success ratio.
-- Gaming and normal Smart Connect scores use separate remembered-winner and learning-bandit keys; enabling gaming scoring also disables the remembered-winner fast path so every candidate receives a fresh trial.
+- Gaming and normal Smart Connect scores use separate remembered-winner and learning-bandit keys; enabling gaming scoring disables the remembered-winner fast path. Smart Connect still respects its configured minimum-trial, time-budget and good-enough stopping rules.
 - Missing optional metrics are neutral; an empty/all-failed probe window scores zero. Recovery time is not currently measured and remains neutral.
 - Current probes are generic route reachability/latency probes, not game-server-specific probes. There is no game detection, no in-game ping claim, and no continuous game-specific route switching yet.
 
