@@ -112,7 +112,7 @@ class Ikev2VpnActivity : Activity() {
             }
         }, matchWidth())
         root.addView(TextView(this).apply {
-            text = Strings.t("Free community servers are third-party services, not operated by Molido. Availability and account lifetime can change. Do not use them for sensitive traffic; read the provider privacy policy before registering.")
+            text = Strings.t("Free community servers are third-party services, not operated by Molido. Availability and account lifetime can change. The provider may process registration usernames and passwords under its own privacy policy. Do not use these servers for sensitive traffic.")
             textSize = 13f
             setPadding(0, 12.dp(), 0, 8.dp())
         })
