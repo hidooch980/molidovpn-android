@@ -7,6 +7,7 @@ import re
 import sys
 import time
 from datetime import datetime, timezone
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import urljoin, urlparse, parse_qs
@@ -72,13 +73,8 @@ def main() -> None:
     if not pages:
         raise RuntimeError("No recognized IKEv2 country pages; refusing to overwrite last-known-good mirror")
 
-    servers = {}
-    for country, url in pages[:80]:
-        try:
-            html = get(url)
-        except Exception as exc:
-            print(f"WARNING: {country}: {exc}", file=sys.stderr)
-            continue
+    def scrape_country(country: str, url: str) -> list[dict]:
+        html = get(url)
         page_links = Links()
         page_links.feed(html)
         account_links = {}
@@ -91,24 +87,32 @@ def main() -> None:
             if code:
                 account_links[code] = absolute
         plain = re.sub(r"<[^>]+>", " ", html)
-        plain = re.sub(r"\s+", " ", plain)
-        available = bool(re.search(r"\bAvailable\b", plain, re.I)) and not bool(
-            re.search(r"\b(Not Available|Unavailable)\b", plain, re.I)
+        plain = re.sub(r"\\s+", " ", plain)
+        available = bool(re.search(r"\\bAvailable\\b", plain, re.I)) and not bool(
+            re.search(r"\\b(Not Available|Unavailable)\\b", plain, re.I)
         )
-        for host in HOST_RE.findall(plain):
-            host = host.lower()
-            code = host.split(".", 1)[0]
-            account_url = account_links.get(code)
-            if not account_url or host in servers:
-                continue
-            servers[host] = {
+        return [
+            {
                 "country": country,
-                "host": host,
+                "host": host.lower(),
                 "identity": "vpnjantit",
-                "accountUrl": account_url,
+                "accountUrl": account_links[host.lower().split(".", 1)[0]],
                 "available": available,
             }
-        time.sleep(0.15)
+            for host in set(HOST_RE.findall(plain))
+            if host.lower().split(".", 1)[0] in account_links
+        ]
+
+    servers = {}
+    with ThreadPoolExecutor(max_workers=5) as pool:
+        futures = {pool.submit(scrape_country, country, url): country for country, url in pages[:80]}
+        for future in as_completed(futures):
+            country = futures[future]
+            try:
+                for item in future.result():
+                    servers[item["host"]] = item
+            except Exception as exc:
+                print(f"WARNING: {country}: {exc}", file=sys.stderr)
 
     if not servers:
         raise RuntimeError("No valid IKEv2 endpoints found; refusing to overwrite last-known-good mirror")
