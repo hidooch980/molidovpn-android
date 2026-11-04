@@ -646,35 +646,32 @@ async fn handle_tcp(
         let tun_fd_clone = unsafe { libc::dup(tun.as_raw_fd()) };
         let conns_clone = Arc::clone(&conns);
         tokio::spawn(async move {
-            if tun_fd_clone < 0 { return; }
+            if tun_fd_clone < 0 {
+                ffi::record_log(format!("[tun2socks] TUN fd duplication failed for {dst}"));
+                let mut guard = conns_clone.lock().await;
+                if matches!(guard.get(&sport), Some(c) if c.connecting && c.isn == isn) {
+                    guard.remove(&sport);
+                }
+                return;
+            }
             // SAFETY: tun_fd_clone is a successful dup and ownership transfers to tun_file.
             let tun_file = unsafe { std::fs::File::from_raw_fd(tun_fd_clone) };
             // SAFETY: tun_file owns the duplicated descriptor and remains open and unchanged
             // until the AsyncFd is dropped.
             let tun_async = match unsafe { tokio::io::unix::AsyncFd::register(tun_file) } {
                 Ok(a) => a,
-                Err(_) => return,
+                Err(error) => {
+                    ffi::record_log(format!("[tun2socks] TUN fd registration failed for {dst}: {error}"));
+                    let mut guard = conns_clone.lock().await;
+                    if matches!(guard.get(&sport), Some(c) if c.connecting && c.isn == isn) {
+                        guard.remove(&sport);
+                    }
+                    return;
+                }
             };
 
             match connect_through_socks(upstream, dst).await {
                 Ok(stream) => {
-                    // The app may have given up while we were retrying through a
-                    // Psiphon rotation. handle_tcp removes the entry on RST/FIN, so
-                    // its absence means this SYN is dead — completing the handshake
-                    // now would make the app answer with RST (build #50, port 38132).
-                    {
-                        let guard = conns_clone.lock().await;
-                        match guard.get(&sport) {
-                            Some(c) if c.connecting => {}
-                            _ => {
-                                ffi::record_log(format!(
-                                    "[tun2socks] SOCKS5 late OK for {dst} — app already gave up, dropping"
-                                ));
-                                return;
-                            }
-                        }
-                    }
-
                     ffi::record_log(format!("[tun2socks] SOCKS5 CONNECT OK {dst}"));
                     let (read_half, write_half) = tokio::io::split(stream);
 
@@ -686,14 +683,30 @@ async fn handle_tcp(
                     // a segment stamped with the SYN's own sequence number.
                     seq_shared.store(isn.wrapping_add(1), Ordering::Relaxed);
 
-                    // Store connection state BEFORE sending SYN-ACK (fixes race condition)
-                    conns_clone.lock().await.insert(sport, TcpConn {
-                        data_tx: Some(data_tx),
-                        ack_shared: Arc::clone(&ack_shared),
-                        seq_shared: Arc::clone(&seq_shared),
-                        isn,
-                        connecting: false,
-                    });
+                    // Atomically promote only the SYN entry that started this task.
+                    // This prevents a late SOCKS completion from resurrecting a closed
+                    // connection or overwriting a newer flow that reused the same port.
+                    let promoted = {
+                        let mut guard = conns_clone.lock().await;
+                        if matches!(guard.get(&sport), Some(c) if c.connecting && c.isn == isn) {
+                            guard.insert(sport, TcpConn {
+                                data_tx: Some(data_tx),
+                                ack_shared: Arc::clone(&ack_shared),
+                                seq_shared: Arc::clone(&seq_shared),
+                                isn,
+                                connecting: false,
+                            });
+                            true
+                        } else {
+                            false
+                        }
+                    };
+                    if !promoted {
+                        ffi::record_log(format!(
+                            "[tun2socks] SOCKS5 late OK for {dst} — SYN entry expired or port reused, dropping"
+                        ));
+                        return;
+                    }
 
                     // Spawn response reader
                     let tun_reader_fd = unsafe { libc::dup(tun_async.as_raw_fd()) };
@@ -705,7 +718,10 @@ async fn handle_tcp(
                             &tun_async, dst_ip, src_ip,
                             dport, sport, 0, seq_num.wrapping_add(1), 0x04, &[],
                         ).await;
-                        conns_clone.lock().await.remove(&sport);
+                        let mut guard = conns_clone.lock().await;
+                        if matches!(guard.get(&sport), Some(c) if c.isn == isn) {
+                            guard.remove(&sport);
+                        }
                         return;
                     }
                     // SAFETY: tun_reader_fd is a successful dup and ownership transfers to this File.
@@ -720,7 +736,10 @@ async fn handle_tcp(
                                 &tun_async, dst_ip, src_ip,
                                 dport, sport, 0, seq_num.wrapping_add(1), 0x04, &[],
                             ).await;
-                            conns_clone.lock().await.remove(&sport);
+                            let mut guard = conns_clone.lock().await;
+                            if matches!(guard.get(&sport), Some(c) if c.isn == isn) {
+                                guard.remove(&sport);
+                            }
                             return;
                         }
                     };
