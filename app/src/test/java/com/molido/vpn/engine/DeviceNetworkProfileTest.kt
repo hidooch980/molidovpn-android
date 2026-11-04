@@ -122,4 +122,8 @@ class DeviceNetworkProfileTest {
         assertNull(DeviceNetworkProfile.parse("""{"transport":"WIFI","updated_at_ms":0}"""))
         assertNull(DeviceNetworkProfile.parse(DeviceNetworkProfile.toJson(profile), now = 1234L + 8L * 86_400_000L))
     }
-}
+    @Test fun ignoresInactiveNetworksWithoutDefaultRoute() {
+        val secondary = DeviceNetworkProfile.Candidate(link(route = false), false)
+        assertNull(DeviceNetworkProfile.choose(listOf(secondary)))
+    }
+\n}\n
