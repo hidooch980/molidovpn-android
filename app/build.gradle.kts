@@ -177,5 +177,8 @@ targetAbis.forEach { abi ->
 
 // Keep exact Android/Robolectric failures visible in Actions job logs.
 tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
+    // Robolectric defaults to repo1.maven.org, which can return HTTP 429 in CI.
+    // Use Maven Central's canonical host for Android SDK test artifacts.
+    systemProperty("robolectric.dependency.repo.url", "https://repo.maven.apache.org/maven2")
     testLogging.exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
 }
