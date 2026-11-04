@@ -107,6 +107,7 @@ class MainActivity : Activity() {
     private var selectedProtocol = Protocol.AUTO
     /** Home-screen DNS chip under the rail; opens the same sheet as Settings. */
     private var homeDnsChip: TextView? = null
+    private var homeGamingShortcut: TextView? = null
 
     // Simple / Advanced home and collapsible settings.
     private var homeAdvancedBox: LinearLayout? = null
@@ -1589,6 +1590,14 @@ class MainActivity : Activity() {
             if (visualState == OrbitDialView.State.CONNECTING) 0.94f else 1f
     }
 
+    private fun gamingShortcutLabel(): String =
+        Strings.t("Gaming optimization") + " · " +
+            Strings.t(if (preferences().getBoolean(com.molido.vpn.engine.GamingQuality.PREF, false)) "On" else "Off")
+
+    private fun renderGamingShortcut() {
+        homeGamingShortcut?.text = "🎮  " + gamingShortcutLabel()
+    }
+
     private fun railLabel(protocol: Protocol): String = when (protocol) {
         // "WoW" is the table key for the short rail label; the enum's own label
         // is the longer "WARP-on-WARP" which would not fit the rail cells.
@@ -1884,9 +1893,21 @@ class MainActivity : Activity() {
         quickActions.addView(quickAction(Strings.t("Country"), "◎") {
             showCountryPicker { homeLocationCard?.text = locationCardText() }
         }, LinearLayout.LayoutParams(0, dp(44), 1f).apply { marginEnd = dp(6) })
-        quickActions.addView(quickAction(Strings.t("DNS"), "⌁") {
-            openDnsPicker()
-        }, LinearLayout.LayoutParams(0, dp(44), 1f).apply {
+        lateinit var gamingShortcut: TextView
+        gamingShortcut = quickAction(gamingShortcutLabel(), "🎮") {
+            val enabled = !preferences().getBoolean(com.molido.vpn.engine.GamingQuality.PREF, false)
+            preferences().edit()
+                .putBoolean(com.molido.vpn.engine.GamingQuality.PREF, enabled)
+                .apply()
+            ConnectionLog.record(
+                "Secure gaming route scoring " + (if (enabled) "on" else "off") +
+                    " — applies on the next Smart Connect run; DNS stays tunnel-routed"
+            )
+            renderGamingShortcut()
+            toastShort(Strings.t(if (enabled) "Gaming optimization enabled" else "Gaming optimization disabled"))
+        }
+        homeGamingShortcut = gamingShortcut
+        quickActions.addView(gamingShortcut, LinearLayout.LayoutParams(0, dp(44), 1f).apply {
             marginStart = dp(2); marginEnd = dp(2)
         })
         quickActions.addView(quickAction(Strings.t("Traffic monitor"), "↗") {
@@ -4029,6 +4050,7 @@ class MainActivity : Activity() {
                 "Secure gaming route scoring " + (if (enabled) "on" else "off") +
                     " — applies on the next Smart Connect run; DNS stays tunnel-routed"
             )
+            renderGamingShortcut()
         }, mainParams())
         // The switch this writes existed before, fed only the removed proxy mode's
         // SOCKS bind, and was deleted because in VPN mode it changed nothing the
