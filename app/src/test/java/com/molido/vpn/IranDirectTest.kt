@@ -16,15 +16,17 @@ class IranDirectTest {
         return out.toByteArray()
     }
 
-    private fun field(number: Int, bytes: ByteArray): ByteArray =
+    private fun bytesField(number: Int, bytes: ByteArray): ByteArray =
         byteArrayOf(((number shl 3) or 2).toByte()) + varint(bytes.size) + bytes
 
+    // GeoIP protobuf: CIDR.ip = field 1 (bytes), CIDR.prefix = field 2 (varint).
+    // The enclosing GeoIP.country_cidrs field 2 wraps this CIDR message.
     private fun cidr(address: ByteArray, prefix: Int): ByteArray =
-        field(2, field(1, address) + byteArrayOf(0x10) + varint(prefix))
+        bytesField(1, address) + byteArrayOf(0x10) + varint(prefix)
 
     private fun country(code: String, vararg cidrs: ByteArray): ByteArray =
-        field(1, code.toByteArray(Charsets.UTF_8)) + cidrs.fold(ByteArray(0)) { acc, item ->
-            acc + field(2, item)
+        bytesField(1, code.toByteArray(Charsets.UTF_8)) + cidrs.fold(ByteArray(0)) { acc, item ->
+            acc + bytesField(2, item)
         }
 
     @Test fun parsesIranianIpv4AndExactIpv6Allocations() {
@@ -36,7 +38,7 @@ class IranDirectTest {
                 0, 0, 0, 0, 0, 0, 0, 0
             ), 32),
         )
-        val parsed = IranDirect.parse(field(1, ir))
+        val parsed = IranDirect.parse(bytesField(1, ir))
         assertEquals(2, parsed.size)
         assertEquals("5.52.0.0" to 16, parsed.first { ':' !in it.first })
         val ipv6 = parsed.single { ':' in it.first }
@@ -47,11 +49,11 @@ class IranDirectTest {
     @Test fun ignoresNonIranCountriesAndOverlySpecificIpv4Prefixes() {
         val us = country("US", cidr(byteArrayOf(8, 8, 8, 0), 24))
         val ir = country("IR", cidr(byteArrayOf(5, 52, 1, 0), 24))
-        assertTrue(IranDirect.parse(field(1, us) + field(1, ir)).isEmpty())
+        assertTrue(IranDirect.parse(bytesField(1, us) + bytesField(1, ir)).isEmpty())
     }
 
     @Test fun ignoresMalformedAddressLengths() {
         val ir = country("IR", cidr(byteArrayOf(5, 52, 0), 16))
-        assertTrue(IranDirect.parse(field(1, ir)).isEmpty())
+        assertTrue(IranDirect.parse(bytesField(1, ir)).isEmpty())
     }
 }
