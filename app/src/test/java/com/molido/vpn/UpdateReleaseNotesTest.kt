@@ -37,4 +37,21 @@ class UpdateReleaseNotesTest {
     @Test fun emptyReleaseBodyHasNoInventedNotes() {
         assertTrue(UpdateSources.releaseNotes("## Release\nNo details supplied").isEmpty())
     }
+    @Test fun acceptsOnlyHttpsUrlsWithoutCredentialsOrFragments() {
+        assertTrue(UpdateSources.isSecureHttpsUrl("https://updates.example.com/latest.json"))
+        assertTrue(!UpdateSources.isSecureHttpsUrl("http://updates.example.com/latest.json"))
+        assertTrue(!UpdateSources.isSecureHttpsUrl("file:///tmp/update.apk"))
+        assertTrue(!UpdateSources.isSecureHttpsUrl("https://user:pass@updates.example.com/latest.json"))
+        assertTrue(!UpdateSources.isSecureHttpsUrl("https://updates.example.com/latest.json#fragment"))
+    }
+
+    @Test fun filtersInsecureAndMalformedMirrorUrls() {
+        val release = UpdateSources.Release("4.0", "MolidoVPN-android-arm64.apk",
+            "http://bad.example/app.apk", null)
+        assertEquals(
+            listOf("https://good.example/MolidoVPN-android-arm64.apk"),
+            UpdateSources.downloadUrls(release, listOf("http://bad.example", "https://good.example", "not a url"))
+        )
+    }
+
 }
