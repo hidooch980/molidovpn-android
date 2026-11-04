@@ -18,6 +18,15 @@ data class GamingMeasurement(
 
 /** Game-specific quality score. It ranks routes; it does not claim to measure in-game ping. */
 object GamingQuality {
+    /** Preference key for the secure route-scoring mode; it never enables DNS bypass. */
+    const val PREF = "gaming_mode_enabled"
+
+    /** Adapt the existing ordered Smart Connect probe window without inventing measurements. */
+    fun measurement(probes: List<Probe>, recoveryMs: Long? = null): GamingMeasurement =
+        GamingMeasurement(
+            probes = probes.map { GamingProbe(success = it.ok, rttMs = it.latencyMs) },
+            recoveryMs = recoveryMs,
+        )
     private const val LOSS_WEIGHT = 0.30
     private const val P95_WEIGHT = 0.25
     private const val JITTER_WEIGHT = 0.20
