@@ -92,15 +92,18 @@ class Ikev2VpnActivity : Activity() {
                     .show()
             }
         }, matchWidth())
+        root.addView(TextView(this).apply {
+            text = Strings.t("Free community endpoints are provided by a third party, not Molido. Accounts last up to 7 days and allow up to 2 devices. Review the provider's privacy policy; do not use a community server for sensitive traffic.")
+            textSize = 13f
+            setPadding(0, 12.dp(), 0, 8.dp())
+        })
         root.addView(Button(this).apply {
-            text = Strings.t("Get a free temporary IKEv2 account")
-            setOnClickListener {
-                // VPN Jantit currently lists two free Istanbul IKEv2 endpoints.
-                // Start with server 6; the user still creates their own short-lived account.
-                server.setText(FREE_SERVER_HOST)
-                ikeIdentity.setText(FREE_SERVER_IDENTITY)
-                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(FREE_PROVIDER_URL)))
-            }
+            text = Strings.t("Free Istanbul server 6 (7 days)")
+            setOnClickListener { openFreeProvider(FREE_SERVER_6_HOST, FREE_SERVER_6_URL) }
+        }, matchWidth())
+        root.addView(Button(this).apply {
+            text = Strings.t("Free Istanbul server 5 (7 days)")
+            setOnClickListener { openFreeProvider(FREE_SERVER_5_HOST, FREE_SERVER_5_URL) }
         }, matchWidth())
 
         root.addView(Button(this).apply {
@@ -111,6 +114,12 @@ class Ikev2VpnActivity : Activity() {
             text = Strings.t("Disconnect IKEv2")
             setOnClickListener { stopProfile() }
         }, matchWidth())
+    }
+
+    private fun openFreeProvider(host: String, url: String) {
+        server.setText(host)
+        ikeIdentity.setText(FREE_SERVER_IDENTITY)
+        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
     }
 
     private fun field(parent: LinearLayout, label: String): EditText {
@@ -269,8 +278,10 @@ class Ikev2VpnActivity : Activity() {
         private const val REQUEST_VPN_CONSENT = 7301
         private const val REQUEST_CA_CERTIFICATE = 7302
         private const val MAX_CA_BYTES = 256 * 1024
-        private const val FREE_PROVIDER_URL = "https://www.vpnjantit.com/create-free-account?server=tr6&type=IKEV2"
-        private const val FREE_SERVER_HOST = "tr6.vpnjantit.com"
+        private const val FREE_SERVER_6_URL = "https://www.vpnjantit.com/create-free-account?server=tr6&type=IKEV2"
+        private const val FREE_SERVER_5_URL = "https://www.vpnjantit.com/create-free-account?server=tr5&type=IKEV2"
+        private const val FREE_SERVER_6_HOST = "tr6.vpnjantit.com"
+        private const val FREE_SERVER_5_HOST = "tr5.vpnjantit.com"
         private const val FREE_SERVER_IDENTITY = "vpnjantit"
     }
 }
