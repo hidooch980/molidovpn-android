@@ -899,8 +899,9 @@ object Strings {
 
     /** Translate [key] into the active language, falling back to English. */
     fun t(english: String): String {
-        val row = table[english]
         val l = AppLanguage.current()
+        LocalizedStrings.translate(l, english)?.let { return it }
+        val row = table[english]
         if (l == "en") return row?.first ?: english
         row ?: return english
         return when (l) {
