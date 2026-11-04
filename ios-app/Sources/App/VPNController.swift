@@ -29,7 +29,9 @@ final class VPNController: ObservableObject {
                     self.message = "خواندن تنظیمات VPN ناموفق بود: \(error.localizedDescription)"
                     return
                 }
-                self.manager = managers?.first
+                self.manager = managers?.first(where: { manager in
+                    (manager.protocolConfiguration as? NETunnelProviderProtocol)?.providerBundleIdentifier == self.providerBundleIdentifier
+                })
                 self.profileInstalled = self.manager != nil
                 self.status = self.manager?.connection.status ?? .invalid
             }
@@ -47,7 +49,10 @@ final class VPNController: ObservableObject {
                     return
                 }
 
-                let manager = managers?.first ?? NETunnelProviderManager()
+                let existingMolidoManager = managers?.first(where: { manager in
+                    (manager.protocolConfiguration as? NETunnelProviderProtocol)?.providerBundleIdentifier == self.providerBundleIdentifier
+                })
+                let manager = existingMolidoManager ?? NETunnelProviderManager()
                 let tunnel = NETunnelProviderProtocol()
                 tunnel.providerBundleIdentifier = self.providerBundleIdentifier
                 tunnel.serverAddress = "Molido Mesh AI"
