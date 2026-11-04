@@ -54,4 +54,32 @@ class UpdateReleaseNotesTest {
         )
     }
 
+    @Test fun signerMustBeCurrentOrInVerifiedRotationLineage() {
+        val old = byteArrayOf(1, 2, 3)
+        val rotated = byteArrayOf(4, 5, 6)
+        val unrelated = byteArrayOf(7, 8, 9)
+
+        assertTrue(UpdateSources.isValidSignerTransition(
+            listOf(old), false, listOf(old), listOf(old), false
+        ))
+        assertTrue(UpdateSources.isValidSignerTransition(
+            listOf(old), false, listOf(rotated), listOf(old, rotated), false
+        ))
+        assertTrue(!UpdateSources.isValidSignerTransition(
+            listOf(old), false, listOf(rotated), listOf(rotated, unrelated), false
+        ))
+        assertTrue(!UpdateSources.isValidSignerTransition(
+            listOf(old), false, listOf(old, unrelated), listOf(old, unrelated), true
+        ))
+    }
+
+    @Test fun multiSignerPackagesRequireExactSignerSet() {
+        val a = byteArrayOf(1)
+        val b = byteArrayOf(2)
+        val c = byteArrayOf(3)
+        assertTrue(UpdateSources.isValidSignerTransition(listOf(a, b), true, listOf(b, a), listOf(b, a), true))
+        assertTrue(!UpdateSources.isValidSignerTransition(listOf(a, b), true, listOf(a, c), listOf(a, c), true))
+        assertTrue(!UpdateSources.isValidSignerTransition(listOf(a), false, listOf(a, b), listOf(a, b), true))
+    }
+
 }
