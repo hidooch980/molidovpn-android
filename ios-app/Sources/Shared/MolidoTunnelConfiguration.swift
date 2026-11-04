@@ -11,6 +11,7 @@ enum MolidoTunnelConfigurationError: LocalizedError {
     case invalidMTU
     case invalidTunnelAddress
     case nativePacketAdapterNotReady
+    case credentialMissing
 
     var errorDescription: String? {
         switch self {
@@ -32,6 +33,8 @@ enum MolidoTunnelConfigurationError: LocalizedError {
             return "A tunnel interface CIDR address is invalid."
         case .nativePacketAdapterNotReady:
             return "Bootstrap is valid, but the iOS native packet adapter is not ready."
+        case .credentialMissing:
+            return "The referenced Keychain credential is missing or empty."
         }
     }
 }
