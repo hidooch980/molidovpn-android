@@ -47,8 +47,9 @@ object Ikev2FreeServerDirectory {
             .distinctBy { it.second }
             .take(80)
 
+        require(countryPages.isNotEmpty()) { "The provider index contained no recognized IKEv2 country pages" }
         val pool = Executors.newFixedThreadPool(5)
-        return try {
+        val servers = try {
             val tasks = countryPages.map { (country, url) ->
                 Callable { readCountry(country, url) }
             }
@@ -58,6 +59,8 @@ object Ikev2FreeServerDirectory {
         } finally {
             pool.shutdownNow()
         }
+        require(servers.isNotEmpty()) { "The provider returned no valid IKEv2 endpoints; preserve the last known-good cache" }
+        return servers
     }
 
     internal fun parseCountryHtml(country: String, url: String, html: String): List<Ikev2FreeServer> {
