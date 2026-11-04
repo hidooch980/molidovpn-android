@@ -122,6 +122,59 @@ object UpdateSources {
         (listOf(release.downloadUrl) + mirrors.map { "${it.trimEnd('/')}/${release.assetName}" })
             .filter(::isSecureHttpsUrl).distinct()
 
+    private data class SemanticVersion(
+        val major: Long,
+        val minor: Long,
+        val patch: Long,
+        val prerelease: List<String>,
+    )
+
+    private val SEMVER = Regex(
+        """^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-([0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*))?(?:\\+([0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*))?$"""
+    )
+
+    /** Strict SemVer comparison; stable releases outrank prereleases and build metadata is ignored. */
+    fun isNewerVersion(remote: String, local: String): Boolean {
+        val r = parseSemanticVersion(remote) ?: return false
+        val l = parseSemanticVersion(local) ?: return false
+        if (r.major != l.major) return r.major > l.major
+        if (r.minor != l.minor) return r.minor > l.minor
+        if (r.patch != l.patch) return r.patch > l.patch
+        if (r.prerelease.isEmpty()) return l.prerelease.isNotEmpty()
+        if (l.prerelease.isEmpty()) return false
+        for (i in 0 until minOf(r.prerelease.size, l.prerelease.size)) {
+            val a = r.prerelease[i]
+            val b = l.prerelease[i]
+            val aNumeric = a.all(Char::isDigit)
+            val bNumeric = b.all(Char::isDigit)
+            val comparison = when {
+                aNumeric && bNumeric -> when {
+                    a.length != b.length -> a.length.compareTo(b.length)
+                    else -> a.compareTo(b)
+                }
+                aNumeric -> -1
+                bNumeric -> 1
+                else -> a.compareTo(b)
+            }
+            if (comparison != 0) return comparison > 0
+        }
+        return r.prerelease.size > l.prerelease.size
+    }
+
+    private fun parseSemanticVersion(value: String): SemanticVersion? {
+        val match = SEMVER.matchEntire(value.removePrefix("v")) ?: return null
+        val prerelease = match.groupValues[4].takeIf { it.isNotEmpty() }?.split('.').orEmpty()
+        if (prerelease.any { it.all(Char::isDigit) && it.length > 1 && it.startsWith('0') }) return null
+        return SemanticVersion(
+            major = match.groupValues[1].toLongOrNull() ?: return null,
+            minor = match.groupValues[2].toLongOrNull() ?: return null,
+            patch = match.groupValues[3].toLongOrNull() ?: return null,
+            prerelease = prerelease,
+        )
+    }
+
+    fun isValidReleaseVersion(value: String): Boolean = parseSemanticVersion(value) != null
+
     private val HEX64 = Regex("^[0-9a-f]{64}$")
 
     /** `"digest": "sha256:<hex>"` (GitHub) or `"sha256": "<hex>"` (our mirrors); null when absent/invalid. */
@@ -142,6 +195,7 @@ object UpdateSources {
     fun parseRelease(text: String, abis: List<String>): Release? {
         val json = JSONObject(text)
         val version = json.getString("tag_name").removePrefix("v")
+        if (!isValidReleaseVersion(version)) return null
         val assets: JSONArray = json.getJSONArray("assets")
         val body = json.optString("body", "")
         val critical = json.optBoolean("critical", false) || body.contains("[critical]", ignoreCase = true)
