@@ -1875,7 +1875,7 @@ class MainActivity : Activity() {
                 ellipsize = android.text.TextUtils.TruncateAt.END
                 background = Sculpt.sculptedBackground(
                     resources.displayMetrics.density, palette.surface, 13,
-                    Sculpt.withAlpha(palette.divider, 0.8f),
+                    stroke = Sculpt.withAlpha(palette.divider, 0.8f),
                 )
                 isClickable = true
                 isFocusable = true
