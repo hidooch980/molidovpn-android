@@ -1,9 +1,9 @@
 import unittest
+import hashlib
 from pydantic import ValidationError
-from app import Observation, endpoint_id
+from app import Observation
 
 def endpoint_id(o):
-    import hashlib
     return hashlib.sha256(f"{o.protocol}|{o.endpoint_host}|{o.port}".encode()).hexdigest()
 
 class ObservationTests(unittest.TestCase):
