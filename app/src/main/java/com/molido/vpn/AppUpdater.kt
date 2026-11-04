@@ -401,7 +401,7 @@ class AppUpdater(private val activity: Activity) {
         false
     }
 
-    /** Our Cloudflare worker first (reachable where GitHub is filtered), then GitHub, then mirrors. */
+    /** Check the static mirrors first, then the GitHub release API, worker and configured mirrors. */
     private fun latestRelease(): Release? = UpdateSources.latest(
         UpdateSources.releaseJsonUrls(ResilienceConfig.updateMirrors(activity)), appVersion(), ::isNewer, ::fetchRelease,
     )
@@ -437,7 +437,7 @@ class AppUpdater(private val activity: Activity) {
                 check(declared <= 0L || received == declared) { "Incomplete release metadata" }
                 output.toString(Charsets.UTF_8.name())
             }
-            // MolidoVPN release assets are named MolidoVPN-android-arm64.apk / -armv7.apk / -universal.apk.
+            // Release assets use MolidoMeshAI-android-arm64.apk / -armv7.apk / -universal.apk.
             return UpdateSources.parseRelease(body, Build.SUPPORTED_ABIS.toList())
         } finally {
             connection.disconnect()
