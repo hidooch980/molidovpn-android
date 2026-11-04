@@ -278,6 +278,10 @@ class Ikev2VpnActivity : Activity() {
         val eapUser = username.text.toString()
         val eapPass = password.text.toString()
         val identity = ikeIdentity.text.toString().ifBlank { host }.trim()
+        if (host.endsWith(".vpnjantit.com", ignoreCase = true) && serverRootCa == null) {
+            message("Import the official VPN Jantit CA certificate before connecting to a free community server.")
+            return
+        }
         if (!Ikev2ProfileValidation.isValidServer(host) ||
             !Ikev2ProfileValidation.hasEapCredentials(identity, eapUser, eapPass)) {
             message("Enter a valid server, IKE identity, EAP username and password.")
