@@ -123,7 +123,7 @@ class UpdateSourcesTest {
         {"name":"MolidoVPN-android-universal.apk","browser_download_url":"https://gh/uni.apk","digest":"sha256:$sha"}]}"""
 
     @Test
-    fun staleStaticCopyIsDoubleCheckedOnGithubNotTheWorker() {
+    fun staleStaticCopyDoesNotBlockWorkerFallback() {
         fun rel(v: String) = UpdateSources.Release(v, "a.apk", "https://gh/a.apk", null)
         val newer = { r: String, l: String -> r.split('.').map { it.toInt() }.zip(l.split('.').map { it.toInt() }).firstOrNull { it.first != it.second }?.let { it.first > it.second } ?: false }
         val urls = UpdateSources.releaseJsonUrls(emptyList())
@@ -131,12 +131,18 @@ class UpdateSourcesTest {
         // Live copy still says 3.2.156, GitHub already has 3.2.157.
         val r = UpdateSources.latest(urls, "3.2.156", newer) { u -> asked += u; if (u == UpdateSources.GITHUB_RELEASE_URL) rel("3.2.157") else rel("3.2.156") }
         assertEquals("3.2.157", r!!.version)
-        assertEquals(listOf(urls[0], UpdateSources.GITHUB_RELEASE_URL), asked)
-        // Live copy already newer: no second request.
+        assertEquals(
+            listOf(urls[0], UpdateSources.GITHUB_RELEASE_URL) + urls.drop(1).filter { it != UpdateSources.GITHUB_RELEASE_URL },
+            asked,
+        )
+        assertTrue(asked.contains(UpdateSources.WORKER_RELEASE_URL))
+        // Even when every endpoint has the same newer copy, all fallbacks are checked.
         asked.clear()
         assertEquals("3.2.157", UpdateSources.latest(urls, "3.2.156", newer) { u -> asked += u; rel("3.2.157") }!!.version)
-        assertEquals(1, asked.size)
-        assertFalse(asked.any { it == UpdateSources.WORKER_RELEASE_URL })
+        assertEquals(
+            listOf(urls[0], UpdateSources.GITHUB_RELEASE_URL) + urls.drop(1).filter { it != UpdateSources.GITHUB_RELEASE_URL },
+            asked,
+        )
     }
 
     @Test
