@@ -5518,7 +5518,7 @@ class MainActivity : Activity() {
         preferences().getString(AppLanguage.PREF, "system") ?: "system"
 
     /**
-     * Pick the UI language: system, English, Persian, Chinese.
+     * Pick the UI language: system, English, Persian, Chinese, Arabic or Turkish.
      *
      * Exactly the theme's shape: write the preference, recreate(), and the
      * whole tree is rebuilt reading [Strings.t] at every label. The tunnel is
@@ -5538,13 +5538,7 @@ class MainActivity : Activity() {
             // their own name under the label — that read as a doubled title.
             description = { code ->
                 when (code) {
-                    "system" -> if (AppLanguage.current() == "fa") {
-                        "انگلیسی، تا مگر دستگاه روی فارسی یا چینی باشد"
-                    } else if (AppLanguage.current() == "zh") {
-                        "英语，除非设备系统语言为波斯语或中文"
-                    } else {
-                        "English unless the device is set to فارسی or 中文"
-                    }
+                    "system" -> Strings.t("Uses a supported device language; English otherwise")
                     else -> ""
                 }
             },
