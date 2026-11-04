@@ -359,9 +359,11 @@ async fn fallback_call(
 }
 
 
-/// HTTP responses are never replay-safe for a device-creating registration POST.
-fn registration_response_allows_replay(_status: reqwest::StatusCode) -> bool {
-    false
+/// Only a definitive 403 can try another network path: the first address was
+/// explicitly refused. Quota, timeout and server responses must not trigger a
+/// second device-creating POST.
+fn registration_should_fallback_after_status(status: reqwest::StatusCode) -> bool {
+    status == reqwest::StatusCode::FORBIDDEN
 }
 
 /// Registration is deliberately not retried like GET/PATCH requests. Each successful
@@ -403,7 +405,7 @@ where
             .map_err(|e| AetherError::Api(format!("{label} decode: {e}; registration will not be repeated")));
     }
 
-    if status == reqwest::StatusCode::FORBIDDEN {
+    if registration_should_fallback_after_status(status) {
         log::warn!("[!] {label} was rejected on this network; trying the alternate route once");
         return fallback_call(label, "POST", path, Some(body), None, jwt).await;
     }
@@ -1236,14 +1238,13 @@ mod tests {
     }
 
     #[test]
-    fn registration_is_not_retried_after_rate_limit_or_server_response() {
-        // The registration POST creates a new device on success. Even a 5xx
-        // can follow a committed request, so no HTTP response is safe to replay.
+    fn registration_only_uses_an_alternate_route_after_explicit_forbidden() {
         for code in 400..600u16 {
             let status = reqwest::StatusCode::from_u16(code).unwrap();
-            assert!(
-                !registration_response_allows_replay(status),
-                "registration response {status} must never be replayed"
+            assert_eq!(
+                registration_should_fallback_after_status(status),
+                status == reqwest::StatusCode::FORBIDDEN,
+                "unexpected fallback policy for registration response {status}"
             );
         }
     }
