@@ -198,4 +198,29 @@ mod tests {
         }
         assert!(queue.push(PacketFamily::Ipv4, &[0x45]).is_err());
     }
+
+    #[test]
+    fn enforces_total_queued_byte_budget_independently_of_packet_count() {
+        let mut queue = DirectionQueue::default();
+        let max_packet = vec![0x45; MAX_PACKET_BYTES];
+        for _ in 0..(MAX_QUEUED_BYTES / MAX_PACKET_BYTES) {
+            queue.push(PacketFamily::Ipv4, &max_packet).unwrap();
+        }
+        let remaining = MAX_QUEUED_BYTES % MAX_PACKET_BYTES;
+        assert!(remaining > 0);
+        queue.push(PacketFamily::Ipv4, &vec![0x45; remaining]).unwrap();
+        assert_eq!(queue.bytes, MAX_QUEUED_BYTES);
+        assert!(queue.push(PacketFamily::Ipv4, &[0x45]).is_err());
+    }
+
+    #[test]
+    fn clear_releases_all_queued_packets_and_byte_accounting() {
+        let mut queue = DirectionQueue::default();
+        queue.push(PacketFamily::Ipv6, &[1, 2, 3, 4]).unwrap();
+        queue.clear();
+        assert_eq!(queue.bytes, 0);
+        assert!(queue.packets.is_empty());
+        queue.push(PacketFamily::Ipv4, &[0x45]).unwrap();
+        assert_eq!(queue.bytes, 1);
+    }
 }
