@@ -11,7 +11,6 @@ enum MolidoTunnelConfigurationError: LocalizedError {
     case invalidMTU
     case invalidTunnelAddress
     case nativePacketAdapterNotReady
-    case credentialMissing
 
     var errorDescription: String? {
         switch self {
@@ -33,8 +32,6 @@ enum MolidoTunnelConfigurationError: LocalizedError {
             return "A tunnel interface CIDR address is invalid."
         case .nativePacketAdapterNotReady:
             return "Bootstrap is valid, but the iOS native packet adapter is not ready."
-        case .credentialMissing:
-            return "The referenced Keychain credential is missing or empty."
         }
     }
 }
@@ -54,8 +51,8 @@ struct MolidoTunnelConfiguration: Codable {
     let version: Int
     let engineProtocol: EngineProtocol
     let engineConfigurationFile: String
-    let keychainService: String
-    let keychainAccount: String
+    let keychainService: String?
+    let keychainAccount: String?
     let ipv4CIDR: String
     let ipv6CIDR: String
     let dnsServers: [String]
@@ -67,12 +64,16 @@ struct MolidoTunnelConfiguration: Codable {
             throw MolidoTunnelConfigurationError.unsupportedVersion
         }
         guard Self.isSafeFileName(engineConfigurationFile),
-              Self.isSafeIdentifier(keychainService),
-              Self.isSafeIdentifier(keychainAccount) else {
+              ((keychainService == nil && keychainAccount == nil) ||
+               (keychainService.map(Self.isSafeIdentifier) == true &&
+                keychainAccount.map(Self.isSafeIdentifier) == true)) else {
             throw MolidoTunnelConfigurationError.invalidConfigurationFile
         }
         guard (1280...9000).contains(mtu) else {
             throw MolidoTunnelConfigurationError.invalidMTU
+        }
+        guard includeDefaultRoute else {
+            throw MolidoTunnelConfigurationError.invalidProviderProfile
         }
         guard !dnsServers.isEmpty,
               dnsServers.allSatisfy({ IPv4Address($0) != nil || IPv6Address($0) != nil }) else {
