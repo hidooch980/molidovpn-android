@@ -29,6 +29,34 @@ class AppUpdater(private val activity: Activity) {
     private val worker = Executors.newSingleThreadExecutor()
     private var progressDialog: AlertDialog? = null
     private var busy = false
+    private var availableRelease: Release? = null
+    private var readyApk: File? = null
+
+    /** Main-screen update banner; invoked only on the UI thread. */
+    var onHomeUpdate: ((version: String, critical: Boolean, ready: Boolean) -> Unit)? = null
+
+    private fun publishHomeUpdate(release: Release, ready: Boolean) {
+        availableRelease = release
+        if (ready) readyApk = File(File(activity.cacheDir, "updates"), "MolidoVPN-${release.version}.apk")
+        onHomeUpdate?.invoke(release.version, release.critical, ready)
+    }
+
+    /** Called by the home-screen banner. Android still asks the user to confirm installation. */
+    fun updateNow() {
+        val release = availableRelease
+        if (release == null) {
+            checkForUpdate()
+            return
+        }
+        val apk = readyApk
+        if (apk != null && apk.exists()) {
+            runCatching { verify(apk, release) }
+                .onSuccess { install(apk) }
+                .onFailure { readyApk = null; openDownload(release) }
+        } else {
+            openDownload(release)
+        }
+    }
 
     /** [silent]: the launch-time check — no spinner, and only speaks up when a newer version exists. */
     fun checkForUpdate(silent: Boolean = false) {
@@ -43,7 +71,18 @@ class AppUpdater(private val activity: Activity) {
                 if (activity.isFinishing || activity.isDestroyed) return@runOnUiThread
                 val release = result.getOrNull()
                 if (silent) {
-                    if (release != null && isNewer(release.version, appVersion())) announceUpdate(release)
+                    if (release != null && isNewer(release.version, appVersion())) {
+                        publishHomeUpdate(release, ready = false)
+                        if (release.critical) announceUpdate(release)
+                        else if (!isMetered()) {
+                            worker.execute {
+                                val apk = runCatching { prefetch(release) }.getOrNull()
+                                if (apk != null) activity.runOnUiThread {
+                                    if (!activity.isFinishing && !activity.isDestroyed) publishHomeUpdate(release, ready = true)
+                                }
+                            }
+                        }
+                    }
                     return@runOnUiThread
                 }
                 result.onFailure { showMessage(Strings.t("Update check failed"), it.message ?: Strings.t("Try again later")) }
@@ -52,7 +91,10 @@ class AppUpdater(private val activity: Activity) {
                             found == null -> showMessage(Strings.t("No update available"), Strings.t("No compatible release was found"))
                             !isNewer(found.version, appVersion()) ->
                                 showMessage(Strings.t("You're up to date"), Strings.tf("MolidoVPN %s is installed", appVersion()))
-                            else -> announceUpdate(found)
+                            else -> {
+                                publishHomeUpdate(found, ready = readyApk?.exists() == true)
+                                if (readyApk?.exists() == true) announceReady(found, readyApk!!) else announceUpdate(found)
+                            }
                         }
                     }
             }
@@ -76,7 +118,8 @@ class AppUpdater(private val activity: Activity) {
             activity.runOnUiThread {
                 busy = false
                 if (activity.isFinishing || activity.isDestroyed) return@runOnUiThread
-                if (apk != null) announceReady(release, apk) else announceUpdate(release)
+                publishHomeUpdate(release, ready = apk != null)
+                if (release.critical) announceUpdate(release)
             }
         }
     }
