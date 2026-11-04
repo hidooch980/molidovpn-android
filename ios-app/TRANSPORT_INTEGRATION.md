@@ -1,31 +1,38 @@
 # iOS transport integration status
 
-## Native boundary
+## Native packet path
 
-- `aether_start_json_with_tun(json, fd)` is the Android Unix-fd bridge and is not used by iOS.
-- `aether_start_json(json)` is the userspace/SOCKS mode and does not attach iOS system packet flow.
-- iOS uses `aether_start_json_with_packet_channel(json)`, the bounded FFI packet queues, and `NEPacketTunnelFlow`.
+The iOS Packet Tunnel uses the Aether Rust core through its dedicated C ABI:
 
-## Implemented in this branch
+- `aether_prepare_json` provisions or loads the selected MASQUE/WireGuard identity and returns the assigned IPv4/IPv6 CIDRs.
+- `aether_start_json_with_packet_channel` starts the native transport without an Android file descriptor.
+- `packet_channel::spawn_bridge` connects Aether's transport channels to bounded, thread-safe FFI queues.
+- `MolidoAetherPacketAdapter` moves packets between those queues and `NEPacketTunnelFlow`.
+- `PacketTunnelProvider` applies full-tunnel IPv4/IPv6 routes and DNS only after Aether reports readiness, then activates packet pumps.
 
-1. Rust packet-channel queues preserve IPv4/IPv6 family metadata, cap packet size at 65,535 bytes, and bound each direction to 256 packets / 2 MiB.
-2. `packet_channel::spawn_bridge` connects those queues to Aether's existing MASQUE and WireGuard packet paths.
-3. `MolidoAetherConfigurationBuilder` builds the actual `NativeStartOptions` schema, calls `aether_prepare_json` on a worker to provision/load identity, validates returned IPv4/IPv6 CIDRs, and creates full-tunnel NetworkExtension settings.
-4. `PacketTunnelProvider` starts the native engine on a worker, waits for readiness, installs IPv4+IPv6 default routes and catch-all DNS only after readiness, then activates the packet pumps.
-5. `MolidoAetherPacketAdapter` preserves inbound packets under native queue backpressure, rejects malformed/family-mismatched packets, monitors runtime readiness, and waits for native worker shutdown during teardown.
-6. Engine identity files live in the App Group's data-protected private directory. The bootstrap contains no secrets.
+The Android-only `aether_start_json_with_tun(json, fd)` API is not used by iOS. The generic userspace/SOCKS `aether_start_json` API is not a substitute for the system packet tunnel.
 
-## Important limitations / production gates
+## Safety and lifecycle behavior
 
-- CI proves the Rust library cross-compiles for Apple targets and the app/extension compile and link for Simulator. It does not prove the Apple Network Extension entitlement has been granted or that a signed app can install on a device.
-- Real packet forwarding, DNS behavior, endpoint socket routing/recursion prevention, IPv6, kill-switch semantics, reconnect and network handover must be tested on physical iPhones over Wi-Fi and cellular.
-- The current iOS bootstrap defaults to MASQUE. WireGuard can be selected in the native configuration model, but there is no user-facing WireGuard profile import flow yet.
-- Split tunneling is intentionally rejected. The current provider supports only full-tunnel IPv4+IPv6 routing.
-- No TestFlight/App Store release signing is configured in this branch.
+- First-run identity provisioning and native startup run off the NetworkExtension lifecycle queue.
+- Bootstrap JSON contains no credentials. Aether persists its identity, keys, tokens and certificates beneath the protected App Group engine directory.
+- Engine files are protected with `completeUntilFirstUserAuthentication`; directories use restrictive permissions and symlinks are rejected.
+- IPv4 and IPv6 default routes and DNS are installed only after native readiness. The initial iOS route policy is full tunnel only; unsupported split routing is rejected rather than allowed to leak.
+- Inbound queue saturation is handled as backpressure: already-read packets are retained in a bounded local queue and retried. The tunnel fails closed if that bounded handoff buffer itself is exhausted.
+- Native exit after readiness, loss of readiness, malformed packets, queue errors and packet-flow write failures terminate the tunnel.
+- Shutdown requests native stop and waits for the blocking FFI worker to return before completing provider teardown.
 
-## Validation
+## Confirmed validation
 
-- iOS CI cross-compiles Aether for iPhone arm64 and simulator architectures, packages the XCFramework, and builds the SwiftUI app plus Packet Tunnel extension.
-- Android CI runs unit tests and builds unsigned release APKs.
-- Rust packet-channel tests are being added to the Android validation pipeline so queue semantics are exercised, not merely compiled.
-- Physical-device leak and sustained-traffic tests remain mandatory before calling this a production VPN.
+The latest recorded CI run for the prior scaffold commit built the iOS app/extension and the Android validation suite successfully. Every new iOS code change must pass a fresh macOS/Xcode workflow before being treated as build-verified. CI does not prove Apple entitlement approval, signing, real network reachability, or absence of leaks on physical devices.
+
+## Remaining production gates
+
+1. Fresh iOS CI build after the provider/adapter integration changes.
+2. Physical iPhone tests on Wi-Fi and cellular, including IPv4-only, IPv6-only and dual-stack networks.
+3. Verify public egress IP, DNS resolver path, IPv6 routing, reconnect, network handover, and fail-closed behavior by observing traffic outside and inside the tunnel.
+4. Validate Apple Developer Team, Packet Tunnel Network Extension capability, App Group entitlement and provisioning profiles for both app and extension.
+5. Test app/extension lifecycle across device restart, first unlock, force quit, low-memory termination and OS updates.
+6. Complete fa/en/ar/tr localization and RTL layout checks before public distribution.
+
+Until those physical-device and Apple-account gates pass, this is an integrated engineering build, not a certified production VPN release.
