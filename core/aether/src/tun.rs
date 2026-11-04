@@ -318,7 +318,7 @@ pub async fn bridge(
     let tun_file = unsafe { File::from_raw_fd(fd) };
     // SAFETY: tun_file owns the duplicated descriptor; it remains open and unchanged
     // for the entire lifetime of AsyncFd, which owns tun_file.
-    let tun = unsafe { AsyncFd::register(tun_file) }?;
+    let tun = unsafe { AsyncFd::register(tun_file) }.map_err(io::Error::from)?;
     let mut packet = vec![0u8; 65_535];
     let mut rx_total = 0u64;
     let mut tx_total = 0u64;
