@@ -101,13 +101,12 @@ class ShardRefreshJob : android.app.job.JobService() {
         SmartSplitSub.refreshIfDue(applicationContext)
         // Clean edge IPs for whatever network the job runs on (own thread, bounded).
         CleanIpScanner.scanIfDue(applicationContext)
-        // V2Ray servers pool (hourly floor, own thread, fire-and-forget).
-        V2raySubscription.refreshIfDue(applicationContext)
         // Keep the JobService alive until both server-list and user-subscription
         // refreshes have completed; otherwise Android may stop the process after
         // jobFinished while MyConfigs is still fetching on its worker thread.
-        val completed = CountDownLatch(2)
+        val completed = CountDownLatch(3)
         MyConfigs.refreshIfDue(applicationContext) { completed.countDown() }
+        V2raySubscription.refreshIfDue(applicationContext) { completed.countDown() }
         ShardSubscription.refreshIfDue(applicationContext) { completed.countDown() }
         Thread({
             try {
