@@ -173,7 +173,7 @@ class AppUpdater(private val activity: Activity) {
 
     private fun releaseNotesText(release: Release): String = release.notes
         .takeIf { it.isNotEmpty() }
-        ?.joinToString(prefix = "\\n\\n" + Strings.t("What's changed:") + "\\n", separator = "\\n") { "• $it" }
+        ?.joinToString(prefix = "\n\n" + Strings.t("What's changed:") + "\n", separator = "\n") { "• $it" }
         ?: ""
 
     /** APK already downloaded but waiting for the "install unknown apps" permission. */
