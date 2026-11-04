@@ -935,32 +935,56 @@ class MainActivity : Activity() {
         pendingConfig = null
     }
 
-    private fun showOpeningOverlay() {
+    fun showOpeningOverlay() {
         val overlay = FrameLayout(this).apply {
-            setBackgroundColor(CANVAS)
+            // Let the new mesh ambience show through the opening animation.
+            setBackgroundColor(Color.TRANSPARENT)
             isClickable = true
         }
-        val logo = ImageView(this).apply {
-            setImageResource(R.drawable.molido_splash_logo)
-            contentDescription = getString(R.string.app_name)
-            scaleType = ScaleType.FIT_CENTER
+        val brand = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
             alpha = 0f
             scaleX = 0.82f
             scaleY = 0.82f
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
         }
-        overlay.addView(logo, FrameLayout.LayoutParams(dp(198), dp(276), Gravity.CENTER))
+        val logo = ImageView(this).apply {
+            setImageResource(R.drawable.molido_mesh_icon_fg)
+            contentDescription = getString(R.string.app_name)
+            scaleType = ScaleType.FIT_CENTER
+        }
+        brand.addView(logo, LinearLayout.LayoutParams(dp(172), dp(172)))
+        brand.addView(label("MOLIDO", 24f, INK, TypefaceStyle.MEDIUM).apply {
+            gravity = Gravity.CENTER
+            letterSpacing = 0.10f
+            contentDescription = "Molido Mesh AI"
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            topMargin = dp(12)
+        })
+        brand.addView(label("MESH AI  ·  SECURE NETWORK", 11f, palette.primaryText, TypefaceStyle.MEDIUM).apply {
+            gravity = Gravity.CENTER
+            letterSpacing = 0.06f
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            topMargin = dp(5)
+        })
+        overlay.addView(brand, FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            Gravity.CENTER,
+        ))
         pageHost.addView(overlay)
 
-        logo.animate()
+        brand.animate()
             .alpha(1f)
             .scaleX(1f)
             .scaleY(1f)
             .setDuration(500)
             .setInterpolator(PathInterpolator(0.2f, 0f, 0f, 1f))
             .withEndAction {
-                logo.animate()
-                    .scaleX(1.05f)
-                    .scaleY(1.05f)
+                brand.animate()
+                    .scaleX(1.035f)
+                    .scaleY(1.035f)
                     .setDuration(700)
                     .setInterpolator(PathInterpolator(0.4f, 0f, 0.2f, 1f))
                     .withEndAction {
