@@ -1,8 +1,8 @@
 import Foundation
 import NetworkExtension
 
-/// The provider deliberately fails closed until a validated bootstrap exists
-/// and the native packet-channel adapter is ready.
+/// The provider deliberately fails closed until a validated bootstrap, engine
+/// configuration, shared Keychain credential, and native packet adapter exist.
 final class PacketTunnelProvider: NEPacketTunnelProvider {
     override func startTunnel(
         options: [String: NSObject]?,
@@ -26,7 +26,22 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
                 throw MolidoTunnelConfigurationError.sharedContainerUnavailable
             }
 
-            _ = try MolidoTunnelConfiguration.load(from: groupID)
+            let configuration = try MolidoTunnelConfiguration.load(from: groupID)
+            _ = try MolidoTunnelBootstrapStore.engineConfigurationURL(
+                for: configuration,
+                in: groupID
+            )
+            let credential = try MolidoKeychainStore.load(
+                service: configuration.keychainService,
+                account: configuration.keychainAccount
+            )
+            guard !credential.isEmpty else {
+                throw MolidoTunnelConfigurationError.credentialMissing
+            }
+
+            // Never copy credentials into providerConfiguration or bootstrap JSON.
+            // The Aether packet-channel bridge remains a hard gate before routes
+            // can be installed or the provider can report a working tunnel.
             throw MolidoTunnelConfigurationError.nativePacketAdapterNotReady
         } catch {
             completionHandler(error as NSError)
