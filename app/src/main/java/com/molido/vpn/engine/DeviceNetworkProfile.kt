@@ -96,11 +96,11 @@ object DeviceNetworkProfile {
         .put("successful_probes", p.successfulProbes).put("total_probes", p.totalProbes)
         .put("updated_at_ms", p.updatedAtMs).toString()
 
-    fun parse(raw: String?): Profile? = try {
+    fun parse(raw: String?, now: Long = System.currentTimeMillis(), ttlMs: Long = 7L * 86_400_000L): Profile? = try {
         val o = JSONObject(raw ?: return null)
         val transport = runCatching { Transport.valueOf(o.optString("transport")) }.getOrNull() ?: return null
         val updated = o.optLong("updated_at_ms", 0L)
-        if (updated <= 0L) return null
+        if (updated <= 0L || updated > now + 60_000L || now - updated > ttlMs.coerceAtLeast(0L)) return null
         fun nullableLong(k: String): Long? = if (o.isNull(k)) null else o.optLong(k).takeIf { it > 0L }
         val loss = if (o.isNull("packet_loss")) null else o.optDouble("packet_loss")
             .takeIf { it.isFinite() && it in 0.0..1.0 }
