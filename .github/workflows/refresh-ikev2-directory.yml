@@ -1,6 +1,10 @@
 name: Refresh public IKEv2 directory
 
 on:
+  push:
+    paths:
+      - "scripts/refresh_ikev2_directory.py"
+      - ".github/workflows/refresh-ikev2-directory.yml"
   schedule:
     - cron: "*/5 * * * *"
   workflow_dispatch:
