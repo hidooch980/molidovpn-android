@@ -117,11 +117,6 @@ final class MolidoAetherPacketAdapter {
                     self.cancelReadinessTimer()
                     self.finishStartup(.failure(AdapterError.readinessTimeout))
                     self.fail(AdapterError.readinessTimeout)
-                } else if aether_is_running() == 0 {
-                    self.cancelReadinessTimer()
-                    self.finishStartup(
-                        .failure(AdapterError.nativeStartFailed("Native engine exited before readiness."))
-                    )
                 }
             }
             self.readinessTimer = timer
