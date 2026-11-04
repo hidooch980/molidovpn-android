@@ -126,4 +126,5 @@ class DeviceNetworkProfileTest {
         val secondary = DeviceNetworkProfile.Candidate(link(route = false), false)
         assertNull(DeviceNetworkProfile.choose(listOf(secondary)))
     }
-\n}\n
+
+}
