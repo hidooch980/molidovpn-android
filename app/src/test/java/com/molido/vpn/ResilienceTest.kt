@@ -68,7 +68,7 @@ class ResilienceConfigTest {
             assertFalse(path, c.dnsTunnel.enabled)
             assertTrue(path, c.dnsTunnel.udpResolvers.isNotEmpty())
         }
-        assertEquals(File("../remote/resilience.json").readText(), File("src/main/assets/resilience-defaults.json").readText())
+        assertEquals(ResilienceConfig.parse(File("../remote/resilience.json").readText()), ResilienceConfig.parse(File("src/main/assets/resilience-defaults.json").readText()))
     }
 }
 
