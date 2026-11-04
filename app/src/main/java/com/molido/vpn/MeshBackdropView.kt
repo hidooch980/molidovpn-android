@@ -46,6 +46,10 @@ class MeshBackdropView(
         9 to 10, 5 to 8, 1 to 5, 4 to 9,
     )
 
+    // Reused draw buffers: avoid allocating a List and Pair objects on every frame.
+    private val pointX = FloatArray(nodes.size)
+    private val pointY = FloatArray(nodes.size)
+
     init {
         isClickable = false
         isFocusable = false
@@ -62,7 +66,10 @@ class MeshBackdropView(
         drawGlow(canvas, w * 0.82f, h * 0.13f, w * 0.72f, palette.violet, 0.10f)
         drawGlow(canvas, w * 0.10f, h * 0.72f, w * 0.68f, palette.primary, 0.075f)
 
-        val points = nodes.map { (x, y) -> x * w to y * h }
+        nodes.forEachIndexed { index, (x, y) ->
+            pointX[index] = x * w
+            pointY[index] = y * h
+        }
         paint.shader = null
         paint.style = Paint.Style.STROKE
         paint.strokeWidth = 0.7f * density
@@ -70,16 +77,16 @@ class MeshBackdropView(
         edges.forEachIndexed { index, (a, b) ->
             val pulse = 0.78f + 0.22f * kotlin.math.sin(phase * 6.28318f + index * 0.71f)
             paint.alpha = (255 * (if (isDark()) 0.13f else 0.09f) * pulse).toInt()
-            canvas.drawLine(points[a].first, points[a].second, points[b].first, points[b].second, paint)
+            canvas.drawLine(pointX[a], pointY[a], pointX[b], pointY[b], paint)
         }
 
         paint.style = Paint.Style.FILL
-        nodes.forEachIndexed { index, (x, y) ->
+        nodes.forEachIndexed { index, _ ->
             val pulse = 0.72f + 0.28f * kotlin.math.sin(phase * 6.28318f + index * 0.83f)
             paint.color = withAlpha(if (index % 3 == 0) palette.violet else palette.primary,
                 (if (isDark()) 0.28f else 0.18f) * pulse)
             val radius = (if (index % 3 == 0) 2.0f else 1.35f) * density
-            canvas.drawCircle(x * w, y * h, radius, paint)
+            canvas.drawCircle(pointX[index], pointY[index], radius, paint)
         }
         paint.alpha = 255
     }
