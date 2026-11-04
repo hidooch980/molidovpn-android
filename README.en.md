@@ -6,8 +6,8 @@
 
 **Free device-wide VPN for Iranian families — Rust core, native Android client, many connection modes**
 
-[![Release](https://img.shields.io/github/v/release/hidooch980/molidovpn?style=for-the-badge&color=5CE68F)](https://github.com/hidooch980/molidovpn/releases/latest)
-[![Android](https://img.shields.io/badge/Android-8.0%2B-3A4FB0?style=for-the-badge&logo=android&logoColor=white)](https://github.com/hidooch980/molidovpn/releases/latest)
+[![Release](https://img.shields.io/github/v/release/hidooch980/molidovpn-android?style=for-the-badge&color=5CE68F)](https://github.com/hidooch980/molidovpn-android/releases/latest)
+[![Android](https://img.shields.io/badge/Android-8.0%2B-3A4FB0?style=for-the-badge&logo=android&logoColor=white)](https://github.com/hidooch980/molidovpn-android/releases/latest)
 [![License](https://img.shields.io/badge/license-AGPL--3.0-6c5ce7?style=for-the-badge)](LICENSE)
 [![Transports](https://img.shields.io/badge/transports-MASQUE%20%C2%B7%20WireGuard%20%C2%B7%20WARP%C2%B7WARP%20%C2%B7%20Psiphon%20%C2%B7%20Tor-1f6f4a?style=for-the-badge)](#transports)
 
@@ -211,7 +211,7 @@ Worth saying plainly: Auto is almost always faster than pinning a country, becau
 
 ## Install
 
-Grab the latest APK from [Releases](https://github.com/hidooch980/molidovpn/releases/latest); the app checks the same page for updates. Support: Telegram [@Molido_Vpn](https://t.me/Molido_Vpn).
+Grab the latest APK from [Releases](https://github.com/hidooch980/molidovpn-android/releases/latest); the app checks the same page for updates. Support: Telegram [@Molido_Vpn](https://t.me/Molido_Vpn).
 
 | Device architecture | File |
 |---|---|
