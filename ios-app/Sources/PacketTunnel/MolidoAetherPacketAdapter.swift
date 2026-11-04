@@ -37,6 +37,7 @@ final class MolidoAetherPacketAdapter {
     private var readinessTimer: DispatchSourceTimer?
     private var inboundRetryTimer: DispatchSourceTimer?
     private var outboundTimer: DispatchSourceTimer?
+    private var healthTimer: DispatchSourceTimer?
     private weak var packetFlow: NEPacketTunnelFlow?
     private var readyHandler: ((Result<Void, Error>) -> Void)?
     private var failureHandler: ((Error) -> Void)?
@@ -113,10 +114,18 @@ final class MolidoAetherPacketAdapter {
     }
 
     /// Activate only after the provider has installed validated full-tunnel routes and DNS.
-    func activatePacketFlow(_ flow: NEPacketTunnelFlow, failed: @escaping (Error) -> Void) {
+    func activatePacketFlow(
+        _ flow: NEPacketTunnelFlow,
+        activated: @escaping (Result<Void, Error>) -> Void,
+        failed: @escaping (Error) -> Void
+    ) {
         controlQueue.async {
-            guard self.started, !self.stopping, !self.pumpsActive, aether_is_ready() == 1 else {
-                failed(AdapterError.nativeStartFailed("Packet flow activation attempted before engine readiness."))
+            guard self.started, !self.stopping, !self.pumpsActive,
+                  aether_is_running() == 1, aether_is_ready() == 1 else {
+                let error = AdapterError.nativeStartFailed(
+                    "Packet flow activation attempted before engine readiness."
+                )
+                activated(.failure(error))
                 return
             }
             self.packetFlow = flow
@@ -124,6 +133,8 @@ final class MolidoAetherPacketAdapter {
             self.pumpsActive = true
             self.readNextPacketBatch()
             self.startOutboundPump()
+            self.startHealthMonitor()
+            activated(.success(()))
         }
     }
 
@@ -138,6 +149,8 @@ final class MolidoAetherPacketAdapter {
             self.inboundRetryTimer = nil
             self.outboundTimer?.cancel()
             self.outboundTimer = nil
+            self.healthTimer?.cancel()
+            self.healthTimer = nil
             self.pumpsActive = false
             self.packetFlow = nil
             self.readyHandler = nil
@@ -166,7 +179,11 @@ final class MolidoAetherPacketAdapter {
 
     private func fail(_ error: Error) {
         guard !stopping else { return }
-        failureHandler?(error)
+        if readyHandler != nil {
+            finishStartup(.failure(error))
+        } else {
+            failureHandler?(error)
+        }
         stop()
     }
 
@@ -249,6 +266,24 @@ final class MolidoAetherPacketAdapter {
         timer.schedule(deadline: .now(), repeating: .milliseconds(2))
         timer.setEventHandler { [weak self] in self?.drainOutboundPackets() }
         outboundTimer = timer
+        timer.resume()
+    }
+
+    /// A runtime that exits after the initial ready signal must not leave the
+    /// system reporting a connected tunnel with no packet transport.
+    private func startHealthMonitor() {
+        let timer = DispatchSource.makeTimerSource(queue: controlQueue)
+        timer.schedule(deadline: .now() + .milliseconds(250), repeating: .milliseconds(250))
+        timer.setEventHandler { [weak self] in
+            guard let self, self.pumpsActive, !self.stopping else { return }
+            guard aether_is_running() == 1, aether_is_ready() == 1 else {
+                self.fail(AdapterError.nativeStartFailed(
+                    "Aether stopped or lost readiness while the packet tunnel was active."
+                ))
+                return
+            }
+        }
+        healthTimer = timer
         timer.resume()
     }
 
