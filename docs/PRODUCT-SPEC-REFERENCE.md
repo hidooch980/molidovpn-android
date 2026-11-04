@@ -23,3 +23,11 @@
 - ذخیره‌سازی فقط در SharedPreferences محلی؛ هیچ داده‌ای به سرور یا سرویس AI ارسال نمی‌شود.
 
 این بخش **Partial** است: پروفایل‌ساز و سیاست محدودسازی probe به چرخهٔ Smart Connect متصل شده‌اند؛ استفاده از پروفایل تاریخی برای وزن‌دهی نهایی Gateway/route، تست handover روی گوشی واقعی، و اندازه‌گیری مستقل زمان تا اولین بستهٔ موفق هنوز gateهای جداگانه دارند. این commit به‌تنهایی اثبات‌کنندهٔ سرعت یا نبود DNS/IP leak نیست.
+
+
+### Old/new network data validation and handover protection
+- Merge old and new quality observations with bounded EWMA; accumulate successful/total probe counters with a hard cap of 10,000.
+- Discard a Smart-trial observation if the physical network key changed during the trial, preventing Wi-Fi/mobile handover samples from contaminating the prior network profile.
+- Reject persisted profiles older than seven days, implausibly future-dated records, inconsistent success/total counters, packet-loss values outside 0..1, and impossible bandwidth hints.
+- CI unit tests cover old/new sample merging, fresh versus stale history, handover attribution guard, bounded counters and corrupt persisted data.
+- Validation remains pending until the latest Android CI run completes; no APK release or production-device validation is implied by these commits.
