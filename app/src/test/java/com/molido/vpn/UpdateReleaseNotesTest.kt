@@ -98,4 +98,30 @@ class UpdateReleaseNotesTest {
         assertTrue(!UpdateSources.isValidSignerTransition(listOf(a), false, listOf(a, b), listOf(a, b), true))
     }
 
+
+    @Test fun releaseParserRejectsApksWithoutValidSha256() {
+        val hash = "a".repeat(64)
+        val json = """{
+            "tag_name":"3.1.99",
+            "assets":[
+                {"name":"MolidoVPN-android-arm64.apk","browser_download_url":"https://cdn.example/arm64.apk"},
+                {"name":"MolidoVPN-android-universal.apk","browser_download_url":"https://cdn.example/universal.apk","digest":"sha256:$hash"}
+            ]
+        }"""
+        val release = UpdateSources.parseRelease(json, listOf("arm64-v8a"))
+        assertEquals("MolidoVPN-android-universal.apk", release?.assetName)
+        assertEquals(hash, release?.sha256)
+    }
+
+    @Test fun releaseParserRejectsMalformedSha256() {
+        val json = """{
+            "tag_name":"3.1.100",
+            "assets":[
+                {"name":"MolidoVPN-android-arm64.apk","browser_download_url":"https://cdn.example/arm64.apk","sha256":"not-a-hash"}
+            ]
+        }"""
+        assertEquals(null, UpdateSources.parseRelease(json, listOf("arm64-v8a")))
+    }
+
+
 }
