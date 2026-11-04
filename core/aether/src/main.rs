@@ -127,10 +127,33 @@ impl EndpointDiscovery {
 
 #[derive(Debug, Clone)]
 pub struct TunnelAddresses {
+    /// Host-only tunnel addresses retained for the Android API.
     pub ipv4: String,
     pub ipv6: String,
+    /// Prefix-preserving addresses for platform VPN route configuration.
+    pub ipv4_cidr: String,
+    pub ipv6_cidr: String,
     pub gateway_proxy: String,
     pub organization: String,
+}
+
+fn address_cidr(raw: &str, default_prefix: u8, max_prefix: u8) -> String {
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return String::new();
+    }
+    let mut parts = raw.splitn(2, '/');
+    let host = parts.next().unwrap_or_default().trim();
+    let prefix = parts
+        .next()
+        .and_then(|value| value.parse::<u8>().ok())
+        .filter(|value| *value <= max_prefix)
+        .unwrap_or(default_prefix);
+    if host.is_empty() {
+        String::new()
+    } else {
+        format!("{host}/{prefix}")
+    }
 }
 
 fn address_host(raw: &str) -> String {
@@ -421,6 +444,8 @@ pub async fn prepare(options: &StartOptions) -> Result<TunnelAddresses> {
             return Ok(TunnelAddresses {
                 ipv4: "198.18.0.1".into(),
                 ipv6: "fc00::1".into(),
+                ipv4_cidr: "198.18.0.1/32".into(),
+                ipv6_cidr: "fc00::1/128".into(),
                 gateway_proxy: String::new(),
                 organization: String::new(),
             });
@@ -430,6 +455,8 @@ pub async fn prepare(options: &StartOptions) -> Result<TunnelAddresses> {
     Ok(TunnelAddresses {
         ipv4: address_host(&identity.ipv4),
         ipv6: address_host(&identity.ipv6),
+        ipv4_cidr: address_cidr(&identity.ipv4, 32, 32),
+        ipv6_cidr: address_cidr(&identity.ipv6, 128, 128),
         gateway_proxy: identity.gateway_proxy,
         organization: identity.organization,
     })
@@ -4686,5 +4713,31 @@ mod registration_cooldown_tests {
             )),
             60
         );
+    }
+}
+
+
+#[cfg(test)]
+mod tunnel_address_format_tests {
+    use super::{address_cidr, address_host};
+
+    #[test]
+    fn keeps_android_host_format_and_exposes_prefix_for_ipv4() {
+        let raw = "172.16.0.2/32";
+        assert_eq!(address_host(raw), "172.16.0.2");
+        assert_eq!(address_cidr(raw, 32, 32), "172.16.0.2/32");
+    }
+
+    #[test]
+    fn exposes_prefix_for_ipv6_and_uses_platform_safe_defaults() {
+        assert_eq!(address_cidr("fd00::2/64", 128, 128), "fd00::2/64");
+        assert_eq!(address_cidr("172.16.0.2", 32, 32), "172.16.0.2/32");
+        assert_eq!(address_cidr("fd00::2", 128, 128), "fd00::2/128");
+    }
+
+    #[test]
+    fn empty_and_invalid_prefix_values_are_handled_safely() {
+        assert_eq!(address_cidr("", 32, 32), "");
+        assert_eq!(address_cidr("172.16.0.2/99", 32, 32), "172.16.0.2/32");
     }
 }
