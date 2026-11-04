@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::Path;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 
@@ -615,6 +615,99 @@ async fn provision_account() -> Result<account::Identity> {
     }
 }
 
+/// A failed WARP registration must not be repeated on every Android auto-reconnect.
+/// The marker is stored beside the identity file so it survives service/process restarts.
+fn registration_cooldown_path(config_path: &str) -> String {
+    format!("{config_path}.registration-cooldown")
+}
+
+fn unix_now_seconds() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
+}
+
+fn registration_cooldown_remaining(config_path: &str) -> Option<u64> {
+    let path = registration_cooldown_path(config_path);
+    let raw = fs::read_to_string(&path).ok()?;
+    let until = match raw.trim().parse::<u64>() {
+        Ok(value) => value,
+        Err(_) => {
+            let _ = fs::remove_file(&path);
+            return None;
+        }
+    };
+    let now = unix_now_seconds();
+    if until > now {
+        Some(until - now)
+    } else {
+        let _ = fs::remove_file(&path);
+        None
+    }
+}
+
+/// Cloudflare's 429 is a quota signal, not a reason to create more device identities.
+/// Shorter cooldowns cover flagged egress and transient edge failures.
+fn registration_cooldown_seconds_for_error(error: &AetherError) -> u64 {
+    let message = error.to_string().to_ascii_lowercase();
+    let status = message
+        .split("status ")
+        .nth(1)
+        .and_then(|tail| {
+            tail.chars()
+                .take_while(|ch| ch.is_ascii_digit())
+                .collect::<String>()
+                .parse::<u16>()
+                .ok()
+        });
+    match status {
+        Some(429) => 300,
+        Some(403) => 180,
+        Some(500..=599) => 60,
+        _ => 60,
+    }
+}
+
+fn persist_registration_cooldown(config_path: &str, seconds: u64) {
+    let path = registration_cooldown_path(config_path);
+    let temp = format!("{path}.tmp");
+    let until = unix_now_seconds().saturating_add(seconds.max(30));
+    if let Err(error) = fs::write(&temp, until.to_string()).and_then(|_| fs::rename(&temp, &path)) {
+        let _ = fs::remove_file(&temp);
+        log::warn!("[!] could not persist Cloudflare registration cooldown: {error}");
+    }
+}
+
+fn clear_registration_cooldown(config_path: &str) {
+    let path = registration_cooldown_path(config_path);
+    let _ = fs::remove_file(&path);
+    let _ = fs::remove_file(format!("{path}.tmp"));
+}
+
+async fn provision_account_guarded(config_path: &str) -> Result<account::Identity> {
+    if let Some(remaining) = registration_cooldown_remaining(config_path) {
+        return Err(AetherError::Api(format!(
+            "Cloudflare registration cooldown active for {remaining}s; no new registration request sent"
+        )));
+    }
+
+    match provision_account().await {
+        Ok(identity) => {
+            clear_registration_cooldown(config_path);
+            Ok(identity)
+        }
+        Err(error) => {
+            let seconds = registration_cooldown_seconds_for_error(&error);
+            persist_registration_cooldown(config_path, seconds);
+            log::warn!(
+                "[!] Cloudflare registration failed; pausing further registration attempts for {seconds}s"
+            );
+            Err(error)
+        }
+    }
+}
+
 async fn adopt_team_profile(identity: account::Identity) -> account::Identity {
     if team_scope().is_none() {
         return identity;
@@ -736,7 +829,7 @@ async fn load_or_provision_warp(config_path: &str) -> Result<account::Identity> 
     }
 
     log::info!("[+] no warp identity found; provisioning dedicated wireguard account");
-    let identity = provision_account().await?;
+    let identity = provision_account_guarded(config_path).await?;
     let identity = adopt_team_profile(identity).await;
     config::save(config_path, &identity)?;
     log::info!("[+] provisioned and saved new warp identity to {config_path}");
@@ -787,7 +880,7 @@ async fn load_or_provision_masque(config_path: &str) -> Result<account::Identity
     }
 
     log::info!("[+] no masque identity found; provisioning dedicated masque account");
-    let identity = provision_account().await?;
+    let identity = provision_account_guarded(config_path).await?;
     let enrollment = account::ensure_masque_enrolled(&identity).await?;
     let identity = apply_masque_enrollment(identity, enrollment);
     let identity = adopt_team_profile(identity).await;
@@ -4529,3 +4622,44 @@ mod tests {
     }
 }
 
+
+#[cfg(test)]
+mod registration_cooldown_tests {
+    use super::*;
+
+    #[test]
+    fn cloudflare_rate_limit_gets_the_longest_registration_cooldown() {
+        assert_eq!(
+            registration_cooldown_seconds_for_error(&AetherError::Api(
+                "registration: status 429: rate limited".into()
+            )),
+            300
+        );
+    }
+
+    #[test]
+    fn flagged_network_and_server_errors_get_bounded_cooldowns() {
+        assert_eq!(
+            registration_cooldown_seconds_for_error(&AetherError::Api(
+                "registration: status 403: forbidden".into()
+            )),
+            180
+        );
+        assert_eq!(
+            registration_cooldown_seconds_for_error(&AetherError::Api(
+                "registration: status 502: bad gateway".into()
+            )),
+            60
+        );
+    }
+
+    #[test]
+    fn ambiguous_registration_failures_are_not_immediately_replayed() {
+        assert_eq!(
+            registration_cooldown_seconds_for_error(&AetherError::Api(
+                "registration response read failed: timeout".into()
+            )),
+            60
+        );
+    }
+}
