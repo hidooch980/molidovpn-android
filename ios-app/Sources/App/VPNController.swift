@@ -56,8 +56,8 @@ final class VPNController: ObservableObject {
                         engineConfigurationFile: "masque-identity.toml",
                         keychainService: nil,
                         keychainAccount: nil,
-                        ipv4CIDR: "172.16.0.2/32",
-                        ipv6CIDR: "2606:4700:110:8::2/128",
+                        ipv4CIDR: nil,
+                        ipv6CIDR: nil,
                         dnsServers: ["1.1.1.1", "1.0.0.1"],
                         mtu: 1280,
                         includeDefaultRoute: true
