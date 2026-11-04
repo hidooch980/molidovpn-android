@@ -191,6 +191,7 @@ object Strings {
         "DNS bypass warning" to Triple("DNS bypass warning", "هشدار عبور DNS خارج از تونل", "DNS 绕过警告"),
         "Secure gaming route scoring" to Triple("Secure gaming route scoring", "امتیازدهی امن مسیر بازی", "安全游戏线路评分"),
         "IKEv2 / IPsec" to Triple("IKEv2 / IPsec", "IKEv2 / IPsec", "IKEv2 / IPsec"),
+        "Android 11+ system VPN; requires your own server and account" to Triple("Android 11+ system VPN; requires your own server and account", "VPN سیستمی اندروید ۱۱ به بالا؛ نیازمند سرور و حساب خودتان", "Android 11+ 系统 VPN；需要自有服务器和账户"),
         "Uses Android's built-in IKEv2/IPsec engine (Android 11+). Bring your own IKEv2 server and account. This is a separate system VPN and cannot run alongside another VPN." to Triple("Uses Android's built-in IKEv2/IPsec engine (Android 11+). Bring your own IKEv2 server and account. This is a separate system VPN and cannot run alongside another VPN.", "از موتور داخلی IKEv2/IPsec اندروید ۱۱ به بالا استفاده می‌کند. سرور و حساب IKEv2 خودتان لازم است. این یک VPN سیستمی جداگانه است و هم‌زمان با VPN دیگر اجرا نمی‌شود.", "使用 Android 11+ 内置 IKEv2/IPsec 引擎。需要自备 IKEv2 服务器和账户。这是独立的系统 VPN，不能与其他 VPN 同时运行。"),
         "Server hostname or IP" to Triple("Server hostname or IP", "نام میزبان یا IP سرور", "服务器主机名或 IP"),
         "IKE identity" to Triple("IKE identity", "شناسه IKE", "IKE 身份"),
