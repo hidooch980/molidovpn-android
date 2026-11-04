@@ -5,9 +5,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Release version (for example 4.0.1)"
+        description: "Release version (for example 4.0.2)"
         required: true
-        default: "4.0.1"
+        default: "4.0.2"
         type: string
 
 permissions:
@@ -18,9 +18,9 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  # First release in the 4.x line. Bump VERSION explicitly for each subsequent release.
+  # Default to the next unused 4.x patch release; choose a new version for each publish.
   VERSION_CODE: ${{ github.run_number }}
-  VERSION: ${{ github.event.inputs.version || '4.0.0' }}
+  VERSION: ${{ github.event.inputs.version || '4.0.2' }}
 
 jobs:
   android:
@@ -151,7 +151,7 @@ jobs:
           path: dist/*
 
       - name: Publish installable GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: v${{ env.VERSION }}
           name: MolidoVPN ${{ env.VERSION }}
