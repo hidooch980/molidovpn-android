@@ -124,4 +124,22 @@ class UpdateReleaseNotesTest {
     }
 
 
+    @Test fun releaseParserSelectsArm64ForV400AndRequiresThePublishedDigest() {
+        val hash = "b".repeat(64)
+        val json = """{
+            "tag_name":"v4.0.0",
+            "assets":[
+                {"name":"MolidoMeshAI-android-universal.apk","browser_download_url":"https://cdn.example/universal.apk","digest":"sha256:$hash"},
+                {"name":"MolidoMeshAI-android-arm64.apk","browser_download_url":"https://cdn.example/arm64.apk","digest":"sha256:$hash"},
+                {"name":"MolidoMeshAI-android-armv7.apk","browser_download_url":"https://cdn.example/armv7.apk","digest":"sha256:$hash"}
+            ]
+        }"""
+        val release = UpdateSources.parseRelease(json, listOf("arm64-v8a"))
+        assertEquals("4.0.0", release?.version)
+        assertEquals("MolidoMeshAI-android-arm64.apk", release?.assetName)
+        assertEquals(hash, release?.sha256)
+    }
+
+
+
 }
