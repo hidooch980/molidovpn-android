@@ -4338,7 +4338,12 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
             // Smart off (remote switch): behave like the old ladder — first working method wins.
             val baseSmart = if (smartRaw.enabled) smartRaw else smartRaw.copy(goodEnough = 1, minTrials = 1)
             val linkProfile = smartLinkSnapshot()
-            val networkPolicy = DeviceNetworkProfile.policy(linkProfile, baseSmart.parallelProbes, baseSmart.downloadBytes)
+            val netKey = smartNetworkKey()
+            val profileKey = "device_network_profile_$netKey"
+            val priorProfile = DeviceNetworkProfile.parse(prefs.getString(profileKey, null), now = System.currentTimeMillis())
+            val networkPolicy = DeviceNetworkProfile.policy(
+                linkProfile, baseSmart.parallelProbes, baseSmart.downloadBytes, priorProfile,
+            )
             val smart = baseSmart.copy(
                 parallelProbes = networkPolicy.parallelProbes,
                 downloadBytes = networkPolicy.downloadBytes,
@@ -4355,7 +4360,6 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
                     (wantedCountry.isEmpty() || c.coreName == "v2ray" || c.coreName == MyConfigs.PROTOCOL)
             }
             if (wantedCountry.isNotEmpty()) ConnectionLog.record("Smart: country $wantedCountry — V2Ray/My configs from it only")
-            val netKey = smartNetworkKey()
             val now = System.currentTimeMillis()
             var memory = NetworkMemory.read(prefs.getString(smartPrefMemory, null), netKey, now, smart.memoryTtlDays)
             if (smartPreferRunnerUp && memory?.runnerUp != null) {
@@ -4415,9 +4419,8 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
                 }
                 val score = SmartScore.score(measured)
                 val observation = DeviceNetworkProfile.observe(measured.probes, now)
-                val profileKey = "device_network_profile_$netKey"
-                val priorProfile = DeviceNetworkProfile.parse(prefs.getString(profileKey, null), now = now)
-                val updatedProfile = DeviceNetworkProfile.merge(priorProfile, observation, linkProfile, now)
+                val previous = DeviceNetworkProfile.parse(prefs.getString(profileKey, null), now = now)
+                val updatedProfile = DeviceNetworkProfile.merge(previous, observation, linkProfile, now)
                 prefs.edit().putString(profileKey, DeviceNetworkProfile.toJson(updatedProfile)).apply()
                 scores[c.id] = score
                 measuredBy[c.id] = measured
