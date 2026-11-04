@@ -136,11 +136,17 @@ class Ikev2VpnActivity : Activity() {
         }
 
         try {
-            val profile = Ikev2VpnProfile.Builder(host, identity)
+            val profileBuilder = Ikev2VpnProfile.Builder(host, identity)
                 .setAuthUsernamePassword(eapUser, eapPass, serverRootCa)
                 .setBypassable(false)
                 .setMetered(true)
-                .build()
+            if (Build.VERSION.SDK_INT >= 33) {
+                profileBuilder.setRequiresInternetValidation(true)
+            }
+            if (Build.VERSION.SDK_INT >= 34) {
+                profileBuilder.setAutomaticIpVersionSelectionEnabled(true)
+            }
+            val profile = profileBuilder.build()
             pendingProfile = profile
             val manager = getSystemService(VpnManager::class.java)
             val consent = manager.provisionVpnProfile(profile)
