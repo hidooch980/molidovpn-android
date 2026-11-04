@@ -126,7 +126,10 @@ object UpdateSources {
                 if (name.endsWith(".apk") && name.contains(token, ignoreCase = true)) {
                     val downloadUrl = asset.optString("browser_download_url", "")
                     if (!isSecureHttpsUrl(downloadUrl)) continue
-                    return Release(version, name, downloadUrl, assetSha256(asset), critical, notes)
+                    // No APK is installable unless release metadata supplies a valid SHA-256.
+                    // GitHub's asset digest and our update worker both publish this field.
+                    val sha256 = assetSha256(asset) ?: continue
+                    return Release(version, name, downloadUrl, sha256, critical, notes)
                 }
             }
         }
