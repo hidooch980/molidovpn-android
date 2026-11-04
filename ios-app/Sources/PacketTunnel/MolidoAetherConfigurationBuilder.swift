@@ -54,7 +54,7 @@ enum MolidoAetherConfigurationBuilder {
             "protocol": configuration.engineProtocol.rawValue,
             "listen": "127.0.0.1:1819",
             "scan_mode": "balanced",
-            "ip_scan": "v4",
+            "ip_scan": "both",
             "endpoint_discovery": "cache",
             "masque_transport": "h3",
             "tls_curve_preset": "chrome",
