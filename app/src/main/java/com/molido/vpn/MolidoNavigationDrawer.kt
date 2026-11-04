@@ -43,7 +43,7 @@ class MolidoNavigationDrawer(
         requestWindowFeature(Window.FEATURE_NO_TITLE)
         val root = LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
-            layoutDirection = if (AppLanguage.current() == "fa")
+            layoutDirection = if (AppLanguage.isRtl())
                 View.LAYOUT_DIRECTION_RTL else View.LAYOUT_DIRECTION_LTR
             setBackgroundColor(palette.canvas)
             setPadding(dp(16), dp(16), dp(16), dp(12))
