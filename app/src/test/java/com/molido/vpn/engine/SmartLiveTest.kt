@@ -154,4 +154,37 @@ class SmartLiveTest {
         assertEquals(31, der[3].toInt())
         assertEquals(33, der[4 + 31 + 1].toInt())
     }
+
+    @Test fun invalidWeightsAndMeasurementsProduceFiniteBoundedScores() {
+        val measured = Measured(
+            "invalid",
+            listOf(Probe(ok = true, latencyMs = -1, throughputKbps = -1)),
+            connectMs = -1,
+        )
+        val invalidWeights = Weights(
+            stability = Double.NaN,
+            latency = Double.POSITIVE_INFINITY,
+            throughput = -1.0,
+            connect = Double.NaN,
+        )
+        val score = SmartScore.score(measured, invalidWeights)
+        assertTrue("score must be finite: $score", score.isFinite())
+        assertTrue("score must remain within 0..100: $score", score in 0.0..100.0)
+
+        val zeroWeights = SmartScore.score(
+            measured,
+            Weights(stability = 0.0, latency = 0.0, throughput = 0.0, connect = 0.0),
+        )
+        assertTrue(zeroWeights.isFinite())
+        assertTrue(zeroWeights in 0.0..100.0)
+    }
+
+    @Test fun noSuccessfulProbeRemainsZeroWithInvalidWeights() {
+        val score = SmartScore.score(
+            Measured("dead", listOf(Probe(ok = false))),
+            Weights(Double.NaN, -1.0, Double.POSITIVE_INFINITY, 0.0),
+        )
+        assertEquals(0.0, score, 0.0)
+    }
+
 }
