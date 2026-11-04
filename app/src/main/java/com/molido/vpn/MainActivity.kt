@@ -115,6 +115,13 @@ class MainActivity : Activity() {
     private var homeAdvancedLink: TextView? = null
     /** Owner announcement banner at the top of home ([renderNotice]); GONE when there is none. */
     private var homeNoticeBox: LinearLayout? = null
+    /** Main-screen automatic update banner; hidden until a newer release is found. */
+    private var homeUpdateBox: LinearLayout? = null
+    private var homeUpdateTitle: TextView? = null
+    private var homeUpdateAction: TextView? = null
+    private var homeUpdateVersion: String? = null
+    private var homeUpdateCritical = false
+    private var homeUpdateReady = false
     private var settingsAdvancedExpanded = false
     /** Settings DNS row while the settings page is built, so a home pick repaints it. */
     private var settingsDnsRow: OrbitSettingsRow? = null
@@ -552,6 +559,7 @@ class MainActivity : Activity() {
         )
 
         appUpdater = AppUpdater(this)
+        appUpdater.onHomeUpdate = { version, critical, ready -> renderHomeUpdate(version, critical, ready) }
         if (savedInstanceState == null) appUpdater.checkForUpdate(silent = true)
         // Registers the periodic SHARD list refresh. Idempotent, so calling it on
         // every launch is how the job gets re-registered after an app update — a
@@ -1594,6 +1602,24 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun renderHomeUpdate(version: String?, critical: Boolean, ready: Boolean) {
+        homeUpdateVersion = version
+        homeUpdateCritical = critical
+        homeUpdateReady = ready
+        val box = homeUpdateBox ?: return
+        if (version.isNullOrBlank()) {
+            box.visibility = View.GONE
+            return
+        }
+        homeUpdateTitle?.text = when {
+            ready -> Strings.tf("Molido Mesh AI %s is downloaded and verified", version)
+            critical -> Strings.tf("Important update available: Molido Mesh AI %s", version)
+            else -> Strings.tf("New version available: Molido Mesh AI %s", version)
+        }
+        homeUpdateAction?.text = if (ready) Strings.t("Install update") else Strings.t("Download update")
+        box.visibility = View.VISIBLE
+    }
+
     private fun createConnectionConsole(): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
         gravity = Gravity.CENTER_HORIZONTAL
@@ -1620,6 +1646,33 @@ class MainActivity : Activity() {
             ViewGroup.LayoutParams.WRAP_CONTENT,
         ).apply { topMargin = dp(6) })
         renderNotice()
+
+        // Persistent home-screen update banner. It is populated only after the updater
+        // has found a newer release; the APK is independently verified before install.
+        val updateBox = LinearLayout(this@MainActivity).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+            setPadding(dp(14), dp(10), dp(14), dp(10))
+            visibility = View.GONE
+            background = Sculpt.sculptedBackground(resources.displayMetrics.density,
+                Sculpt.withAlpha(palette.amber, 0.13f), 14, Sculpt.withAlpha(palette.amber, 0.48f))
+        }
+        homeUpdateBox = updateBox
+        homeUpdateTitle = label("", 14f, INK, TypefaceStyle.MEDIUM).apply {
+            textDirection = View.TEXT_DIRECTION_RTL
+            textAlignment = View.TEXT_ALIGNMENT_VIEW_START
+        }
+        updateBox.addView(homeUpdateTitle)
+        homeUpdateAction = label("", 13f, palette.amberText, TypefaceStyle.MEDIUM).apply {
+            setPadding(0, dp(8), 0, 0)
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { appUpdater.updateNow() }
+        }
+        updateBox.addView(homeUpdateAction)
+        addView(updateBox, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(6) })
+        renderHomeUpdate(homeUpdateVersion, homeUpdateCritical, homeUpdateReady)
 
         // "What's new" card after an update (once). Built empty; filled off the main thread, never blocks connecting.
         WhatsNew.pendingVersion(this@MainActivity)?.let { ver ->
