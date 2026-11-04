@@ -298,23 +298,27 @@ class AppUpdater(private val activity: Activity) {
     @Suppress("DEPRECATION")
     private fun signedLikeInstalled(apk: File): Boolean = try {
         val pm = activity.packageManager
-        fun certs(info: android.content.pm.PackageInfo?): List<ByteArray> {
-            if (info == null) return emptyList()
-            return if (Build.VERSION.SDK_INT >= 28) {
-                val signing = info.signingInfo ?: return emptyList()
-                (if (signing.hasMultipleSigners()) signing.apkContentsSigners else signing.signingCertificateHistory)
-                    ?.map { it.toByteArray() }.orEmpty()
-            } else {
-                info.signatures?.map { it.toByteArray() }.orEmpty()
-            }
-        }
         val flags = if (Build.VERSION.SDK_INT >= 28) android.content.pm.PackageManager.GET_SIGNING_CERTIFICATES
             else android.content.pm.PackageManager.GET_SIGNATURES
-        val installed = certs(pm.getPackageInfo(activity.packageName, flags))
-        val archive = certs(pm.getPackageArchiveInfo(apk.path, flags))
-        // A rotated key keeps the old one in the history: the new APK's lineage must include ours.
-        UpdateSources.sameSigners(installed, archive) ||
-            (installed.isNotEmpty() && archive.isNotEmpty() && installed.all { c -> archive.any { it.contentEquals(c) } })
+        val installedInfo = pm.getPackageInfo(activity.packageName, flags)
+        val archiveInfo = pm.getPackageArchiveInfo(apk.path, flags)
+        if (installedInfo == null || archiveInfo == null) return false
+        if (Build.VERSION.SDK_INT >= 28) {
+            val installedSigning = installedInfo.signingInfo ?: return false
+            val archiveSigning = archiveInfo.signingInfo ?: return false
+            UpdateSources.isValidSignerTransition(
+                installedCurrent = installedSigning.apkContentsSigners.map { it.toByteArray() },
+                installedHasMultipleSigners = installedSigning.hasMultipleSigners(),
+                candidateCurrent = archiveSigning.apkContentsSigners.map { it.toByteArray() },
+                candidateHistory = archiveSigning.signingCertificateHistory.map { it.toByteArray() },
+                candidateHasMultipleSigners = archiveSigning.hasMultipleSigners(),
+            )
+        } else {
+            UpdateSources.sameSigners(
+                installedInfo.signatures?.map { it.toByteArray() }.orEmpty(),
+                archiveInfo.signatures?.map { it.toByteArray() }.orEmpty(),
+            )
+        }
     } catch (_: Exception) {
         false
     }
