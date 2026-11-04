@@ -49,7 +49,7 @@ class MolidoNavigationDrawer(
         activity.resources.displayMetrics.density,
         palette.surface,
         15,
-        Sculpt.withAlpha(palette.divider, 0.8f),
+        stroke = Sculpt.withAlpha(palette.divider, 0.8f),
     )
 
     init {
