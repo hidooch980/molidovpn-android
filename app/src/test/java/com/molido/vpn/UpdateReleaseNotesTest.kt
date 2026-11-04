@@ -27,13 +27,14 @@ class UpdateReleaseNotesTest {
     }
 
     @Test fun limitsNotesAndLineLength() {
-        val markdown = (1..12).joinToString("\n") { "- " + "x".repeat(260) }
+        // Unique entries are required because the production parser intentionally de-duplicates notes.
+        val markdown = (1..12).joinToString("\n") { "- item $it " + "x".repeat(260) }
         val notes = UpdateSources.releaseNotes(markdown)
         assertEquals(8, notes.size)
         assertTrue(notes.all { it.length <= 240 })
     }
 
     @Test fun emptyReleaseBodyHasNoInventedNotes() {
-        assertTrue(UpdateSources.releaseNotes("## Release\\nNo details supplied").isEmpty())
+        assertTrue(UpdateSources.releaseNotes("## Release\nNo details supplied").isEmpty())
     }
 }
