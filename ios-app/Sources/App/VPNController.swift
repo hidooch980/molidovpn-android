@@ -205,11 +205,26 @@ final class VPNController: ObservableObject {
         egressVerificationTask = Task { [weak self] in
             defer { self?.egressVerificationTask = nil }
             do {
-                var request = URLRequest(url: URL(string: "https://www.cloudflare.com/cdn-cgi/trace")!)
+                var components = URLComponents(string: "https://www.cloudflare.com/cdn-cgi/trace")!
+                components.queryItems = [URLQueryItem(name: "nonce", value: UUID().uuidString)]
+                var request = URLRequest(url: components.url!)
                 request.httpMethod = "GET"
                 request.timeoutInterval = 12
                 request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
-                let (data, response) = try await URLSession.shared.data(for: request)
+                request.setValue("no-cache, no-store", forHTTPHeaderField: "Cache-Control")
+                request.setValue("close", forHTTPHeaderField: "Connection")
+
+                // Use a fresh ephemeral session so an earlier pooled HTTP connection
+                // cannot make a pre-tunnel egress look like a successful tunnel test.
+                let sessionConfiguration = URLSessionConfiguration.ephemeral
+                sessionConfiguration.urlCache = nil
+                sessionConfiguration.httpCookieStorage = nil
+                sessionConfiguration.httpShouldSetCookies = false
+                sessionConfiguration.requestCachePolicy = .reloadIgnoringLocalCacheData
+                sessionConfiguration.timeoutIntervalForResource = 15
+                let session = URLSession(configuration: sessionConfiguration)
+                defer { session.invalidateAndCancel() }
+                let (data, response) = try await session.data(for: request)
                 guard let http = response as? HTTPURLResponse, http.statusCode == 200,
                       let body = String(data: data, encoding: .utf8) else {
                     throw EgressVerificationError.invalidResponse
