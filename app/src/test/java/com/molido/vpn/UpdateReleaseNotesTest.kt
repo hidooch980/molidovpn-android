@@ -141,5 +141,62 @@ class UpdateReleaseNotesTest {
     }
 
 
+    private fun release(version: String) = UpdateSources.Release(
+        version = version,
+        assetName = "MolidoMeshAI-android-arm64.apk",
+        downloadUrl = "https://updates.example/$version.apk",
+        sha256 = null,
+    )
+
+    private fun isNewer(remote: String, installed: String) = remote == "4.0.0" && installed != "4.0.0"
+
+    @Test fun staleStaticCopyDoesNotBlockWorkerRelease() {
+        val staticUrl = LiveSync.RAW + "latest.json"
+        val calls = mutableListOf<String>()
+        val result = UpdateSources.latest(
+            listOf(staticUrl, UpdateSources.WORKER_RELEASE_URL),
+            "3.3.60",
+            ::isNewer,
+        ) { url ->
+            calls += url
+            when (url) {
+                staticUrl -> release("3.3.60")
+                UpdateSources.GITHUB_RELEASE_URL -> null
+                UpdateSources.WORKER_RELEASE_URL -> release("4.0.0")
+                else -> null
+            }
+        }
+        assertEquals("4.0.0", result?.version)
+        assertTrue(calls.contains(UpdateSources.WORKER_RELEASE_URL))
+    }
+
+    @Test fun failedGithubFreshnessCheckDoesNotBlockWorkerRelease() {
+        val staticUrl = LiveSync.RAW + "latest.json"
+        val result = UpdateSources.latest(
+            listOf(staticUrl, UpdateSources.WORKER_RELEASE_URL),
+            "3.3.60",
+            ::isNewer,
+        ) { url ->
+            when (url) {
+                staticUrl -> null
+                UpdateSources.GITHUB_RELEASE_URL -> throw IllegalStateException("GitHub unavailable")
+                UpdateSources.WORKER_RELEASE_URL -> release("4.0.0")
+                else -> null
+            }
+        }
+        assertEquals("4.0.0", result?.version)
+    }
+
+    @Test fun allReachableSourcesWithoutANewerReleaseReturnNull() {
+        val staticUrl = LiveSync.RAW + "latest.json"
+        val result = UpdateSources.latest(
+            listOf(staticUrl, UpdateSources.WORKER_RELEASE_URL),
+            "4.0.0",
+            ::isNewer,
+        ) { null }
+        assertEquals(null, result)
+    }
+
+
 
 }
