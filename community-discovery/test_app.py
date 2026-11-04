@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+from cryptography.hazmat.primitives.serialization import PrivateFormat, NoEncryption
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 from fastapi import HTTPException
 from pydantic import ValidationError
@@ -57,8 +57,8 @@ class DiscoveryApiTests(unittest.TestCase):
         self.key = api.Ed25519PrivateKey.generate()
         self.key_bytes = self.key.private_bytes(
             Encoding.Raw,
-            api.serialization.PrivateFormat.Raw,
-            api.serialization.NoEncryption(),
+            PrivateFormat.Raw,
+            NoEncryption(),
         )
         self.patches = [
             patch.object(api, "DB", self.db),
