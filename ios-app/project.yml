@@ -1,0 +1,51 @@
+name: MolidoMeshAI
+options:
+  bundleIdPrefix: com.molido
+  deploymentTarget:
+    iOS: "16.4"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    IPHONEOS_DEPLOYMENT_TARGET: "16.4"
+    TARGETED_DEVICE_FAMILY: "1"
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGNING_ALLOWED: "NO"
+targets:
+  MolidoMeshAI:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources/App
+      - path: Sources/Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.molido.meshai
+        PRODUCT_NAME: Molido Mesh AI
+        INFOPLIST_KEY_CFBundleDisplayName: Molido Mesh AI
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.utilities
+        CODE_SIGN_ENTITLEMENTS: Resources/MolidoMeshAI.entitlements
+        INFOPLIST_KEY_MolidoKeychainAccessGroup: "$(AppIdentifierPrefix)com.molido.meshai.shared"
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_EMIT_LOC_STRINGS: YES
+    dependencies:
+      - target: MolidoPacketTunnel
+        embed: true
+  MolidoPacketTunnel:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: Sources/PacketTunnel
+      - path: Sources/Shared
+    dependencies:
+      - framework: Frameworks/Aether.xcframework
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.molido.meshai.PacketTunnel
+        PRODUCT_NAME: MolidoPacketTunnel
+        CODE_SIGN_ENTITLEMENTS: Resources/MolidoPacketTunnel.entitlements
+        INFOPLIST_KEY_MolidoKeychainAccessGroup: "$(AppIdentifierPrefix)com.molido.meshai.shared"
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_NSExtension_NSExtensionPointIdentifier: com.apple.networkextension.packet-tunnel
+        INFOPLIST_KEY_NSExtension_NSExtensionPrincipalClass: "$(PRODUCT_MODULE_NAME).PacketTunnelProvider"
+        SKIP_INSTALL: YES

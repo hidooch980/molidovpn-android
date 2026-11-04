@@ -3,23 +3,22 @@ package com.molido.vpn
 import android.content.Context
 
 /**
- * The app's UI language: English (default), Persian, Chinese.
+ * The app's UI language: English, Persian, Chinese, Arabic and Turkish (core strings).
  *
  * A single preference, read once per [current] call — cheap enough for a
  * t() lookup on every label, since the whole table is already in memory as
  * object literals.
  *
- * "system" means: follow the OS locale when it is fa or zh, English
- * otherwise. That is the default, so a fresh install never switches
+ * "system" follows any supported OS locale, English otherwise. That is the default, so a fresh install never switches
  * languages on the user unasked.
  */
 object AppLanguage {
 
-    /** Preference key. Values: "system", "en", "fa", "zh". */
+    /** Preference key. Values: "system", "en", "fa", "zh", "ar", "tr". */
     const val PREF = "app_language"
 
     /** The language codes the UI itself is translated into. */
-    val SUPPORTED = listOf("en", "fa", "zh")
+    val SUPPORTED = listOf("en", "fa", "zh", "ar", "tr")
 
     /**
      * The active language code, never blank.
@@ -43,7 +42,10 @@ object AppLanguage {
         return if (tag in SUPPORTED) tag else "en"
     }
 
+    fun isRtl(language: String = current()): Boolean = language == "fa" || language == "ar"
+
     fun set(context: Context, code: String) {
+        if (code != "system" && code !in SUPPORTED) return
         context.getSharedPreferences("settings", Context.MODE_PRIVATE)
             .edit().putString(PREF, code).apply()
     }
@@ -57,6 +59,8 @@ object AppLanguage {
         "system" -> Strings.t("Follow system")
         "fa" -> "فارسی"
         "zh" -> "中文"
+        "ar" -> "العربية"
+        "tr" -> "Türkçe"
         else -> "English"
     }
 }

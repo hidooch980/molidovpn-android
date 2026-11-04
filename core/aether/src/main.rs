@@ -53,6 +53,8 @@ pub struct StartOptions {
     pub tls_curve_preset: TlsCurvePreset,
     pub wireguard_data_check: bool,
     pub tun_fd: Option<i32>,
+    /// Route packets through the iOS NEPacketTunnelFlow FFI queues.
+    pub packet_channel: bool,
     pub log_level: Option<String>,
     pub perf_profile: Option<String>,
     pub h2_fragmentation: Option<bool>,
@@ -125,10 +127,33 @@ impl EndpointDiscovery {
 
 #[derive(Debug, Clone)]
 pub struct TunnelAddresses {
+    /// Host-only tunnel addresses retained for the Android API.
     pub ipv4: String,
     pub ipv6: String,
+    /// Prefix-preserving addresses for platform VPN route configuration.
+    pub ipv4_cidr: String,
+    pub ipv6_cidr: String,
     pub gateway_proxy: String,
     pub organization: String,
+}
+
+fn address_cidr(raw: &str, default_prefix: u8, max_prefix: u8) -> String {
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return String::new();
+    }
+    let mut parts = raw.splitn(2, '/');
+    let host = parts.next().unwrap_or_default().trim();
+    let prefix = parts
+        .next()
+        .and_then(|value| value.parse::<u8>().ok())
+        .filter(|value| *value <= max_prefix)
+        .unwrap_or(default_prefix);
+    if host.is_empty() {
+        String::new()
+    } else {
+        format!("{host}/{prefix}")
+    }
 }
 
 fn address_host(raw: &str) -> String {
@@ -162,6 +187,7 @@ impl StartOptions {
             tls_curve_preset: TlsCurvePreset::Chrome,
             wireguard_data_check: true,
             tun_fd: None,
+            packet_channel: false,
             log_level: None,
             perf_profile: None,
             h2_fragmentation: None,
@@ -259,6 +285,13 @@ pub async fn run_cli() -> Result<()> {
 pub async fn start(options: StartOptions) -> Result<()> {
     apply_runtime_options(&options);
     initialize();
+
+    if options.packet_channel && options.tun_fd.is_some() {
+        return Err(AetherError::Other("packet-channel mode cannot be combined with a TUN file descriptor".into()));
+    }
+    if options.packet_channel && !matches!(options.protocol, Protocol::Masque | Protocol::WireGuard) {
+        return Err(AetherError::Other("iOS packet-channel mode currently supports MASQUE and WireGuard only".into()));
+    }
 
     match options.protocol {
         Protocol::Masque => {
@@ -411,6 +444,8 @@ pub async fn prepare(options: &StartOptions) -> Result<TunnelAddresses> {
             return Ok(TunnelAddresses {
                 ipv4: "198.18.0.1".into(),
                 ipv6: "fc00::1".into(),
+                ipv4_cidr: "198.18.0.1/32".into(),
+                ipv6_cidr: "fc00::1/128".into(),
                 gateway_proxy: String::new(),
                 organization: String::new(),
             });
@@ -420,6 +455,8 @@ pub async fn prepare(options: &StartOptions) -> Result<TunnelAddresses> {
     Ok(TunnelAddresses {
         ipv4: address_host(&identity.ipv4),
         ipv6: address_host(&identity.ipv6),
+        ipv4_cidr: address_cidr(&identity.ipv4, 32, 32),
+        ipv6_cidr: address_cidr(&identity.ipv6, 128, 128),
         gateway_proxy: identity.gateway_proxy,
         organization: identity.organization,
     })
@@ -1960,15 +1997,19 @@ async fn run_masque_tunnel(
 
     let (addr_tx, mut addr_rx) = tokio::sync::mpsc::channel::<quic::AssignedAddr>(8);
     let mut http_task = None;
-    let local_task = if let Some(fd) = options.tun_fd {
+    let local_task = if options.packet_channel {
+        tokio::spawn(async move { while addr_rx.recv().await.is_some() {} });
+        log::info!("[+] iOS packet-channel bridge active");
+        crate::packet_channel::spawn_bridge(outbound_tx, inbound_rx)
+    } else if let Some(fd) = options.tun_fd {
         tokio::spawn(async move { while addr_rx.recv().await.is_some() {} });
         log::info!("[+] Android TUN bridge active");
-        tokio::spawn(tun::bridge(
-            fd,
-            parse_local_v4(&identity.ipv4),
-            inbound_rx,
-            outbound_tx,
-        ))
+        let tun_ipv4 = parse_local_v4(&identity.ipv4);
+        tokio::spawn(async move {
+            if let Err(error) = tun::bridge(fd, tun_ipv4, inbound_rx, outbound_tx).await {
+                log::error!("[-] Android TUN bridge stopped: {error}");
+            }
+        })
     } else {
         let stack = netstack::spawn(
             &identity.ipv4,
@@ -1992,7 +2033,9 @@ async fn run_masque_tunnel(
         http_task = spawn_http_proxy(&stack, options);
         tokio::spawn(async move {
             log::info!("[+] socks5 server listening on {listen}");
-            socks::serve(listen, stack).await
+            if let Err(error) = socks::serve(listen, stack).await {
+                log::error!("[-] SOCKS5 server stopped: {error}");
+            }
         })
     };
 
@@ -2595,9 +2638,16 @@ async fn run_wireguard_tunnel(
     log::info!("[+] WireGuard endpoint validated in {validation_rtt:?}; live transport ready");
 
     let mut http_task = None;
-    let local_task = if let Some(fd) = options.tun_fd {
+    let local_task = if options.packet_channel {
+        log::info!("[+] iOS packet-channel bridge active");
+        crate::packet_channel::spawn_bridge(outbound_tx, inbound_rx)
+    } else if let Some(fd) = options.tun_fd {
         log::info!("[+] Android TUN bridge active");
-        tokio::spawn(tun::bridge(fd, ipv4, inbound_rx, outbound_tx))
+        tokio::spawn(async move {
+            if let Err(error) = tun::bridge(fd, ipv4, inbound_rx, outbound_tx).await {
+                log::error!("[-] Android TUN bridge stopped: {error}");
+            }
+        })
     } else {
         let stack = netstack::spawn(
             &identity.ipv4,
@@ -2609,7 +2659,9 @@ async fn run_wireguard_tunnel(
         http_task = spawn_http_proxy(&stack, options);
         tokio::spawn(async move {
             log::info!("[+] socks5 server listening on {listen}");
-            socks::serve(listen, stack).await
+            if let Err(error) = socks::serve(listen, stack).await {
+                log::error!("[-] SOCKS5 server stopped: {error}");
+            }
         })
     };
 
@@ -4661,5 +4713,31 @@ mod registration_cooldown_tests {
             )),
             60
         );
+    }
+}
+
+
+#[cfg(test)]
+mod tunnel_address_format_tests {
+    use super::{address_cidr, address_host};
+
+    #[test]
+    fn keeps_android_host_format_and_exposes_prefix_for_ipv4() {
+        let raw = "172.16.0.2/32";
+        assert_eq!(address_host(raw), "172.16.0.2");
+        assert_eq!(address_cidr(raw, 32, 32), "172.16.0.2/32");
+    }
+
+    #[test]
+    fn exposes_prefix_for_ipv6_and_uses_platform_safe_defaults() {
+        assert_eq!(address_cidr("fd00::2/64", 128, 128), "fd00::2/64");
+        assert_eq!(address_cidr("172.16.0.2", 32, 32), "172.16.0.2/32");
+        assert_eq!(address_cidr("fd00::2", 128, 128), "fd00::2/128");
+    }
+
+    #[test]
+    fn empty_and_invalid_prefix_values_are_handled_safely() {
+        assert_eq!(address_cidr("", 32, 32), "");
+        assert_eq!(address_cidr("172.16.0.2/99", 32, 32), "172.16.0.2/32");
     }
 }

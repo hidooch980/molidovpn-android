@@ -44,7 +44,7 @@ class VpnProfilesActivity : Activity() {
         palette = AppAppearance.load(this)
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            layoutDirection = if (AppLanguage.current() == "fa") View.LAYOUT_DIRECTION_RTL else View.LAYOUT_DIRECTION_LTR
+            layoutDirection = if (AppLanguage.isRtl()) View.LAYOUT_DIRECTION_RTL else View.LAYOUT_DIRECTION_LTR
             setPadding(dp(20), dp(24), dp(20), dp(24))
             setBackgroundColor(palette.canvas)
         }

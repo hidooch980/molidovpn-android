@@ -516,6 +516,8 @@ class MainActivity : Activity() {
         // The application context outlives this activity, so a mid-session
         // recreate() never orphans it.
         AppLanguage.appContext = applicationContext
+        window.decorView.layoutDirection = if (AppLanguage.isRtl()) View.LAYOUT_DIRECTION_RTL
+            else View.LAYOUT_DIRECTION_LTR
         palette = AppAppearance.load(this)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             // A registered OnBackInvokedCallback ALWAYS consumes the gesture — its
@@ -3909,6 +3911,28 @@ class MainActivity : Activity() {
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.WRAP_CONTENT,
         ).apply { topMargin = dp(8) })
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            content.addView(navRow(
+                Strings.t("IKEv2 / IPsec"),
+                Strings.t("Android 11+ system VPN; requires your own server and account"),
+            ) { startActivity(Intent(this, Class.forName("com.molido.vpn.Ikev2VpnActivity"))) }, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ).apply { topMargin = dp(8) })
+        }
+        content.addView(createToggleRow(
+            Strings.t("Secure gaming route scoring"),
+            Strings.t("Prioritize p95 latency, jitter and packet loss for Smart Connect. DNS remains inside the VPN tunnel; no direct DNS bypass."),
+            preferences().getBoolean(com.molido.vpn.engine.GamingQuality.PREF, false),
+        ) { enabled ->
+            preferences().edit()
+                .putBoolean(com.molido.vpn.engine.GamingQuality.PREF, enabled)
+                .apply()
+            ConnectionLog.record(
+                "Secure gaming route scoring " + (if (enabled) "on" else "off") +
+                    " — applies on the next Smart Connect run; DNS stays tunnel-routed"
+            )
+        }, mainParams())
         // The switch this writes existed before, fed only the removed proxy mode's
         // SOCKS bind, and was deleted because in VPN mode it changed nothing the
         // user could see. It changes something now: the service applies the
@@ -5494,7 +5518,7 @@ class MainActivity : Activity() {
         preferences().getString(AppLanguage.PREF, "system") ?: "system"
 
     /**
-     * Pick the UI language: system, English, Persian, Chinese.
+     * Pick the UI language: system, English, Persian, Chinese, Arabic or Turkish.
      *
      * Exactly the theme's shape: write the preference, recreate(), and the
      * whole tree is rebuilt reading [Strings.t] at every label. The tunnel is
@@ -5514,13 +5538,7 @@ class MainActivity : Activity() {
             // their own name under the label — that read as a doubled title.
             description = { code ->
                 when (code) {
-                    "system" -> if (AppLanguage.current() == "fa") {
-                        "انگلیسی، تا مگر دستگاه روی فارسی یا چینی باشد"
-                    } else if (AppLanguage.current() == "zh") {
-                        "英语，除非设备系统语言为波斯语或中文"
-                    } else {
-                        "English unless the device is set to فارسی or 中文"
-                    }
+                    "system" -> Strings.t("Uses a supported device language; English otherwise")
                     else -> ""
                 }
             },
@@ -8365,8 +8383,25 @@ class MainActivity : Activity() {
             }
         },
         onSelected = { key ->
-            DnsSettings.setPreset(this, DnsSettings.byKey(key) ?: DnsSettings.Preset.AUTO)
-            onDone()
+            val selected = DnsSettings.byKey(key) ?: DnsSettings.Preset.AUTO
+            if (selected.gaming) {
+                android.app.AlertDialog.Builder(this)
+                    .setTitle(Strings.t("DNS bypass warning"))
+                    .setMessage(Strings.t("Gaming DNS sends DNS queries outside the VPN tunnel. This is not full-tunnel DNS protection and may expose DNS requests to the local network or ISP."))
+                    .setNegativeButton(Strings.t("Cancel"), null)
+                    .setPositiveButton(Strings.t("Continue anyway")) { _, _ ->
+                        DnsSettings.setPreset(
+                            this,
+                            selected,
+                            explicitlyAllowDirectGamingDns = true,
+                        )
+                        onDone()
+                    }
+                    .show()
+            } else {
+                DnsSettings.setPreset(this, selected)
+                onDone()
+            }
         }
     )
 

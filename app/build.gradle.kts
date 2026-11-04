@@ -131,6 +131,8 @@ android {
     implementation("com.google.android.material:material:1.12.0")
     // QR decode from a picked image (My configs). Core only: no camera stack.
     implementation("com.google.zxing:core:3.5.3")
+    // Parse the public IKEv2 provider directory; only HTTPS pages on its own domain are followed.
+    implementation("org.jsoup:jsoup:1.18.3")
     // StateFlow for UI state (ui/state) + Dispatchers.Main for collecting it. No AndroidX lifecycle needed.
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.aar"))))

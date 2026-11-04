@@ -8,6 +8,7 @@ use std::sync::{LazyLock, Mutex, OnceLock, RwLock};
 use serde::{Deserialize, Serialize};
 use tokio::sync::Notify;
 
+use crate::packet_channel::aether_packet_channel_reset;
 use crate::{
     platform, EndpointDiscovery, IpScan, MasqueTransport, Protocol, ScanMode, StartOptions,
     TlsCurvePreset, TunnelAddresses,
@@ -343,10 +344,15 @@ async fn wait_for_stop() {
     }
 }
 
-struct RunningGuard;
+struct RunningGuard {
+    reset_packet_channel: bool,
+}
 
 impl Drop for RunningGuard {
     fn drop(&mut self) {
+        if self.reset_packet_channel {
+            let _ = aether_packet_channel_reset();
+        }
         RUNNING.store(false, Ordering::Release);
         READY.store(false, Ordering::Release);
     }
@@ -359,7 +365,13 @@ impl Drop for RunningGuard {
 /// The Android caller must invoke this on a worker thread.
 #[no_mangle]
 pub unsafe extern "C" fn aether_start_json(json: *const c_char) -> i32 {
-    unsafe { aether_start_json_inner(json, None) }
+    unsafe { aether_start_json_inner(json, None, false) }
+}
+
+/// Starts Aether using the bounded iOS packet queues; no Unix fd is accepted.
+#[no_mangle]
+pub unsafe extern "C" fn aether_start_json_with_packet_channel(json: *const c_char) -> i32 {
+    unsafe { aether_start_json_inner(json, None, true) }
 }
 
 /// Starts Aether in Android TUN mode. The caller retains ownership of `tun_fd`.
@@ -369,10 +381,10 @@ pub unsafe extern "C" fn aether_start_json_with_tun(json: *const c_char, tun_fd:
         set_last_error("TUN file descriptor is invalid");
         return -1;
     }
-    unsafe { aether_start_json_inner(json, Some(tun_fd)) }
+    unsafe { aether_start_json_inner(json, Some(tun_fd), false) }
 }
 
-unsafe fn aether_start_json_inner(json: *const c_char, tun_fd: Option<i32>) -> i32 {
+unsafe fn aether_start_json_inner(json: *const c_char, tun_fd: Option<i32>, packet_channel: bool) -> i32 {
     let result = catch_unwind(AssertUnwindSafe(|| {
         let mut options = match unsafe { options_from_json(json) } {
             Ok(options) => options,
@@ -382,6 +394,7 @@ unsafe fn aether_start_json_inner(json: *const c_char, tun_fd: Option<i32>) -> i
             }
         };
         options.tun_fd = tun_fd;
+        options.packet_channel = packet_channel;
 
         if RUNNING
             .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
@@ -390,9 +403,15 @@ unsafe fn aether_start_json_inner(json: *const c_char, tun_fd: Option<i32>) -> i
             set_last_error("Aether tunnel already running");
             return -2;
         }
-        let _running = RunningGuard;
+        let _running = RunningGuard { reset_packet_channel: packet_channel };
         STOP_REQUESTED.store(false, Ordering::Release);
         READY.store(false, Ordering::Release);
+        if packet_channel {
+            if aether_packet_channel_reset() != 0 {
+                set_last_error("could not reset iOS packet channel");
+                return -2;
+            }
+        }
         set_last_error("");
         clear_logs();
         emit_status("starting", None);
@@ -458,12 +477,16 @@ pub unsafe extern "C" fn aether_prepare_json(json: *const c_char) -> i32 {
             Ok(TunnelAddresses {
                 ipv4,
                 ipv6,
+                ipv4_cidr,
+                ipv6_cidr,
                 gateway_proxy,
                 organization,
             }) => {
                 set_last_result(serde_json::json!({
                     "ipv4": ipv4,
                     "ipv6": ipv6,
+                    "ipv4_cidr": ipv4_cidr,
+                    "ipv6_cidr": ipv6_cidr,
                     "gateway_proxy": gateway_proxy,
                     "organization": organization,
                 }));
