@@ -8,6 +8,10 @@ extern "C" {
 typedef void (*AetherEventCallback)(const char *json);
 void aether_set_event_callback(AetherEventCallback callback);
 int32_t aether_start_json(const char *json);
+/* Provisions/loads tunnel identity and returns address JSON via aether_last_result().
+ * This call performs blocking native work and must run off the NetworkExtension queue.
+ */
+int32_t aether_prepare_json(const char *json);
 /* iOS only: use aether_packet_* queues; no Unix TUN descriptor is accepted. */
 int32_t aether_start_json_with_packet_channel(const char *json);
 /* Android-only descriptor bridge; never pass an iOS NEPacketTunnelFlow here. */
