@@ -27,9 +27,11 @@ The GitHub Actions workflow cross-compiles the Rust static library for iPhone ar
 - The versioned bootstrap stores protocol choice, DNS, MTU and a safe identity filename; it contains no secrets.
 - Aether owns personal identity provisioning and persists its keys, tokens and certificates in the protected App Group engine directory.
 - The directory and files use iOS data protection and restrictive POSIX permissions; symlinks are rejected.
+- The saved `NETunnelProviderProtocol` enables `includeAllNetworks` and explicitly keeps local-network, APNs, and cellular-service exclusions disabled. iOS drops eligible device traffic while this VPN is disconnected or reconnecting; Apple-defined control-plane and captive-portal traffic remains exempt.
 - The provider applies IPv4 and IPv6 default routes and catch-all DNS only after the native engine reports ready.
 - The current iOS build supports full-tunnel routing only. Split-tunnel requests are rejected until a validated route policy exists.
 - Queue saturation is treated as backpressure and retained within a bounded handoff buffer; malformed packets, exhausted buffers, native failure and packet-flow errors fail closed.
+- After connection, the app makes a fresh ephemeral HTTPS request to Cloudflare trace and displays the egress IP only when the response confirms `warp=on`.
 - The app does not display fabricated latency or throughput values.
 
 ## Current scope and limitations
