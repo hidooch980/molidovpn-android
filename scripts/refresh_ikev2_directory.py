@@ -16,7 +16,7 @@ BASE = "https://www.vpnjantit.com/"
 INDEX = urljoin(BASE, "free-ikev2")
 HOST = "www.vpnjantit.com"
 OUT = Path("data/ikev2/free-servers.json")
-HOST_RE = re.compile(r"(?i)\\b([a-z0-9-]+\\.vpnjantit\\.com)\\b")
+HOST_RE = re.compile(r"(?i)\b([a-z0-9-]+\.vpnjantit\.com)\b")
 PAGE_RE = re.compile(r"^/free-ikev2-[a-z0-9-]+$")
 CODE_RE = re.compile(r"^[a-z0-9-]{1,63}$")
 MAX_COUNTRY_PAGES = 80
@@ -107,9 +107,9 @@ def extract_country_servers(country: str, page_url: str, html: str) -> list[dict
             account_links[code] = absolute
 
     plain = re.sub(r"<[^>]+>", " ", html)
-    plain = re.sub(r"\\s+", " ", plain)
-    available = bool(re.search(r"\\bAvailable\\b", plain, re.I)) and not bool(
-        re.search(r"\\b(Not Available|Unavailable)\\b", plain, re.I)
+    plain = re.sub(r"\s+", " ", plain)
+    available = bool(re.search(r"\bAvailable\b", plain, re.I)) and not bool(
+        re.search(r"\b(Not Available|Unavailable)\b", plain, re.I)
     )
     servers = []
     for gateway in sorted(set(HOST_RE.findall(plain))):
@@ -166,7 +166,7 @@ def build_directory(index_html: str, fetch_country=get) -> dict:
 def main() -> None:
     payload = build_directory(get(INDEX))
     OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\\n", encoding="utf-8")
+    OUT.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(f"Wrote {len(payload['servers'])} endpoints to {OUT}")
 
 
