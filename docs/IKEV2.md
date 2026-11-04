@@ -16,7 +16,7 @@ VPN Jantit states that its free IKEv2 accounts are temporary (up to 7 days) and 
 
 ## Certificate and credentials
 
-The user must obtain the CA certificate from the provider's official site and import it explicitly. The app checks that the selected X.509 certificate is a CA certificate, but that structural check does not prove that the certificate is authentic. Never import a certificate from an untrusted mirror or chat.
+For VPN Jantit community endpoints, the app requires the user to obtain the CA certificate from the provider's official account page and import it explicitly before connecting. The app checks that the selected X.509 certificate is a CA certificate, but that structural check does not prove that the certificate is authentic. Never import a certificate from an untrusted mirror or chat.
 
 EAP username/password are entered only for the Android system profile provisioning call. They are not included in the directory cache, app preferences, backup, telemetry or logs. Android manages the provisioned system VPN profile and may retain its credentials as part of that profile. The provider's own registration and privacy policies apply to the account data entered on its website.
 
