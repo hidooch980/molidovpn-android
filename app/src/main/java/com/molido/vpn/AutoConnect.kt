@@ -76,6 +76,7 @@ class BootReceiver : BroadcastReceiver() {
         if (AppLanguage.appContext == null) AppLanguage.appContext = app
         // Alarms do not survive a reboot or an update: re-arm the schedule first.
         runCatching { ConnectSchedule.reschedule(app) }
+        runCatching { ShardRefreshJob.schedule(app) }
         if (!AutoConnect.enabled(app)) return
         if (TunnelStatus.isActive()) return
         try {
