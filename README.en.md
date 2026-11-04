@@ -238,7 +238,7 @@ cargo install cargo-ndk
 
 Output lands in `app/build/outputs/apk/debug/`. `core/build-android.sh` compiles the Rust core per ABI and places `libaether.so`; Gradle invokes it, so you don't run it by hand.
 
-Every push to `main` runs [`release.yml`](.github/workflows/release.yml), which builds APKs as artifacts. Published releases are built from this repository by [molidovpn's release workflow](https://github.com/hidooch980/molidovpn/blob/main/.github/workflows/release.yml) after an emulator connection test. `sync-lists.yml` refreshes `remote/*` hourly and `core-updates.yml` updates bundled cores every 6 hours.
+Pushing a version tag such as `v4.0.2` automatically starts the Android release workflow. It validates native binary checksums, runs Android release unit tests, builds signed ARM64/ARMv7/universal APKs, verifies package metadata and signing identity, and publishes the APKs with SHA-256 checksums only if every gate passes. A normal push to `main` does not publish a release. Published releases are built from this repository by [molidovpn's release workflow](https://github.com/hidooch980/molidovpn/blob/main/.github/workflows/release.yml) after an emulator connection test. `sync-lists.yml` refreshes `remote/*` hourly and `core-updates.yml` updates bundled cores every 6 hours.
 
 ---
 
