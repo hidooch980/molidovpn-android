@@ -516,6 +516,8 @@ class MainActivity : Activity() {
         // The application context outlives this activity, so a mid-session
         // recreate() never orphans it.
         AppLanguage.appContext = applicationContext
+        window.decorView.layoutDirection = if (AppLanguage.isRtl()) View.LAYOUT_DIRECTION_RTL
+            else View.LAYOUT_DIRECTION_LTR
         palette = AppAppearance.load(this)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             // A registered OnBackInvokedCallback ALWAYS consumes the gesture — its
