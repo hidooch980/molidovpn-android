@@ -67,6 +67,9 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
                     let addresses = try MolidoAetherConfigurationBuilder.prepare(
                         optionsJSON: optionsJSON
                     )
+                    // Aether creates its identity file during preparation. Re-apply
+                    // restrictive protection after the new key/token material exists.
+                    _ = try MolidoTunnelBootstrapStore.prepareEngineStorage(in: groupID)
                     adapter.start(
                         engineOptionsJSON: optionsJSON,
                         ready: { result in
