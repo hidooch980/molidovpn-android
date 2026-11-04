@@ -117,18 +117,49 @@ final class VPNController: ObservableObject {
     }
 
     func connect() {
-        guard profileInstalled, let manager else {
+        guard profileInstalled, let manager,
+              let tunnel = manager.protocolConfiguration as? NETunnelProviderProtocol else {
             message = "ابتدا پروفایل VPN را آماده کنید."
             return
         }
+        egressVerificationTask?.cancel()
+        egressVerificationTask = nil
         egressIP = nil
         egressVerified = false
         lastVerificationAttempt = nil
-        do {
-            try manager.connection.startVPNTunnel()
-            message = "درخواست اتصال ارسال شد؛ مسیر IPv4/IPv6 و DNS پس از آماده‌شدن موتور فعال می‌شود."
-        } catch {
-            message = "اتصال برقرار نشد: \(error.localizedDescription)"
+
+        // Re-assert fail-closed routing on every connect, including profiles
+        // created by older app versions. Never start with a legacy bypass policy.
+        tunnel.includeAllNetworks = true
+        tunnel.excludeLocalNetworks = false
+        tunnel.excludeAPNs = false
+        tunnel.excludeCellularServices = false
+        manager.protocolConfiguration = tunnel
+        message = "در حال اعمال سیاست امن مسیر شبکه…"
+
+        manager.saveToPreferences { [weak self] saveError in
+            Task { @MainActor in
+                guard let self else { return }
+                if let saveError {
+                    self.message = "ذخیره سیاست امن شبکه ناموفق بود: \(saveError.localizedDescription)"
+                    return
+                }
+                manager.loadFromPreferences { reloadError in
+                    Task { @MainActor in
+                        if let reloadError {
+                            self.message = "بازخوانی پروفایل امن ناموفق بود: \(reloadError.localizedDescription)"
+                            return
+                        }
+                        self.manager = manager
+                        do {
+                            try manager.connection.startVPNTunnel()
+                            self.message = "درخواست اتصال امن ارسال شد؛ مسیر IPv4/IPv6 و DNS پس از آماده‌شدن موتور فعال می‌شود."
+                        } catch {
+                            self.message = "اتصال برقرار نشد: \(error.localizedDescription)"
+                        }
+                    }
+                }
+            }
         }
     }
 
