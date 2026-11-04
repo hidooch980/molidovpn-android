@@ -17,14 +17,16 @@ The Android-only `aether_start_json_with_tun(json, fd)` API is not used by iOS. 
 - First-run identity provisioning and native startup run off the NetworkExtension lifecycle queue.
 - Bootstrap JSON contains no credentials. Aether persists its identity, keys, tokens and certificates beneath the protected App Group engine directory.
 - Engine files are protected with `completeUntilFirstUserAuthentication`; directories use restrictive permissions and symlinks are rejected.
-- IPv4 and IPv6 default routes and DNS are installed only after native readiness. The initial iOS route policy is full tunnel only; unsupported split routing is rejected rather than allowed to leak.
+- The saved `NETunnelProviderProtocol` enables `includeAllNetworks` and explicitly disables local-network, APNs and cellular-service exclusions. iOS drops eligible traffic while the VPN is disconnected or reconnecting; Apple-defined control-plane and captive-portal traffic remains exempt.
+- IPv4 and IPv6 default routes and catch-all DNS are installed only after native readiness. The initial iOS route policy is full tunnel only; unsupported split routing is rejected rather than allowed to leak.
 - Inbound queue saturation is handled as backpressure: already-read packets are retained in a bounded local queue and retried. The tunnel fails closed if that bounded handoff buffer itself is exhausted.
 - Native exit after readiness, loss of readiness, malformed packets, queue errors and packet-flow write failures terminate the tunnel.
+- After NetworkExtension reports connected, the app uses a fresh ephemeral HTTPS session to Cloudflare trace and only marks egress verified when a valid exit IP and `warp=on` are returned.
 - Shutdown requests native stop and waits for the blocking FFI worker to return before completing provider teardown.
 
 ## Confirmed validation
 
-The latest recorded CI run for the prior scaffold commit built the iOS app/extension and the Android validation suite successfully. Every new iOS code change must pass a fresh macOS/Xcode workflow before being treated as build-verified. CI does not prove Apple entitlement approval, signing, real network reachability, or absence of leaks on physical devices.
+Aether Rust unit tests (including packet-channel tests) and Apple-target cross-compilation have passed in recent runs. A fresh macOS/Xcode app/extension build and the Android validation and packet-regression workflows are being rerun for the latest integration commits. CI does not prove Apple entitlement approval, signing, real network reachability, or absence of leaks on physical devices.
 
 ## Remaining production gates
 
