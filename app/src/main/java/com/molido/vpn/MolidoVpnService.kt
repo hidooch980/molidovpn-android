@@ -31,6 +31,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import ca.psiphon.PsiphonTunnel
 import com.molido.vpn.engine.Cost
 import com.molido.vpn.engine.DeviceNetworkProfile
+import com.molido.vpn.engine.GamingQuality
 import com.molido.vpn.engine.Measured
 import com.molido.vpn.engine.MethodBandit
 import com.molido.vpn.engine.NetworkMemory
@@ -4339,6 +4340,11 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
             val baseSmart = if (smartRaw.enabled) smartRaw else smartRaw.copy(goodEnough = 1, minTrials = 1)
             val linkProfile = smartLinkSnapshot()
             val netKey = smartNetworkKey()
+            val gamingMode = prefs.getBoolean(GamingQuality.PREF, false)
+            smartGamingModeActive = gamingMode
+            // Keep learned winners and bandit rewards separate: a gaming score must
+            // never be compared with a normal SmartScore from the same network.
+            val scoringNetworkKey = if (gamingMode) "$netKey|gaming" else netKey
             val profileKey = "device_network_profile_$netKey"
             val priorProfile = DeviceNetworkProfile.parse(prefs.getString(profileKey, null), now = System.currentTimeMillis())
             val networkPolicy = DeviceNetworkProfile.policy(
@@ -4361,7 +4367,7 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
             }
             if (wantedCountry.isNotEmpty()) ConnectionLog.record("Smart: country $wantedCountry — V2Ray/My configs from it only")
             val now = System.currentTimeMillis()
-            var memory = NetworkMemory.read(prefs.getString(smartPrefMemory, null), netKey, now, smart.memoryTtlDays)
+            var memory = NetworkMemory.read(prefs.getString(smartPrefMemory, null), scoringNetworkKey, now, smart.memoryTtlDays)
             if (smartPreferRunnerUp && memory?.runnerUp != null) {
                 // Re-evaluation after a quality drop: the runner-up gets the first shot.
                 memory = memory.copy(winner = memory.runnerUp!!, runnerUp = memory.winner)
@@ -4369,7 +4375,7 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
             smartPreferRunnerUp = false
             SmartConnectState.begin(netKey, methods.map { it.id to it.candidate.label }, now)
             val sinceFull = now - prefs.getLong(autoPrefLastFullTest, 0L)
-            val fastAllowed = !forceFull && memory != null && sinceFull in 0 until autoRetestMs
+            val fastAllowed = !gamingMode && !forceFull && memory != null && sinceFull in 0 until autoRetestMs
             // Probes cost ~3 s; skipped while the remembered winner may still be enough.
             var pre: Map<String, Probe> = if (fastAllowed) emptyMap() else smartPreProbe(methods, smart, token)
             if (token != autoToken) return
@@ -4385,7 +4391,7 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
             val shared = methods.mapNotNull { m -> ConnectionReports.modeScore(this, m.candidate.coreName)?.let { m.id to it } }.toMap()
             // Iranian user: WARP-family exits are in IR, so foreign exits are tried first.
             val demote = (if (autoHomeIsIran(prefs)) MethodRegistry.WARP_FAMILY else emptySet()) + (if (udpOff) MethodRegistry.UDP else emptySet())
-            val banditKey = MethodBandit.key(netKey, java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY))
+            val banditKey = MethodBandit.key(scoringNetworkKey, java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY))
             val learned = MethodBandit.rank(MethodBandit.arms(prefs.getString(smartPrefBandit, null), banditKey), methods.map { it.id })
             smartBanditKey = banditKey
             var order = SmartPlan.order(methods.map { it.candidate }, memory, pre, shared, demote, learned)
@@ -4417,7 +4423,11 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
                         measured = Measured(c.id, listOf(Probe(false)))
                     }
                 }
-                val score = SmartScore.score(measured)
+                val score = if (gamingMode) {
+                    GamingQuality.score(GamingQuality.measurement(measured.probes))
+                } else {
+                    SmartScore.score(measured)
+                }
                 val observation = DeviceNetworkProfile.observe(measured.probes, now)
                 // A Wi-Fi/mobile handover during a trial invalidates attribution:
                 // never write the old link's profile using samples from the new link.
@@ -4491,7 +4501,7 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
                 .putString(autoPrefLastWinner, chosen.coreName)
                 .putLong(autoPrefLastLatency, winnerMs)
                 .putString(autoPrefLastCountry, countries[chosen.label].orEmpty())
-                .putString(smartPrefMemory, NetworkMemory.write(prefs.getString(smartPrefMemory, null), netKey,
+                .putString(smartPrefMemory, NetworkMemory.write(prefs.getString(smartPrefMemory, null), scoringNetworkKey,
                     NetworkMemory.Entry(chosen.id, pick.runnerUp, scores[chosen.id] ?: 0.0, System.currentTimeMillis())))
                 .apply { if (fullTest) putLong(autoPrefLastFullTest, System.currentTimeMillis()) }
                 .apply()
@@ -4543,10 +4553,27 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
 
     // ------------------------------------------------------------------ Smart Connect helpers
 
-    private fun smartReason(m: Measured) = SmartScore.reason(m, Strings.t("stable"), Strings.t("IR exit"))
+    private fun smartReason(m: Measured): String {
+        if (!smartGamingModeActive) {
+            return SmartScore.reason(m, Strings.t("stable"), Strings.t("IR exit"))
+        }
+        val measurement = GamingQuality.measurement(m.probes)
+        val details = ArrayList<String>()
+        GamingQuality.p95RttMs(measurement.probes)?.let {
+            details += Strings.tf("p95 %s ms", it)
+        }
+        GamingQuality.jitterMs(measurement.probes)?.let {
+            details += Strings.tf("jitter %s ms", it)
+        }
+        val lossPercent = if (measurement.probes.isEmpty()) 100.0 else
+            (measurement.probes.count { !it.success } * 100.0 / measurement.probes.size)
+        details += Strings.tf("loss %s%%", String.format(java.util.Locale.US, "%.1f", lossPercent))
+        return details.joinToString(" · ")
+    }
 
     private val smartPrefMemory = "smart_network_memory"
     private val smartPrefBandit = "smart_method_bandit"
+    @Volatile private var smartGamingModeActive = false
     @Volatile private var smartBanditKey: String? = null
     @Volatile private var smartMethodId: String? = null
     /** Video-stall heuristic over the 5 s counter samples ([startQualitySampler]). */
