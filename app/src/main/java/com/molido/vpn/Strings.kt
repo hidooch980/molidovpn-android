@@ -211,6 +211,7 @@ object Strings {
         "EAP username" to Triple("EAP username", "نام کاربری EAP", "EAP 用户名"),
         "EAP password" to Triple("EAP password", "گذرواژه EAP", "EAP 密码"),
         "Import server CA certificate (PEM)" to Triple("Import server CA certificate (PEM)", "واردکردن گواهی CA سرور (PEM)", "导入服务器 CA 证书（PEM）"),
+        "Import the official VPN Jantit CA certificate before connecting to a free community server." to Triple("Import the official VPN Jantit CA certificate before connecting to a free community server.", "پیش از اتصال به سرور رایگان، گواهی CA رسمی VPN Jantit را وارد کنید.", "连接免费社区服务器前，请先导入 VPN Jantit 官方 CA 证书。"),
         "Trust server CA certificate?" to Triple("Trust server CA certificate?", "به گواهی CA سرور اعتماد می‌کنید؟", "信任服务器 CA 证书？"),
         "A CA certificate can authorize VPN server identities. Import only the certificate downloaded from the provider's official site; a malicious CA could impersonate the VPN server." to Triple("A CA certificate can authorize VPN server identities. Import only the certificate downloaded from the provider's official site; a malicious CA could impersonate the VPN server.", "گواهی CA هویت سرور VPN را تأیید می‌کند. فقط گواهی دریافت‌شده از وب‌سایت رسمی ارائه‌دهنده را وارد کنید؛ CA مخرب می‌تواند خود را جای سرور جا بزند.", "CA 证书可授权 VPN 服务器身份。仅导入从服务商官方网站下载的证书；恶意 CA 可能冒充 VPN 服务器。"),
         "Choose certificate" to Triple("Choose certificate", "انتخاب گواهی", "选择证书"),
