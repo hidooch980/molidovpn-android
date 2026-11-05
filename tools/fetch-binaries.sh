@@ -57,7 +57,11 @@ download_asset() { # asset name, output path, expected digest from GitHub API
 
   # Secondary: API asset endpoint. It is the same immutable release asset,
   # not a moving upstream branch or an unverified mirror.
-  if curl_retry -H "Accept: application/octet-stream" \
+  local auth_args=()
+  if [[ -n "${GH_TOKEN:-}" ]]; then
+    auth_args=(-H "Authorization: Bearer $GH_TOKEN")
+  fi
+  if curl_retry "${auth_args[@]}" -H "Accept: application/octet-stream" \
        -H "X-GitHub-Api-Version: 2022-11-28" \
        "$API/releases/assets/$id" -o "$tmp" &&
      [[ "$(sha256sum "$tmp" | awk '{print $1}')" == "$expected" ]]; then
