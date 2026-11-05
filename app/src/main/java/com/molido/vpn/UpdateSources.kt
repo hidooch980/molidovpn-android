@@ -16,7 +16,7 @@ import java.net.URI
  * folder holding `latest.json` (GitHub "latest release" shape) next to the APK files.
  *
  * Trust: a mirror is never trusted. The APK must (1) include a valid SHA-256 in release metadata
- * (`digest` from GitHub or `sha256` from our worker) and match it byte-for-byte, and (2) ALWAYS be
+ * (`digest` from GitHub or `sha256` from a configured mirror) and match it byte-for-byte, and (2) ALWAYS be
  * signed with the same certificate lineage as the installed app — checked in [AppUpdater] before
  * the installer opens. Missing or malformed hashes make an APK ineligible for installation.
  */
@@ -208,7 +208,7 @@ object UpdateSources {
                     val downloadUrl = asset.optString("browser_download_url", "")
                     if (!isSecureHttpsUrl(downloadUrl)) continue
                     // No APK is installable unless release metadata supplies a valid SHA-256.
-                    // GitHub's asset digest and our update worker both publish this field.
+                    // GitHub and configured release mirrors publish this field.
                     val sha256 = assetSha256(asset) ?: continue
                     return Release(version, name, downloadUrl, sha256, critical, notes)
                 }
