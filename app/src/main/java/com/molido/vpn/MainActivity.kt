@@ -1921,10 +1921,7 @@ class MainActivity : Activity() {
         // A dedicated, accessible one-tap action complements the animated dial.
         // It follows the same toggle path, so connect, cancel and disconnect all
         // use the existing VPN permission and service lifecycle.
-        addView(quickConnectButton, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            dp(56),
-        ).apply { topMargin = dp(12) })
+        // Added together with Gaming below in a compact two-action row.
 
         // Dedicated Gaming control stays visible in Simple mode. It only
         // toggles the existing secure Smart Connect scoring preference; DNS and
@@ -1956,10 +1953,21 @@ class MainActivity : Activity() {
         }
         homeGamingShortcut = gamingShortcut
         renderGamingShortcut()
-        addView(gamingShortcut, LinearLayout.LayoutParams(
+        val primaryActions = LinearLayout(this@MainActivity).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            layoutDirection = View.LAYOUT_DIRECTION_LTR
+            addView(quickConnectButton, LinearLayout.LayoutParams(
+                0, dp(56), 1f,
+            ).apply { marginEnd = dp(8) })
+            addView(gamingShortcut, LinearLayout.LayoutParams(
+                dp(116), dp(56),
+            ))
+        }
+        addView(primaryActions, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
-            dp(42),
-        ).apply { topMargin = dp(8) })
+            dp(56),
+        ).apply { topMargin = dp(12) })
 
         // Secondary destinations remain in Advanced mode; the full feature
         // catalogue is also available in the searchable navigation drawer.
@@ -2258,9 +2266,9 @@ class MainActivity : Activity() {
         homeQuickActions?.visibility = if (simple) View.GONE else View.VISIBLE
         homeTelemetryLine?.visibility = if (simple) View.GONE else View.VISIBLE
         homeLocationCard?.visibility = if (simple) View.VISIBLE else View.GONE
-        // Simple home is the one-screen dashboard: keep optional shortcuts and
-        // decorative footer in Advanced mode so short phones do not need to scroll.
-        homeGamingShortcut?.visibility = if (simple) View.GONE else View.VISIBLE
+        // Keep Gaming beside the primary connect action in both home modes.
+        // Only the decorative footer is removed from Simple mode to save height.
+        homeGamingShortcut?.visibility = View.VISIBLE
         footerWave.visibility = if (simple) View.GONE else View.VISIBLE
         homeLocationCard?.text = locationCardText()
         homeAdvancedLink?.text = if (simple) Strings.t("Advanced mode") else Strings.t("Simple mode")
