@@ -2280,10 +2280,12 @@ class MainActivity : Activity() {
     private fun applyHomeMode() {
         val simple = homeSimple()
         homeAdvancedBox?.visibility = if (simple) View.GONE else View.VISIBLE
-        // The refreshed home keeps useful destinations visible in both modes.
-        // Advanced adds transport and diagnostic controls; Simple stays uncluttered
-        // but still exposes country selection, traffic and live connection metadata.
-        homeQuickActions?.visibility = View.VISIBLE
+        // Simple mode is intentionally focused: one primary connect action,
+        // Gaming shortcut, live connection quality and server location. Secondary
+        // destinations stay available in Advanced mode and the navigation drawer.
+        homeQuickActions?.visibility = if (simple) View.GONE else View.VISIBLE
+        // Keep live latency/protocol feedback visible: it is the compact, useful
+        // "smart" signal that explains the current automatic route choice.
         homeTelemetryLine?.visibility = View.VISIBLE
         homeLocationCard?.visibility = if (simple) View.VISIBLE else View.GONE
         // Keep Gaming beside the primary connect action in both home modes.
