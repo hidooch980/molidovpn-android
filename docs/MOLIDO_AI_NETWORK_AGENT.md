@@ -140,3 +140,57 @@ Start with deterministic scoring plus a lightweight contextual bandit/local stat
 ## Release gates
 
 Do not enable automatic agent actions by default until Phases A-C pass. Initially ship recommendations and diagnostics in shadow mode; compare decisions with existing Smart Connect. Enable bounded automatic recovery only after regression and real-device tests pass. No new release is considered verified until signed APK continuity, updater integrity and release artifact checks pass.
+
+### 8. Server Refresh & Discovery Agent
+
+The Server Refresh agent maintains a fresh, trustworthy candidate catalogue. It is a bounded ingestion and validation worker; it cannot activate arbitrary endpoints or bypass the existing VPN policy.
+
+**Responsibilities**
+- Refresh configured first-party and explicitly approved upstream sources on a schedule, on user request, and after a source failure cooldown.
+- Track source provenance, fetch time, source version, license/permission status where known, and parser version for every imported candidate.
+- Normalize supported URI/profile formats, canonicalize endpoints, deduplicate by a stable fingerprint, and reject malformed or oversized input.
+- Enforce per-source and global candidate caps, response-size limits, timeouts, retry budgets and exponential backoff.
+- Validate expiry, required fields, TLS/SNI consistency, transport parameters and runtime capability before a candidate can enter the usable pool.
+- Keep source discovery separate from connection verification: a parsed profile is only a candidate, never a working server.
+- Preserve the last-known-good catalogue and publish a new snapshot atomically only after validation succeeds; retain rollback metadata.
+- Quarantine repeated failures with a cooldown and re-test them later rather than deleting useful candidates permanently.
+- Expose refresh status, source health, last successful update, candidate counts and rejection reasons in local diagnostics.
+
+**Candidate lifecycle**
+1. Fetch from an allowlisted source over authenticated HTTPS with certificate validation.
+2. Enforce byte, line, profile-count and parsing-time limits before decoding.
+3. Parse only explicitly supported schemes and reject unsupported transports without pretending they are connectable.
+4. Normalize and deduplicate; do not log raw credentials or full profile URIs.
+5. Check provenance, expiry, syntax, host/port validity and protocol-specific constraints.
+6. Check runtime capability flags; parser/import support alone is insufficient.
+7. Perform safe reachability and, where possible, a real tunnel handshake plus a controlled payload/DNS test through the VPN.
+8. Store measured RTT p50/p95, jitter, loss, handshake result, payload verification, test time and confidence as separate fields.
+9. Rank candidates by user mode (gaming, browsing, downloads or balanced) using only fresh, valid measurements.
+10. Atomically promote the validated snapshot; otherwise retain the last-known-good snapshot and report why refresh was rejected.
+
+**Source policy and safety**
+- Default to first-party or explicitly approved sources with documented permission; do not scrape arbitrary public proxy lists or assume public availability grants redistribution rights.
+- Source adapters are independently disableable and have per-source trust/quality weights; a source score never overrides cryptographic or runtime checks.
+- Unknown or stale metrics remain unknown and cannot be promoted as measured speed.
+- Never send profile credentials, private keys, DNS names, destination IP history or traffic payloads to an AI service.
+- Do not collect user browsing history to score servers. Any aggregate opt-in health signal must be unlinkable, minimal and independently consented.
+- Do not expose imported profiles in logs, crash reports, analytics or support bundles.
+- A failed refresh must not clear the active catalogue or interrupt an established tunnel.
+- The agent may recommend a route; deterministic policy and the existing VPN service alone authorize activation.
+
+**Refresh cadence**
+- Background source refresh: configurable default every 6 hours, with randomized jitter to avoid synchronized load.
+- Lightweight health recheck: based on last-tested age and battery/data budget, not a constant high-frequency scan.
+- User-triggered refresh: immediate but rate-limited, with progress and a clear result.
+- On metered network, battery saver or thermal stress: defer nonessential downloads and probing.
+- On Wi-Fi/mobile handover: revalidate the active route and a small candidate sample; do not redownload every source.
+
+**Required tests**
+- Invalid URI, unsupported scheme, malformed encoding, duplicate, expired and oversized profile rejection.
+- TLS/certificate failure, source timeout, rate limit and partial-source failure handling.
+- Last-known-good preservation and atomic snapshot rollback.
+- No candidate marked usable without runtime capability and verified tunnel payload.
+- No credential leakage in logs, diagnostics, telemetry or exceptions.
+- Source caps, backoff, randomized cadence and battery/metered-network budgets.
+- A malicious or compromised source cannot change kill-switch, DNS, routing or user protocol-lock settings.
+
