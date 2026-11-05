@@ -288,12 +288,10 @@ class AppUpdater(private val activity: Activity) {
         check(newCode > oldCode) { Strings.t("The downloaded file is not newer than this version") }
         // Mirrors are untrusted: the hash from the release metadata (when it has one) and the
         // signing certificate of the installed app must both match.
-        release.sha256?.let { expected ->
-            val actual = UpdateSources.sha256Hex(target)
-            if (actual != expected) {
-                target.delete()
-                error(Strings.t("The downloaded file is damaged") + " (sha256)")
-            }
+        val actualHash = UpdateSources.sha256Hex(target)
+        if (!UpdateSources.matchesSha256(release.sha256, actualHash)) {
+            target.delete()
+            error(Strings.t("The downloaded file is damaged") + " (sha256)")
         }
         if (!signedLikeInstalled(target)) {
             target.delete()
