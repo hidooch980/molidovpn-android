@@ -571,6 +571,7 @@ class MainActivity : Activity() {
         // every launch is how the job gets re-registered after an app update — a
         // package replace clears JobScheduler's registrations for the app.
         ShardRefreshJob.schedule(this)
+        DdnsRefreshJob.schedule(this)
         // And one opportunistic refresh now. The job's window is up to six hours
         // wide; someone who installs the app and taps SHARD immediately should not
         // have to wait for it. Returns without I/O if the list is already fresh.
