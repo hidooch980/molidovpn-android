@@ -141,15 +141,15 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
           script: |
-            APK=$(find validation-apks -type f -path '*/debug/*' -iname '*universal*.apk' | head -n 1)
+            APK=$(find validation-apks -type f \( -path '*/debug/*' -o -path 'debug/*' \) -iname '*universal*.apk' | head -n 1)
             test -n "$APK"
             adb install -r "$APK"
             adb logcat -c
             adb shell monkey -p com.mobin.mobin_vpn -c android.intent.category.LAUNCHER 1
             sleep 25
             adb logcat -d > android-api36-logcat.txt || true
-            adb shell pidof com.mobin.mobin_vpn || { echo "app is not running"; grep -A20 "FATAL EXCEPTION" android17-logcat.txt | head -60; exit 1; }
-            if grep -q "FATAL EXCEPTION" android17-logcat.txt; then grep -A30 "FATAL EXCEPTION" android17-logcat.txt | head -80; exit 1; fi
+            adb shell pidof com.mobin.mobin_vpn || { echo "app is not running"; grep -A20 "FATAL EXCEPTION" android-api36-logcat.txt | head -60; exit 1; }
+            if grep -q "FATAL EXCEPTION" android-api36-logcat.txt; then grep -A30 "FATAL EXCEPTION" android-api36-logcat.txt | head -80; exit 1; fi
             echo "MolidoVPN app launched and remained alive on API 36."
 
       - name: Keep API 36 startup log
@@ -157,6 +157,6 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: android-api36-startup-log
-          path: android17-logcat.txt
+          path: android-api36-logcat.txt
           if-no-files-found: warn
           retention-days: 14
