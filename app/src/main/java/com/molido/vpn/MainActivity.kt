@@ -1953,21 +1953,46 @@ class MainActivity : Activity() {
         }
         homeGamingShortcut = gamingShortcut
         renderGamingShortcut()
-        val primaryActions = LinearLayout(this@MainActivity).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
+        // Split-heart primary control: left half connects, right half toggles Gaming.
+        val splitHeart = FrameLayout(this@MainActivity).apply {
             layoutDirection = View.LAYOUT_DIRECTION_LTR
-            addView(quickConnectButton, LinearLayout.LayoutParams(
-                0, dp(56), 1f,
-            ).apply { marginEnd = dp(8) })
-            addView(gamingShortcut, LinearLayout.LayoutParams(
-                dp(116), dp(56),
-            ))
+            val heart = label("♥", 104f, Sculpt.withAlpha(palette.mint, 0.22f), TypefaceStyle.BOLD).apply {
+                gravity = Gravity.CENTER
+                includeFontPadding = false
+                textAlignment = View.TEXT_ALIGNMENT_CENTER
+            }
+            addView(heart, FrameLayout.LayoutParams(dp(176), dp(100), Gravity.CENTER))
+            val halves = LinearLayout(this@MainActivity).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER
+                layoutDirection = View.LAYOUT_DIRECTION_LTR
+                addView(label("⏻\\n${Strings.t("Connect")}", 14f, palette.mint, TypefaceStyle.BOLD).apply {
+                    gravity = Gravity.CENTER
+                    textAlignment = View.TEXT_ALIGNMENT_CENTER
+                    isClickable = true
+                    isFocusable = true
+                    contentDescription = Strings.t("Connect")
+                    setOnClickListener { quickConnectButton.performClick() }
+                }, LinearLayout.LayoutParams(dp(88), dp(76)))
+                addView(gamingShortcut.apply {
+                    text = "🎮\\n${Strings.t("Gaming")}"
+                    textSize = 13f
+                    setPadding(dp(4), dp(4), dp(4), dp(4))
+                    background = Sculpt.sculptedBackground(
+                        resources.displayMetrics.density,
+                        Sculpt.withAlpha(palette.violet, 0.22f),
+                        18,
+                        Sculpt.withAlpha(palette.violet, 0.65f),
+                    )
+                }, LinearLayout.LayoutParams(dp(88), dp(76)))
+            }
+            addView(halves, FrameLayout.LayoutParams(dp(184), dp(80), Gravity.CENTER))
+            contentDescription = Strings.t("Connect") + " / " + Strings.t("Gaming")
         }
-        addView(primaryActions, LinearLayout.LayoutParams(
+        addView(splitHeart, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
-            dp(56),
-        ).apply { topMargin = dp(12) })
+            dp(100),
+        ).apply { topMargin = dp(6) })
 
         // Secondary destinations remain in Advanced mode; the full feature
         // catalogue is also available in the searchable navigation drawer.
