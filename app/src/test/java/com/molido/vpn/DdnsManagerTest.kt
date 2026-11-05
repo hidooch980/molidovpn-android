@@ -10,8 +10,14 @@ class DdnsManagerTest {
     }
 
     @Test fun rejectsMalformedHostnameAndShortCredential() {
-        assertThrows(IllegalArgumentException::class.java) {
-            DdnsManager.validate(DdnsManager.Config(DdnsManager.Provider.DUCKDNS, "bad..domain", "12345678"))
+        listOf(
+            "bad..domain", "-bad.example.com", "bad-.example.com",
+            "bad_label.example.com", "bad label.example.com", "example.com.",
+            "exämple.com", "a".repeat(64) + ".example.com"
+        ).forEach { hostname ->
+            assertThrows(IllegalArgumentException::class.java) {
+                DdnsManager.validate(DdnsManager.Config(DdnsManager.Provider.DUCKDNS, hostname, "12345678"))
+            }
         }
         assertThrows(IllegalArgumentException::class.java) {
             DdnsManager.validate(DdnsManager.Config(DdnsManager.Provider.DUCKDNS, "home.duckdns.org", "short"))
