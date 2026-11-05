@@ -178,71 +178,60 @@ class UpdateReleaseNotesTest {
         return false
     }
 
-    @Test fun staleStaticCopyDoesNotBlockWorkerRelease() {
+    @Test fun staleStaticCopyDoesNotBlockConfiguredMirror() {
         val staticUrl = LiveSync.RAW + "latest.json"
+        val mirrorUrl = "https://backup.example/latest.json"
         val calls = mutableListOf<String>()
-        val result = UpdateSources.latest(
-            listOf(staticUrl, UpdateSources.WORKER_RELEASE_URL),
-            "3.3.60",
-            ::isNewer,
-        ) { url ->
+        val result = UpdateSources.latest(listOf(staticUrl, mirrorUrl), "3.3.60", ::isNewer) { url ->
             calls += url
             when (url) {
                 staticUrl -> release("3.3.60")
                 UpdateSources.GITHUB_RELEASE_URL -> null
-                UpdateSources.WORKER_RELEASE_URL -> release("4.0.0")
+                mirrorUrl -> release("4.0.0")
                 else -> null
             }
         }
         assertEquals("4.0.0", result?.version)
-        assertTrue(calls.contains(UpdateSources.WORKER_RELEASE_URL))
+        assertTrue(calls.contains(mirrorUrl))
+        assertTrue(calls.none { it.contains("workers.dev") })
     }
 
     @Test fun githubNewerThanStaleStaticReleaseWins() {
         val staticUrl = LiveSync.RAW + "latest.json"
-        val result = UpdateSources.latest(
-            listOf(staticUrl, UpdateSources.WORKER_RELEASE_URL),
-            "3.2.161",
-            ::isNewer,
-        ) { url ->
+        val mirrorUrl = "https://backup.example/latest.json"
+        val result = UpdateSources.latest(listOf(staticUrl, mirrorUrl), "3.2.161", ::isNewer) { url ->
             when (url) {
                 staticUrl -> release("3.3.60")
                 UpdateSources.GITHUB_RELEASE_URL -> release("4.0.0")
-                UpdateSources.WORKER_RELEASE_URL -> release("4.0.0")
+                mirrorUrl -> release("4.0.0")
                 else -> null
             }
         }
         assertEquals("4.0.0", result?.version)
     }
 
-    @Test fun failedGithubFreshnessCheckDoesNotBlockWorkerRelease() {
+    @Test fun failedGithubFreshnessCheckDoesNotBlockConfiguredMirror() {
         val staticUrl = LiveSync.RAW + "latest.json"
-        val result = UpdateSources.latest(
-            listOf(staticUrl, UpdateSources.WORKER_RELEASE_URL),
-            "3.3.60",
-            ::isNewer,
-        ) { url ->
+        val mirrorUrl = "https://backup.example/latest.json"
+        val result = UpdateSources.latest(listOf(staticUrl, mirrorUrl), "3.3.60", ::isNewer) { url ->
             when (url) {
                 staticUrl -> null
                 UpdateSources.GITHUB_RELEASE_URL -> throw IllegalStateException("GitHub unavailable")
-                UpdateSources.WORKER_RELEASE_URL -> release("4.0.0")
+                mirrorUrl -> release("4.0.0")
                 else -> null
             }
         }
         assertEquals("4.0.0", result?.version)
     }
 
-    @Test fun workerCanSupersedeStaticCopyWhenGithubIsUnavailable() {
+    @Test fun configuredMirrorCanSupersedeStaticCopyWhenGithubIsUnavailable() {
         val staticUrl = LiveSync.RAW + "latest.json"
-        val result = UpdateSources.latest(
-            listOf(staticUrl, UpdateSources.WORKER_RELEASE_URL),
-            "3.2.161",
-            ::isNewer,
-        ) { url ->
+        val mirrorUrl = "https://backup.example/latest.json"
+        val result = UpdateSources.latest(listOf(staticUrl, mirrorUrl), "3.2.161", ::isNewer) { url ->
             when (url) {
                 staticUrl -> release("3.3.60")
                 UpdateSources.GITHUB_RELEASE_URL -> throw IllegalStateException("GitHub unavailable")
-                UpdateSources.WORKER_RELEASE_URL -> release("4.0.0")
+                mirrorUrl -> release("4.0.0")
                 else -> null
             }
         }
@@ -251,14 +240,9 @@ class UpdateReleaseNotesTest {
 
     @Test fun allReachableSourcesWithoutANewerReleaseReturnNull() {
         val staticUrl = LiveSync.RAW + "latest.json"
-        val result = UpdateSources.latest(
-            listOf(staticUrl, UpdateSources.WORKER_RELEASE_URL),
-            "4.0.0",
-            ::isNewer,
-        ) { null }
+        val result = UpdateSources.latest(listOf(staticUrl, UpdateSources.GITHUB_RELEASE_URL), "4.0.0", ::isNewer) { null }
         assertEquals(null, result)
     }
-
 
 
 }
