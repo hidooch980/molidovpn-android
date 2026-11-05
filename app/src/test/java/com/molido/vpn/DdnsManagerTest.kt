@@ -24,6 +24,15 @@ class DdnsManagerTest {
         }
     }
 
+    @Test fun validatesPublicIpLiteralsWithoutAcceptingHostnamesOrMalformedOctets() {
+        listOf("1.1.1.1", "203.0.113.10", "2001:4860:4860::8888").forEach {
+            org.junit.Assert.assertTrue(it, DdnsManager.isIpLiteral(it))
+        }
+        listOf("example.com", "999.1.1.1", "1.2.3", "1.2.3.4.5", "2001:db8::gg").forEach {
+            org.junit.Assert.assertFalse(it, DdnsManager.isIpLiteral(it))
+        }
+    }
+
     @Test fun cloudflareRequiresZoneAndRecordIds() {
         assertThrows(IllegalArgumentException::class.java) {
             DdnsManager.validate(DdnsManager.Config(DdnsManager.Provider.CLOUDFLARE, "home.example.com", "12345678"))
