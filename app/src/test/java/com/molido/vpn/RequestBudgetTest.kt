@@ -16,10 +16,11 @@ class RequestBudgetTest {
         assertEquals("cfip-mci.json", StaticFirst.opFile("cfip", "mci"))
     }
 
-    @Test fun releaseMetadataAsksTheWorkerLast() {
+    @Test fun releaseMetadataUsesGitHubWithoutAWorkerDependency() {
         val urls = UpdateSources.releaseJsonUrls(emptyList())
         assertTrue(urls.first().startsWith(LiveSync.RAW))
-        assertEquals(UpdateSources.WORKER_RELEASE_URL, urls.last())
+        assertEquals(UpdateSources.GITHUB_RELEASE_URL, urls.last())
+        assertTrue(urls.none { it.contains("workers.dev") })
     }
 
     @Test fun aboutOneSessionInTenHeartbeats() {
