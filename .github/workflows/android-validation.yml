@@ -51,6 +51,9 @@ jobs:
       - name: Install Android platform, build tools, NDK and CMake
         run: sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;26.3.11579264" "cmake;3.22.1"
 
+      - name: Install Rust core host-test dependencies
+        run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libclang-dev
+
       - name: Install Rust Android targets
         run: |
           rustup target add aarch64-linux-android armv7-linux-androideabi
@@ -59,6 +62,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: core/aether -> target
+
+      - name: Run Aether Rust core unit tests
+        run: cargo test --manifest-path core/aether/Cargo.toml --locked --lib
 
       - name: Fetch pinned native binaries with checksum verification
         run: bash tools/fetch-binaries.sh
@@ -70,16 +76,87 @@ jobs:
         run: python3 tools/refresh-emergency-configs.py 40 --strict
 
       - name: Run Android unit tests and build unsigned release APKs
+        env:
+          MOLIDO_SCREENS: ${{ runner.temp }}/molido-screens
         run: |
           chmod +x gradlew
-          ./gradlew testReleaseUnitTest assembleRelease --no-daemon \
+          ./gradlew testReleaseUnitTest assembleRelease assembleDebug --no-daemon \
             -PtargetAbi=arm64-v8a,armeabi-v7a \
             -PmolidoVersionCode=49999 \
             -PmolidoVersionName=0.0.0-ci
+
+      - name: Keep UI regression screenshots
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: android-ui-regression-screenshots
+          path: ${{ runner.temp }}/molido-screens/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Keep Android unit-test reports
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: android-unit-test-reports
+          path: |
+            app/build/reports/tests/testReleaseUnitTest/
+            app/build/test-results/testReleaseUnitTest/
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Upload unsigned validation APKs
         uses: actions/upload-artifact@v6
         with:
           name: molido-mesh-ai-android-validation
-          path: app/build/outputs/apk/release/*.apk
+          path: |
+            app/build/outputs/apk/release/*.apk
+            app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+
+  android-startup-api-36:
+    needs: build-and-test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/download-artifact@v7
+        with:
+          name: molido-mesh-ai-android-validation
+          path: validation-apks
+
+      - name: Enable emulator acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Launch app on API 36 emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          script: |
+            APK=$(find validation-apks -type f \( -path '*/debug/*' -o -path 'debug/*' \) -iname '*universal*.apk' | head -n 1)
+            test -n "$APK"
+            adb install -r "$APK"
+            adb logcat -c
+            adb shell monkey -p com.mobin.mobin_vpn -c android.intent.category.LAUNCHER 1
+            sleep 25
+            adb logcat -d > android-api36-logcat.txt || true
+            adb shell pidof com.mobin.mobin_vpn || { echo "app is not running"; grep -A20 "FATAL EXCEPTION" android-api36-logcat.txt | head -60; exit 1; }
+            if grep -q "FATAL EXCEPTION" android-api36-logcat.txt; then grep -A30 "FATAL EXCEPTION" android-api36-logcat.txt | head -80; exit 1; fi
+            echo "MolidoVPN app launched and remained alive on API 36."
+
+      - name: Keep API 36 startup log
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: android-api36-startup-log
+          path: android-api36-logcat.txt
+          if-no-files-found: warn
+          retention-days: 14
