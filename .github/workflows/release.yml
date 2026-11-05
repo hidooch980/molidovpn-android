@@ -1,21 +1,17 @@
 name: Build Molido Mesh AI Android
 
 on:
-  # A version tag automatically builds, validates and publishes the signed release.
+  # Only version tags publish automatically; editing main must never start a release.
   push:
     tags:
       - "v*"
-    branches:
-      - "main"
-    paths:
-      - ".github/workflows/release.yml"
   # Manual dispatch remains available for controlled recovery.
   workflow_dispatch:
     inputs:
       version:
-        description: "Release version (for example 4.0.2)"
+        description: "Release version (for example 4.0.4)"
         required: true
-        default: "4.0.3"
+        default: "4.0.4"
         type: string
 
 permissions:
@@ -39,7 +35,7 @@ jobs:
 
       - name: Normalize and validate requested version
         env:
-          REQUESTED_VERSION: ${{ github.event.inputs.version || '4.0.3' }}
+          REQUESTED_VERSION: ${{ github.event.inputs.version || '4.0.4' }}
         shell: bash
         run: |
           set -euo pipefail
