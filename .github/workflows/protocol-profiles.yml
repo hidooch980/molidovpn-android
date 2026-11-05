@@ -1,6 +1,11 @@
 name: Validate imported VPN profiles
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - '.github/workflows/protocol-profiles.yml'
   pull_request:
     branches: [main]
     paths:
