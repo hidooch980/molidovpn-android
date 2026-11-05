@@ -1454,7 +1454,7 @@ class MainActivity : Activity() {
         val drawer = MolidoNavigationDrawer(this, palette, appVersion(), listOf(
             item("Connection", "Connection mode") { openModeScreen() },
             item("Connection", "Country") {
-                showCountryPicker { homeLocationCard?.text = locationCardText() }
+                showCountryPicker { homeLocationCard?.text = Strings.t("SERVER LOCATION") + "\n" + locationCardText() }
             },
             item("Connection", "My configs") { openMyConfigs() },
             item("Connection", "VPN profile preparation") {
@@ -2001,7 +2001,7 @@ class MainActivity : Activity() {
                 setOnClickListener { action() }
             }
         quickActions.addView(quickAction(Strings.t("Country"), "◎") {
-            showCountryPicker { homeLocationCard?.text = locationCardText() }
+            showCountryPicker { homeLocationCard?.text = Strings.t("SERVER LOCATION") + "\n" + locationCardText() }
         }, LinearLayout.LayoutParams(0, dp(44), 1f).apply { marginEnd = dp(6) })
         quickActions.addView(quickAction(Strings.t("Traffic monitor"), "↗") {
             openTrafficMonitorScreen()
@@ -2218,7 +2218,7 @@ class MainActivity : Activity() {
             isClickable = true
             isFocusable = true
             contentDescription = Strings.t("Change server location")
-            setOnClickListener { showCountryPicker { homeLocationCard?.text = locationCardText() } }
+            setOnClickListener { showCountryPicker { homeLocationCard?.text = Strings.t("SERVER LOCATION") + "\n" + locationCardText() } }
         }
         homeLocationCard = location
         addView(location, firstAdvanced + 1, LinearLayout.LayoutParams(
@@ -2290,7 +2290,7 @@ class MainActivity : Activity() {
         // Only the decorative footer is removed from Simple mode to save height.
         homeGamingShortcut?.visibility = View.VISIBLE
         footerWave.visibility = if (simple) View.GONE else View.VISIBLE
-        homeLocationCard?.text = locationCardText()
+        homeLocationCard?.text = Strings.t("SERVER LOCATION") + "\n" + locationCardText()
         homeAdvancedLink?.text = if (simple) Strings.t("Advanced mode") else Strings.t("Simple mode")
         val simpleTarget = simpleProtocol()
         if (simple && selectedProtocol != simpleTarget && !TunnelStatus.isActive() &&
