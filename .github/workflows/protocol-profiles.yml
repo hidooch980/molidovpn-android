@@ -68,7 +68,7 @@ jobs:
           ./gradlew :app:testMobileReleaseUnitTest :app:testTvReleaseUnitTest --no-daemon \
             -PtargetAbi=arm64-v8a \
             -x buildRustCoreArm64V8a \
-            -x externalNativeBuildMobileRelease \\
+            -x externalNativeBuildMobileRelease \
             -x externalNativeBuildTvRelease
       - name: Keep test reports
         if: always()
