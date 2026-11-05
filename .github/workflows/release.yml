@@ -75,6 +75,19 @@ jobs:
       - name: Fetch pinned native binaries with checksum verification
         run: bash tools/fetch-binaries.sh
 
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.24.6"
+          cache: false
+
+      - name: Build pinned dnstt clients for Android ABIs (CI validation only)
+        env:
+          DNSTT_OUTPUT_DIR: ${{ runner.temp }}/dnstt-native
+        run: |
+          bash tools/build-dnstt.sh --abi arm64-v8a,armeabi-v7a
+          test -s "$DNSTT_OUTPUT_DIR/arm64-v8a/libdnstt.so"
+          test -s "$DNSTT_OUTPUT_DIR/armeabi-v7a/libdnstt.so"
+
       - name: Syntax-check release tooling
         run: python3 -m py_compile tools/refresh-emergency-configs.py
 
