@@ -99,6 +99,12 @@ jobs:
               echo "::notice::v$version is already published; automatic release skipped."
               should_release=false
             fi
+          elif [[ "$REF_TYPE" == "tag" ]]; then
+            # The triggering tag is expected to exist; only reject a duplicate release.
+            if gh release view "v$version" >/dev/null 2>&1; then
+              echo "::error::Release v$version already exists; refusing to overwrite it."
+              exit 1
+            fi
           else
             if git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null 2>&1 ||
                gh release view "v$version" >/dev/null 2>&1; then
