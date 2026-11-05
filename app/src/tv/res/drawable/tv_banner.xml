@@ -1,5 +1,5 @@
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item>
+    <item android:width="320dp" android:height="180dp">
         <shape android:shape="rectangle">
             <gradient
                 android:angle="0"
