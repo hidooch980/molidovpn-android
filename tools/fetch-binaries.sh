@@ -15,7 +15,7 @@ WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
 SINGBOX_VERSION="1.12.25"
-SINGBOX_URL="https://github.com/SagerNet/sing-box/releases/download/v$SINGBOX_VERSION"
+SINGBOX_API="https://api.github.com/repos/SagerNet/sing-box"
 
 curl_retry() {
   curl --fail --location --silent --show-error \
@@ -118,10 +118,26 @@ singbox_sha() { # ABI -> SHA-256 of the pinned archive
   esac
 }
 
+# Resolve immutable release asset IDs from the pinned upstream tag, then
+# download through the authenticated GitHub API (avoids intermittent 403s
+# from browser/CDN release URLs). The digest remains pinned below.
+curl_retry -H "Accept: application/vnd.github+json" \
+  -H "X-GitHub-Api-Version: 2022-11-28" \
+  "${SINGBOX_API}/releases/tags/v${SINGBOX_VERSION}" -o "$WORK/singbox-release.json"
+
 for abi in arm64-v8a armeabi-v7a; do
   name="sing-box-$SINGBOX_VERSION-android-$(singbox_arch "$abi")"
-  curl_retry "$SINGBOX_URL/$name.tar.gz" -o "$WORK/$name.tar.gz"
-  (cd "$WORK" && echo "$(singbox_sha "$abi")  $name.tar.gz" | sha256sum -c -)
+  expected="$(singbox_sha "$abi")"
+  id="$(jq -er --arg name "$name.tar.gz" '.assets[] | select(.name == $name) | .id' "$WORK/singbox-release.json")"
+  upstream_digest="$(jq -er --arg name "$name.tar.gz" '.assets[] | select(.name == $name) | .digest | sub("^sha256:"; "")' "$WORK/singbox-release.json")"
+  [[ "$upstream_digest" == "$expected" ]] || {
+    echo "Pinned sing-box release digest mismatch for $name" >&2
+    exit 1
+  }
+  curl_retry -H "Accept: application/octet-stream" \
+    -H "X-GitHub-Api-Version: 2022-11-28" \
+    "$SINGBOX_API/releases/assets/$id" -o "$WORK/$name.tar.gz"
+  (cd "$WORK" && echo "$expected  $name.tar.gz" | sha256sum -c -)
   tar -xzf "$WORK/$name.tar.gz" -C "$WORK"
 done
 
