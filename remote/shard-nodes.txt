@@ -70,3 +70,7 @@ vless://4e4f1f70-5e56-4a76-bb9d-db087f4690c4@[2a06:98c1:3101::6812:202f]:443?sec
 # --- MolidoVPN servers ---
 vless://2040b770-b53c-4a5f-b212-19f37b6bef9d@104.16.230.132:443?path=/ws&security=tls&encryption=none&insecure=0&host=brook-barry-ruby-hispanic.trycloudflare.com&type=ws&allowInsecure=0&sni=brook-barry-ruby-hispanic.trycloudflare.com#MolidoVPN
 trojan://7bpe9s002exll38s@199.68.156.121:2087?path=/wss&security=tls&alpn=http/1.1&insecure=1&host=nexoshop.netvia.ir&fp=chrome&type=ws&allowInsecure=1&sni=nexoshop.netvia.ir#MolidoVPN
+vless://c83f15bf-1817-4ec8-a19f-6393d226434c@104.21.58.37:2053?security=tls&sni=fast.145779.xyz&type=ws&host=fast.145779.xyz&path=%2Fws-tesla&fp=chrome#MolidoVPN
+trojan://7bpe9s002exll38s@199.68.156.250:2087?host=nexoshop.netvia.ir&path=%2Fwss&security=tls&sni=nexoshop.netvia.ir&type=ws#MolidoVPN
+trojan://7bpe9s002exll38s@199.68.156.250:2087?allowInsecure=0&alpn=http/1.1&fp=chrome&host=nexoshop.netvia.ir&path=/wss&security=tls&sni=nexoshop.netvia.ir&type=ws#MolidoVPN
+trojan://7bpe9s002exll38s@199.68.156.121:2087?path=%2Fwss&security=tls&alpn=http%2F1.1&insecure=0&host=nexoshop.netvia.ir&fp=firefox&type=ws&allowInsecure=0&sni=nexoshop.netvia.ir#MolidoVPN
