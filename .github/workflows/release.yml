@@ -5,6 +5,9 @@ on:
   push:
     tags:
       - "v*"
+    # One controlled TV-capable release build from this dedicated branch.
+    branches:
+      - "release/android-tv-4.0.3"
   # Manual dispatch remains available for controlled recovery.
   workflow_dispatch:
     inputs:
@@ -35,7 +38,7 @@ jobs:
 
       - name: Normalize and validate requested version
         env:
-          REQUESTED_VERSION: ${{ github.event.inputs.version || '4.0.2' }}
+          REQUESTED_VERSION: ${{ github.event.inputs.version || '4.0.3' }}
         shell: bash
         run: |
           set -euo pipefail
