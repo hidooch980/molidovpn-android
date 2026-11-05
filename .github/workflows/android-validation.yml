@@ -53,8 +53,6 @@ jobs:
 
       - name: Install Rust core host-test dependencies
         run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libclang-dev
-      - name: Run Aether Rust core unit tests
-        run: cargo test --manifest-path core/aether/Cargo.toml --locked --lib
 
       - name: Install Rust Android targets
         run: |
@@ -64,6 +62,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: core/aether -> target
+
+      - name: Run Aether Rust core unit tests
+        run: cargo test --manifest-path core/aether/Cargo.toml --locked --lib
 
       - name: Fetch pinned native binaries with checksum verification
         run: bash tools/fetch-binaries.sh
