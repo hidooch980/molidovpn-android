@@ -188,6 +188,27 @@ jobs:
           fi
           "$AAPT" dump badging baseline-v4.0.0.apk | grep -F "package: name='com.mobin.mobin_vpn'"
 
+          # Keep the pre-4.x stable upgrade path intact as well. v3.3.60 is
+          # the oldest published APK in this repository's current release history.
+          legacy_url="https://github.com/hidooch980/molidovpn-android/releases/download/v3.3.60/MolidoMeshAI-android-arm64.apk"
+          curl --fail --location --retry 3 --silent --show-error "$legacy_url" -o baseline-v3.3.60.apk
+          "$APKSIGNER" verify --verbose baseline-v3.3.60.apk
+          legacy_cert=$("$APKSIGNER" verify --print-certs baseline-v3.3.60.apk | \\
+            awk -F': ' '/Signer #1 certificate SHA-256 digest:/ {print tolower($2); exit}')
+          test -n "$legacy_cert"
+          if [[ "$legacy_cert" != "$expected_cert" ]]; then
+            echo "Configured keystore does not match the published v3.3.60 legacy signing certificate; refusing upgrade release." >&2
+            exit 1
+          fi
+          legacy_badging=$("$AAPT" dump badging baseline-v3.3.60.apk)
+          grep -F "package: name='com.mobin.mobin_vpn'" <<< "$legacy_badging"
+          legacy_code=$(sed -n "s/.*versionCode='\\([0-9][0-9]*\\)'.*/\\1/p" <<< "$legacy_badging" | head -n1)
+          test -n "$legacy_code"
+          if (( expected_code <= legacy_code )); then
+            echo "New APK versionCode must be greater than the published v3.3.60 baseline." >&2
+            exit 1
+          fi
+
           tv_apk=dist/MolidoMeshAI-android-tv-universal.apk
           "$AAPT" dump badging "$tv_apk" | grep -F "uses-feature: name='android.software.leanback'"
           "$AAPT" dump xmltree "$tv_apk" AndroidManifest.xml | grep -F 'android.intent.category.LEANBACK_LAUNCHER'
