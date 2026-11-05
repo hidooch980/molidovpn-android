@@ -167,8 +167,8 @@ internal object DdnsManager {
         }
         val parts = value.split('.')
         return parts.size == 4 && parts.all { part ->
-            part.isNotEmpty() && part.length <= 3 && part.all(Char::isDigit) &&
-                part.toIntOrNull() in 0..255
+            part.isNotEmpty() && part.length <= 3 && part.all { it in '0'..'9' } &&
+                (part.toIntOrNull()?.let { it in 0..255 } == true)
         }
     }
 
