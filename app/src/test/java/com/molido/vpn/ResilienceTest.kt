@@ -158,6 +158,16 @@ class UpdateSourcesTest {
     }
 
     @Test
+    fun updaterDigestCheckFailsClosedWhenHashIsMissingOrMalformed() {
+        assertTrue(UpdateSources.matchesSha256(sha, sha))
+        assertTrue(UpdateSources.matchesSha256(sha.uppercase(), sha))
+        assertFalse(UpdateSources.matchesSha256(null, sha))
+        assertFalse(UpdateSources.matchesSha256("bad", sha))
+        assertFalse(UpdateSources.matchesSha256(sha, "bad"))
+        assertFalse(UpdateSources.matchesSha256(sha, "0".repeat(64)))
+    }
+
+    @Test
     fun sha256FieldFromMirrorAndInvalidOnesIgnored() {
         assertEquals(sha, UpdateSources.assetSha256(JSONObject().put("sha256", sha.uppercase())))
         assertNull(UpdateSources.assetSha256(JSONObject().put("digest", "md5:abc")))
