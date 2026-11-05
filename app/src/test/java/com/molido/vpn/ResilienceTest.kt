@@ -184,7 +184,7 @@ class UpdateSourcesTest {
         assertEquals(
             listOf(LiveSync.RAW + "latest.json", LiveSync.CDN + "latest.json",
                 StaticFirst.RAW + "latest.json", StaticFirst.CDN + "latest.json",
-                UpdateSources.GITHUB_RELEASE_URL, UpdateSources.WORKER_RELEASE_URL,
+                UpdateSources.GITHUB_RELEASE_URL,
                 "https://m1.example.com/latest.json", "https://m2.example.com/latest.json"),
             UpdateSources.releaseJsonUrls(m),
         )
