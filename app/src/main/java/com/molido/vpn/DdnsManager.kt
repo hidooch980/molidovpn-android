@@ -51,7 +51,7 @@ internal object DdnsManager {
     )
 
     fun summary(context: Context): String =
-        load(context)?.let { "${it.provider.label} · ${it.hostname}" } ?: "Not configured"
+        load(context)?.let { "${it.provider.label} · ${it.hostname}" } ?: Strings.t("Not configured")
 
     fun show(context: Context) {
         val saved = runCatching { load(context) }.getOrNull()
@@ -71,7 +71,7 @@ internal object DdnsManager {
                 if (secret) inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
             }
         val hostname = field("Hostname (example.duckdns.org)", saved?.hostname.orEmpty())
-        val token = field("API token / password", saved?.token.orEmpty(), true)
+        val token = field("API token / username:password", saved?.token.orEmpty(), true)
         val zone = field("Cloudflare Zone ID (Cloudflare only)", saved?.zoneId.orEmpty())
         val record = field("Cloudflare DNS Record ID (Cloudflare only)", saved?.recordId.orEmpty())
         root.addView(provider)
@@ -165,7 +165,7 @@ internal object DdnsManager {
                     connection.connectTimeout = CONNECT_TIMEOUT_MS
                     connection.readTimeout = READ_TIMEOUT_MS
                     connection.setRequestProperty("User-Agent", "MolidoVPN-DDNS/1.0 support@molido.invalid")
-                    val auth = Base64.encodeToString("molido:${config.token}".toByteArray(StandardCharsets.UTF_8), Base64.NO_WRAP)
+                    val credentials = config.token.split(":", limit = 2)\n                    require(credentials.size == 2 && credentials.all { it.isNotBlank() }) { "For No-IP, enter username:password in the credential field." }\n                    val auth = Base64.encodeToString(config.token.toByteArray(StandardCharsets.UTF_8), Base64.NO_WRAP)
                     connection.setRequestProperty("Authorization", "Basic $auth")
                     val body = readResponse(connection)
                     check(connection.responseCode in 200..299 && (body.startsWith("good") || body.startsWith("nochg"))) {
