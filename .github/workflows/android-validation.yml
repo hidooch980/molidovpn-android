@@ -77,6 +77,17 @@ jobs:
             -PmolidoVersionCode=49999 \
             -PmolidoVersionName=0.0.0-ci
 
+      - name: Keep Android unit-test reports
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: android-unit-test-reports
+          path: |
+            app/build/reports/tests/testReleaseUnitTest/
+            app/build/test-results/testReleaseUnitTest/
+          if-no-files-found: warn
+          retention-days: 14
+
       - name: Upload unsigned validation APKs
         uses: actions/upload-artifact@v6
         with:
