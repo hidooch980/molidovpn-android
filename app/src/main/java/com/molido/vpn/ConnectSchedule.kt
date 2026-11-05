@@ -67,7 +67,7 @@ object ConnectSchedule {
                     am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)
                 }
             } catch (e: Exception) {
-                Log.w("ConnectSchedule", "could not arm $action: ${e.message}")
+                Log.w("ConnectSchedule", LogRedactor.redact("could not arm $action: ${e.message}"))
                 runCatching { am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi) }
             }
         }
@@ -93,7 +93,7 @@ class ScheduleReceiver : BroadcastReceiver() {
                 }
             }
         } catch (e: Exception) {
-            Log.w("ConnectSchedule", "scheduled ${intent.action} failed: ${e.message}")
+            Log.w("ConnectSchedule", LogRedactor.redact("scheduled ${intent.action} failed: ${e.message}"))
         } finally {
             ConnectSchedule.reschedule(app)
         }
