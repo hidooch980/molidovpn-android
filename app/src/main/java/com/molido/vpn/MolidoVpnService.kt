@@ -2388,7 +2388,7 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
         } catch (e: Exception) {
             // Native event payloads can contain user configuration; never mirror
             // the raw JSON or exception stack into Android's shared log buffer.
-            Log.e(LOG_TAG, "Failed to parse native event (\${json.length} chars): \${e.javaClass.simpleName}")
+            Log.e(LOG_TAG, "Failed to parse native event (${json.length} chars): ${e.javaClass.simpleName}")
         }
     }
 
@@ -5375,7 +5375,7 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
                 // Keep actionable context in the app log after redaction. Logcat
                 // receives only a safe summary, never a raw core error or stack.
                 ConnectionLog.record("Tunnel setup failed: $detail")
-                Log.e(LOG_TAG, "Tunnel setup failed (\${error.javaClass.simpleName}): \${LogRedactor.redact(detail)}")
+                Log.e(LOG_TAG, "Tunnel setup failed (${error.javaClass.simpleName}): ${LogRedactor.redact(detail)}")
                 sendStatus(STATUS_FAILED, detail)
                 // A setup failure is not a dropped tunnel: there is nothing to
                 // restore, and retrying a config Android or the core rejected
