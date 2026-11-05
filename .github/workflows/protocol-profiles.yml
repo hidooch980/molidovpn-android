@@ -65,16 +65,19 @@ jobs:
       - name: Compile Android sources and run the complete unit-test suite
         run: |
           chmod +x gradlew
-          ./gradlew :app:testReleaseUnitTest --no-daemon \
+          ./gradlew :app:testMobileReleaseUnitTest :app:testTvReleaseUnitTest --no-daemon \
             -PtargetAbi=arm64-v8a \
             -x buildRustCoreArm64V8a \
-            -x externalNativeBuildRelease
+            -x externalNativeBuildMobileRelease \
+            -x externalNativeBuildTvRelease
       - name: Keep test reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: vpn-profile-test-results
           path: |
-            app/build/reports/tests/testReleaseUnitTest/
-            app/build/test-results/testReleaseUnitTest/
+            app/build/reports/tests/testMobileReleaseUnitTest/
+            app/build/test-results/testMobileReleaseUnitTest/
+            app/build/reports/tests/testTvReleaseUnitTest/
+            app/build/test-results/testTvReleaseUnitTest/
           if-no-files-found: ignore

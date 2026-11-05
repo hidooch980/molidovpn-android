@@ -24,6 +24,16 @@ android {
     buildToolsVersion = "36.0.0"
     ndkVersion = "26.3.11579264"
 
+    flavorDimensions += "distribution"
+    productFlavors {
+        create("mobile") {
+            dimension = "distribution"
+        }
+        create("tv") {
+            dimension = "distribution"
+        }
+    }
+
     defaultConfig {
         applicationId = "com.mobin.mobin_vpn"
         minSdk = 26

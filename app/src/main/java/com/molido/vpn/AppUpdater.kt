@@ -438,7 +438,11 @@ class AppUpdater(private val activity: Activity) {
                 output.toString(Charsets.UTF_8.name())
             }
             // Release assets use MolidoMeshAI-android-arm64.apk / -armv7.apk / -universal.apk.
-            return UpdateSources.parseRelease(body, Build.SUPPORTED_ABIS.toList())
+            return UpdateSources.parseRelease(
+                body,
+                Build.SUPPORTED_ABIS.toList(),
+                television = activity.packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_LEANBACK),
+            )
         } finally {
             connection.disconnect()
         }

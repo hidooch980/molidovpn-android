@@ -9,6 +9,7 @@ import android.content.BroadcastReceiver
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.res.Configuration
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.ApplicationInfo
@@ -59,6 +60,42 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 
 class MainActivity : Activity() {
+    private val isTelevisionDevice: Boolean
+        get() = packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK) ||
+            (resources.configuration.uiMode and Configuration.UI_MODE_TYPE_MASK) == Configuration.UI_MODE_TYPE_TELEVISION
+
+    /**
+     * Make the existing connection console usable with a D-pad / TV remote.
+     * Click actions stay exactly the same as on phones; only focus and orientation
+     * change for Leanback devices.
+     */
+    private fun configureTelevisionControls(root: View) {
+        if (!isTelevisionDevice) return
+        requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+        window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)
+        root.isFocusable = true
+        root.isFocusableInTouchMode = true
+        if (root is ViewGroup) root.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
+
+        fun prepare(view: View) {
+            if (view.isClickable || view.hasOnClickListeners()) {
+                view.isFocusable = true
+                view.isFocusableInTouchMode = false
+                // A transparent foreground adds a clear focus ring without
+                // replacing the view's existing sculpted background or click action.
+                view.foreground = getDrawable(R.drawable.tv_focus_ring)
+            }
+            if (view is ViewGroup) {
+                for (index in 0 until view.childCount) prepare(view.getChildAt(index))
+            }
+        }
+        prepare(root)
+        root.post {
+            if (!root.hasFocus() && ::quickConnectButton.isInitialized) {
+                quickConnectButton.requestFocus()
+            }
+        }
+    }
     private lateinit var orbitDial: OrbitDialView
     private lateinit var connectionTitle: TextView
     private lateinit var connectionDetail: TextView
@@ -515,6 +552,7 @@ class MainActivity : Activity() {
         // apply to dialogs but the window itself would stay dark.
         if (!AppAppearance.isNight(this)) setTheme(R.style.Theme_Molido_Light)
         super.onCreate(savedInstanceState)
+        if (isTelevisionDevice) requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
         // First thing after super: the service reads the language preference on
         // its own status sends, and t() needs a context to resolve "system".
         // The application context outlives this activity, so a mid-session
@@ -802,10 +840,11 @@ class MainActivity : Activity() {
             ))
         }
         setContentView(pageHost)
+        configureTelevisionControls(pageHost)
         configureSystemBars()
         showOpeningOverlay()
         // After the splash overlay (~1.5 s) so the two never overlap.
-        pageHost.postDelayed({ maybeShowOnboarding() }, 1_700L)
+        if (!isTelevisionDevice) pageHost.postDelayed({ maybeShowOnboarding() }, 1_700L)
         // Reattach to a tunnel that is already up. Without this the dial opens in
         // the disconnected state while the VPN is running, and the session timer
         // would only start on the next status broadcast. [adoptRunningTunnel]

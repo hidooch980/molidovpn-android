@@ -126,20 +126,26 @@ jobs:
           AETHERY_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           chmod +x gradlew
-          ./gradlew testReleaseUnitTest assembleRelease --no-daemon \
+          ./gradlew testMobileReleaseUnitTest testTvReleaseUnitTest assembleMobileRelease assembleTvRelease --no-daemon \
             -PtargetAbi=arm64-v8a,armeabi-v7a \
             -PaetheryKeystore=release.keystore \
             -PmolidoVersionCode=$((400000 + VERSION_CODE)) \
             -PmolidoVersionName=$VERSION
           mkdir dist
-          for f in app/build/outputs/apk/release/*.apk; do
+          for f in app/build/outputs/apk/mobile/release/*.apk; do
             case "$f" in
               *arm64-v8a*)   cp "$f" dist/MolidoMeshAI-android-arm64.apk ;;
               *armeabi-v7a*) cp "$f" dist/MolidoMeshAI-android-armv7.apk ;;
               *universal*)   cp "$f" dist/MolidoMeshAI-android-universal.apk ;;
             esac
           done
-          for name in MolidoMeshAI-android-arm64.apk MolidoMeshAI-android-armv7.apk MolidoMeshAI-android-universal.apk; do
+          for f in app/build/outputs/apk/tv/release/*.apk; do
+            case "$f" in
+              *arm64-v8a*) cp "$f" dist/MolidoMeshAI-android-tv-arm64.apk ;;
+              *universal*) cp "$f" dist/MolidoMeshAI-android-tv-universal.apk ;;
+            esac
+          done
+          for name in MolidoMeshAI-android-arm64.apk MolidoMeshAI-android-armv7.apk MolidoMeshAI-android-universal.apk MolidoMeshAI-android-tv-arm64.apk MolidoMeshAI-android-tv-universal.apk; do
             test -s "dist/$name"
           done
 
@@ -169,6 +175,13 @@ jobs:
           fi
           "$AAPT" dump badging baseline-v4.0.0.apk | grep -F "package: name='com.mobin.mobin_vpn'"
 
+          tv_apk=dist/MolidoMeshAI-android-tv-universal.apk
+          "$AAPT" dump badging "$tv_apk" | grep -F "uses-feature: name='android.software.leanback'"
+          "$AAPT" dump xmltree "$tv_apk" AndroidManifest.xml | grep -F 'android.intent.category.LEANBACK_LAUNCHER'
+          if "$AAPT" dump xmltree dist/MolidoMeshAI-android-universal.apk AndroidManifest.xml | grep -Fq 'android.intent.category.LEANBACK_LAUNCHER'; then
+            echo "Phone APK must not register as an Android TV launcher app" >&2
+            exit 1
+          fi
           for apk in dist/*.apk; do
             "$APKSIGNER" verify --verbose "$apk"
             actual_cert=$("$APKSIGNER" verify --print-certs "$apk" | \
@@ -204,6 +217,6 @@ jobs:
           body: |
             MolidoVPN Android release ${{ env.VERSION }}.
 
-            - Signed ARM64, ARMv7 and universal APKs.
+            - Signed phone ARM64, ARMv7 and universal APKs.\n            - Signed Android TV ARM64 and universal APKs with Leanback launcher support.
             - SHA-256 digests are published with GitHub release assets and verified by the in-app updater.
             - Upgrade in place; do not uninstall the previous version.

@@ -57,9 +57,6 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
-                <!-- Upstream v0.8.0 gain: Android TV / leanback launcher support.
-                     Harmless on phones, and there is no reason to drop it. -->
-                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
             <!--
               Long-pressing the Quick Settings tile lands here.
