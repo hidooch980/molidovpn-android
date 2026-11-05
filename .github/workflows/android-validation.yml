@@ -72,7 +72,7 @@ jobs:
       - name: Run Android unit tests and build unsigned release APKs
         run: |
           chmod +x gradlew
-          ./gradlew testReleaseUnitTest assembleRelease --no-daemon \
+          ./gradlew testMobileReleaseUnitTest testTvReleaseUnitTest assembleMobileRelease assembleTvRelease --no-daemon \
             -PtargetAbi=arm64-v8a,armeabi-v7a \
             -PmolidoVersionCode=49999 \
             -PmolidoVersionName=0.0.0-ci
@@ -81,5 +81,7 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: molido-mesh-ai-android-validation
-          path: app/build/outputs/apk/release/*.apk
+          path: |
+            app/build/outputs/apk/mobile/release/*.apk
+            app/build/outputs/apk/tv/release/*.apk
           if-no-files-found: error
