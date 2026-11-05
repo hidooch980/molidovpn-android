@@ -85,7 +85,7 @@ jobs:
       - name: Run Android unit tests and build unsigned release APKs
         run: |
           chmod +x gradlew
-          ./gradlew testMobileReleaseUnitTest testTvReleaseUnitTest assembleMobileRelease assembleTvRelease --no-daemon \
+          ./gradlew testMobileReleaseUnitTest testTvReleaseUnitTest assembleMobileRelease assembleTvRelease --no-daemon --max-workers=2 \
             -PtargetAbi=arm64-v8a,armeabi-v7a \
             -PmolidoVersionCode=49999 \
             -PmolidoVersionName=0.0.0-ci
@@ -113,3 +113,16 @@ jobs:
             app/build/outputs/apk/mobile/release/*.apk
             app/build/outputs/apk/tv/release/*.apk
           if-no-files-found: error
+
+      - name: Upload JUnit test reports
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: molido-android-junit-${{ github.run_id }}
+          path: |
+            app/build/test-results/testMobileReleaseUnitTest/**/*.xml
+            app/build/test-results/testTvReleaseUnitTest/**/*.xml
+            app/build/reports/tests/testMobileReleaseUnitTest/**
+            app/build/reports/tests/testTvReleaseUnitTest/**
+          if-no-files-found: warn
+          retention-days: 14
