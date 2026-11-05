@@ -63,8 +63,7 @@ internal object DnsOnlyPacketValidation {
                 0x00 -> {
                     cursor++
                     if (length == 0) {
-                        if (nextOffset < 0) nextOffset = cursor
-                        break
+                            break
                     }
                     if (length > MAX_LABEL_LENGTH || cursor + length > limit) return null
                     expandedLength += length + 1
@@ -80,7 +79,7 @@ internal object DnsOnlyPacketValidation {
                 0xc0 -> {
                     if (!allowCompression || cursor + 1 >= limit || ++jumps > MAX_POINTER_JUMPS) return null
                     val pointer = ((length and 0x3f) shl 8) or (bytes[cursor + 1].toInt() and 0xff)
-                    if (pointer < DNS_HEADER_SIZE || pointer >= limit || !visited.add(pointer)) return null
+                    if (pointer < DNS_HEADER_SIZE || pointer >= cursor || pointer >= limit || !visited.add(pointer)) return null
                     if (nextOffset < 0) nextOffset = cursor + 2
                     cursor = pointer
                 }
