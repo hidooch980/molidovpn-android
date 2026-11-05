@@ -60,7 +60,8 @@ jobs:
           WORK="$(mktemp -d)"
           trap 'rm -rf "$WORK"' EXIT
           verify_release() {
-            local tag="$1" api="$2" apk="$WORK/$tag.apk" meta="$WORK/$tag.json"
+            local tag="$1" api="$2"
+            local apk="$WORK/$tag.apk" meta="$WORK/$tag.json"
             curl --fail --location --silent --show-error --retry 3 \
               -H 'Accept: application/vnd.github+json' "$api" -o "$meta"
             local url digest
