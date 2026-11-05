@@ -53,14 +53,9 @@ object MobileAdsBootstrap {
 
     /** Call from a visible, user-initiated Privacy choices setting. */
     @JvmStatic
-    fun showPrivacyOptions(activity: Activity, onComplete: (Boolean) -> Unit = {}) {
-        if (configuredAppId(activity) == null) {
-            onComplete(false)
-            return
-        }
-        UserMessagingPlatform.showPrivacyOptionsForm(activity) { error ->
-            onComplete(error == null)
-        }
+    fun showPrivacyOptions(activity: Activity) {
+        if (configuredAppId(activity) == null) return
+        UserMessagingPlatform.showPrivacyOptionsForm(activity) { _ -> }
     }
 
     private fun initializeIfAllowed(
