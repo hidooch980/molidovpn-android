@@ -401,7 +401,7 @@ class AppUpdater(private val activity: Activity) {
         false
     }
 
-    /** Check the static mirrors first, then the GitHub release API, worker and configured mirrors. */
+    /** Check static GitHub mirrors, the canonical GitHub release API, then configured mirrors. */
     private fun latestRelease(): Release? = UpdateSources.latest(
         UpdateSources.releaseJsonUrls(ResilienceConfig.updateMirrors(activity)), appVersion(), UpdateSources::isNewerVersion, ::fetchRelease,
     )
