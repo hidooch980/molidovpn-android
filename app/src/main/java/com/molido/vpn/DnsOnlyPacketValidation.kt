@@ -63,7 +63,8 @@ internal object DnsOnlyPacketValidation {
                 0x00 -> {
                     cursor++
                     if (length == 0) {
-                            break
+                        if (nextOffset < 0) nextOffset = cursor
+                        break
                     }
                     if (length > MAX_LABEL_LENGTH || cursor + length > limit) return null
                     expandedLength += length + 1
@@ -74,7 +75,6 @@ internal object DnsOnlyPacketValidation {
                         labels.add(if (value in 65..90) value + 32 else value)
                     }
                     cursor += length
-                    if (nextOffset < 0) nextOffset = cursor
                 }
                 0xc0 -> {
                     if (!allowCompression || cursor + 1 >= limit || ++jumps > MAX_POINTER_JUMPS) return null
