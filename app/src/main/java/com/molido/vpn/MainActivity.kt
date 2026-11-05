@@ -1643,13 +1643,15 @@ class MainActivity : Activity() {
     private fun renderGamingShortcut() {
         val enabled = preferences().getBoolean(com.molido.vpn.engine.GamingQuality.PREF, false)
         homeGamingShortcut?.apply {
-            text = "🎮  " + gamingShortcutLabel()
+            text = "🎮  " + Strings.t("Gaming") + "\n" +
+                Strings.t(if (enabled) "On" else "Off")
             background = Sculpt.sculptedBackground(
                 resources.displayMetrics.density,
-                Sculpt.withAlpha(if (enabled) palette.violet else palette.surface, if (enabled) 0.22f else 1f),
-                14,
-                Sculpt.withAlpha(if (enabled) palette.violet else palette.divider, 0.55f),
+                Sculpt.withAlpha(if (enabled) palette.violet else palette.surface, if (enabled) 0.24f else 1f),
+                18,
+                Sculpt.withAlpha(if (enabled) palette.violet else palette.divider, if (enabled) 0.72f else 0.55f),
             )
+            setTextColor(if (enabled) palette.violetText else INK)
             contentDescription = Strings.t("Gaming optimization") + " · " +
                 Strings.t(if (enabled) "On" else "Off")
         }
@@ -1923,20 +1925,21 @@ class MainActivity : Activity() {
         // use the existing VPN permission and service lifecycle.
         // Added together with Gaming below in a compact two-action row.
 
-        // Dedicated Gaming control stays visible in Simple mode. It only
-        // toggles the existing secure Smart Connect scoring preference; DNS and
-        // tunnel security policy are unchanged.
-        val gamingShortcut = label("", 13f, INK, TypefaceStyle.MEDIUM).apply {
+        // Premium one-tap action card: one unmistakable primary action and
+        // one compact Gaming shortcut. The old split-heart artwork was decorative,
+        // hard to understand at a glance, and made both tap targets feel cramped.
+        val gamingShortcut = label("", 12.5f, INK, TypefaceStyle.MEDIUM).apply {
             gravity = Gravity.CENTER
-            minHeight = dp(42)
-            setPadding(dp(14), dp(7), dp(14), dp(7))
+            minHeight = dp(64)
+            setPadding(dp(6), dp(6), dp(6), dp(6))
+            maxLines = 2
             isClickable = true
             isFocusable = true
             background = Sculpt.sculptedBackground(
                 resources.displayMetrics.density,
-                Sculpt.withAlpha(palette.violet, 0.14f),
-                14,
-                Sculpt.withAlpha(palette.violet, 0.42f),
+                palette.surface,
+                18,
+                Sculpt.withAlpha(palette.violet, 0.55f),
             )
             setOnClickListener {
                 val enabled = !preferences().getBoolean(com.molido.vpn.engine.GamingQuality.PREF, false)
@@ -1953,46 +1956,32 @@ class MainActivity : Activity() {
         }
         homeGamingShortcut = gamingShortcut
         renderGamingShortcut()
-        // Split-heart primary control: left half connects, right half toggles Gaming.
-        val splitHeart = FrameLayout(this@MainActivity).apply {
-            layoutDirection = View.LAYOUT_DIRECTION_LTR
-            val heart = label("♥", 104f, Sculpt.withAlpha(palette.mint, 0.22f), TypefaceStyle.MEDIUM).apply {
-                gravity = Gravity.CENTER
-                includeFontPadding = false
-                textAlignment = View.TEXT_ALIGNMENT_CENTER
-            }
-            addView(heart, FrameLayout.LayoutParams(dp(176), dp(100), Gravity.CENTER))
-            val halves = LinearLayout(this@MainActivity).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER
-                layoutDirection = View.LAYOUT_DIRECTION_LTR
-                addView(label("⏻\n${Strings.t("Connect")}", 14f, palette.mint, TypefaceStyle.MEDIUM).apply {
-                    gravity = Gravity.CENTER
-                    textAlignment = View.TEXT_ALIGNMENT_CENTER
-                    isClickable = true
-                    isFocusable = true
-                    contentDescription = Strings.t("Connect")
-                    setOnClickListener { quickConnectButton.performClick() }
-                }, LinearLayout.LayoutParams(dp(88), dp(76)))
-                addView(gamingShortcut.apply {
-                    text = "🎮\n${Strings.t("Gaming")}"
-                    textSize = 13f
-                    setPadding(dp(4), dp(4), dp(4), dp(4))
-                    background = Sculpt.sculptedBackground(
-                        resources.displayMetrics.density,
-                        Sculpt.withAlpha(palette.violet, 0.22f),
-                        18,
-                        Sculpt.withAlpha(palette.violet, 0.65f),
-                    )
-                }, LinearLayout.LayoutParams(dp(88), dp(76)))
-            }
-            addView(halves, FrameLayout.LayoutParams(dp(184), dp(80), Gravity.CENTER))
-            contentDescription = Strings.t("Connect") + " / " + Strings.t("Gaming")
+
+        val heroActions = LinearLayout(this@MainActivity).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(8), dp(8), dp(8), dp(8))
+            background = Sculpt.sculptedBackground(
+                resources.displayMetrics.density,
+                palette.surface,
+                22,
+                Sculpt.withAlpha(palette.divider, 0.9f),
+            )
         }
-        addView(splitHeart, LinearLayout.LayoutParams(
+        quickConnectButton.minHeight = dp(64)
+        quickConnectButton.setPadding(dp(12), dp(8), dp(12), dp(8))
+        heroActions.addView(
+            quickConnectButton,
+            LinearLayout.LayoutParams(0, dp(64), 1f).apply { marginEnd = dp(8) },
+        )
+        heroActions.addView(
+            gamingShortcut,
+            LinearLayout.LayoutParams(dp(104), dp(64)),
+        )
+        addView(heroActions, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
-            dp(100),
-        ).apply { topMargin = dp(6) })
+            dp(80),
+        ).apply { topMargin = dp(8) })
 
         // Secondary destinations remain in Advanced mode; the full feature
         // catalogue is also available in the searchable navigation drawer.
