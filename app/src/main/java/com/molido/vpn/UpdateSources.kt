@@ -192,7 +192,7 @@ object UpdateSources {
     }
 
     /** Picks the APK for the first supported ABI that has one. Null = no compatible asset. */
-    fun parseRelease(text: String, abis: List<String>): Release? {
+    fun parseRelease(text: String, abis: List<String>, television: Boolean = false): Release? {
         val json = JSONObject(text)
         val version = json.getString("tag_name").removePrefix("v")
         if (!isValidReleaseVersion(version)) return null
@@ -201,7 +201,8 @@ object UpdateSources {
         val critical = json.optBoolean("critical", false) || body.contains("[critical]", ignoreCase = true)
         val notes = releaseNotes(body)
         for (abi in abis + "universal") {
-            val token = abiToken(abi)
+            val baseToken = abiToken(abi)
+            val token = if (television) "android-tv-${baseToken.removePrefix("android-")}" else baseToken
             for (i in 0 until assets.length()) {
                 val asset = assets.getJSONObject(i)
                 val name = asset.getString("name")
