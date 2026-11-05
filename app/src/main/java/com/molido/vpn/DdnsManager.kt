@@ -51,7 +51,7 @@ internal object DdnsManager {
     )
 
     fun summary(context: Context): String =
-        load(context)?.let { "${it.provider.label} · ${it.hostname}" } ?: Strings.t("Not configured")
+        runCatching { load(context) }.getOrNull()?.let { "${it.provider.label} · ${it.hostname}" } ?: Strings.t("Not configured")
 
     fun show(context: Context) {
         val saved = runCatching { load(context) }.getOrNull()
@@ -139,7 +139,7 @@ internal object DdnsManager {
         update(config)
     }
 
-    private fun validate(config: Config) {
+    internal fun validate(config: Config) {
         require(config.hostname.length in 4..253) { "Enter a valid DDNS hostname." }
         require(config.hostname.matches(Regex("(?i)^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$")) &&
             !config.hostname.contains("..") && config.hostname.contains('.')) { "Hostname is invalid." }
