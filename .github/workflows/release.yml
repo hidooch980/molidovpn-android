@@ -143,7 +143,7 @@ jobs:
           AETHERY_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           chmod +x gradlew
-          ./gradlew testMobileReleaseUnitTest testTvReleaseUnitTest assembleMobileRelease assembleTvRelease --no-daemon --stacktrace --info \
+          ./gradlew testMobileReleaseUnitTest testTvReleaseUnitTest assembleMobileRelease assembleTvRelease --no-daemon --stacktrace --info --max-workers=2 \
             -PtargetAbi=arm64-v8a,armeabi-v7a \
             -PaetheryKeystore=release.keystore \
             -PmolidoVersionCode=$((400000 + VERSION_CODE)) \
