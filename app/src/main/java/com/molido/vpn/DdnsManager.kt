@@ -141,14 +141,22 @@ internal object DdnsManager {
 
     internal fun validate(config: Config) {
         require(config.hostname.length in 4..253) { "Enter a valid DDNS hostname." }
-        require(config.hostname.matches(Regex("(?i)^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$")) &&
-            !config.hostname.contains("..") && config.hostname.contains('.')) { "Hostname is invalid." }
+        val labels = config.hostname.split('.')
+        require(labels.size >= 2 && labels.all { label ->
+            label.length in 1..63 &&
+                label.first().isLetterOrDigit() &&
+                label.last().isLetterOrDigit() &&
+                label.all { it.isLetterOrDigit() || it == '-' } &&
+                itIsAscii(label)
+        }) { "Hostname must use valid ASCII DNS labels (letters, digits and internal hyphens only)." }
         require(config.token.length in 8..512) { "Enter a valid provider token or password." }
         if (config.provider == Provider.CLOUDFLARE) {
             require(config.zoneId.matches(Regex("^[a-fA-F0-9]{32}$"))) { "Cloudflare Zone ID must be 32 hexadecimal characters." }
             require(config.recordId.matches(Regex("^[a-fA-F0-9]{32}$"))) { "Cloudflare DNS Record ID must be 32 hexadecimal characters." }
         }
     }
+
+    private fun itIsAscii(label: String): Boolean = label.all { it.code in 0x30..0x39 || it.code in 0x41..0x5A || it.code in 0x61..0x7A || it == '-' }
 
     private fun update(config: Config) {
         validate(config)
