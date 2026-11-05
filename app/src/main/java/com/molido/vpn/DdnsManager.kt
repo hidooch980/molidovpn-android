@@ -135,7 +135,7 @@ internal object DdnsManager {
     }
 
     fun updateSaved(context: Context): Result<Unit> = runCatching {
-        val config = load(context) ?: error("DDNS is not configured")
+        val config = load(context) ?: return@runCatching
         update(config)
     }
 
@@ -164,7 +164,7 @@ internal object DdnsManager {
                     connection.requestMethod = "GET"
                     connection.connectTimeout = CONNECT_TIMEOUT_MS
                     connection.readTimeout = READ_TIMEOUT_MS
-                    connection.setRequestProperty("User-Agent", "MolidoVPN-DDNS/1.0 support@molido.invalid")
+                    connection.setRequestProperty("User-Agent", "MolidoVPN-DDNS/1.0")
                     val credentials = config.token.split(":", limit = 2)
                     require(credentials.size == 2 && credentials.all { it.isNotBlank() }) { "For No-IP, enter username:password in the credential field." }
                     val auth = Base64.encodeToString(config.token.toByteArray(StandardCharsets.UTF_8), Base64.NO_WRAP)
