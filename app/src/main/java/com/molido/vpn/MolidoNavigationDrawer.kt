@@ -2,7 +2,9 @@ package com.molido.vpn
 
 import android.app.Activity
 import android.app.Dialog
+import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
+import android.graphics.drawable.GradientDrawable
 import android.text.Editable
 import android.text.TextWatcher
 import android.view.Gravity
@@ -15,6 +17,10 @@ import android.widget.ScrollView
 import android.widget.TextView
 import java.util.Locale
 
+/**
+ * Searchable premium navigation drawer. Entries still invoke the exact actions
+ * supplied by MainActivity; this class only owns presentation and filtering.
+ */
 class MolidoNavigationDrawer(
     private val activity: Activity,
     private val palette: AppAppearance.Palette,
@@ -34,10 +40,17 @@ class MolidoNavigationDrawer(
     private fun label(value: String, strong: Boolean = false) =
         TextView(activity).apply {
             text = value
-            textSize = if (strong) 16f else 13f
+            textSize = if (strong) 15.5f else 12.5f
             setTextColor(if (strong) palette.ink else palette.muted)
-            typeface = Typefaces.regular(activity)
+            typeface = if (strong) Typefaces.medium(activity) else Typefaces.regular(activity)
         }
+
+    private fun cardBackground() = Sculpt.sculptedBackground(
+        activity.resources.displayMetrics.density,
+        palette.surface,
+        15,
+        stroke = Sculpt.withAlpha(palette.divider, 0.8f),
+    )
 
     init {
         requestWindowFeature(Window.FEATURE_NO_TITLE)
@@ -46,37 +59,81 @@ class MolidoNavigationDrawer(
             layoutDirection = if (AppLanguage.isRtl())
                 View.LAYOUT_DIRECTION_RTL else View.LAYOUT_DIRECTION_LTR
             setBackgroundColor(palette.canvas)
-            setPadding(dp(16), dp(16), dp(16), dp(12))
+            setPadding(dp(16), dp(14), dp(16), dp(12))
         }
+
         val header = LinearLayout(activity).apply {
             gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, dp(2), 0, dp(12))
         }
-        header.addView(label("MOLIDO VPN", true),
-            LinearLayout.LayoutParams(0, dp(48), 1f))
+        val mark = TextView(activity).apply {
+            text = "M"
+            textSize = 20f
+            gravity = Gravity.CENTER
+            setTextColor(Color.WHITE)
+            typeface = Typefaces.extraBold(activity)
+            background = GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                intArrayOf(palette.primary, palette.violet),
+            ).apply { cornerRadius = dp(15).toFloat() }
+        }
+        header.addView(mark, LinearLayout.LayoutParams(dp(46), dp(46)))
+        val brand = LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_VERTICAL
+            addView(label("MOLIDO MESH AI", true).apply {
+                textSize = 16f
+                letterSpacing = 0.07f
+            })
+            addView(label("SECURE NETWORK  ·  $version").apply {
+                textSize = 9.5f
+                letterSpacing = 0.035f
+                setPadding(0, dp(2), 0, 0)
+            })
+        }
+        header.addView(brand, LinearLayout.LayoutParams(0, -2, 1f).apply {
+            marginStart = dp(11)
+        })
         header.addView(label("×", true).apply {
+            textSize = 24f
             gravity = Gravity.CENTER
             contentDescription = Strings.t("Close")
             isFocusable = true
+            background = cardBackground()
             setOnClickListener { dismiss() }
-        }, LinearLayout.LayoutParams(dp(48), dp(48)))
+        }, LinearLayout.LayoutParams(dp(42), dp(42)))
         root.addView(header)
 
         val search = EditText(activity).apply {
             hint = Strings.t("Search menus")
-            textSize = 16f
+            textSize = 14f
             setSingleLine(true)
             setTextColor(palette.ink)
             setHintTextColor(palette.muted)
             typeface = Typefaces.regular(activity)
+            background = cardBackground()
+            setPadding(dp(14), 0, dp(14), 0)
+            imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH
         }
-        root.addView(search, LinearLayout.LayoutParams(-1, dp(52)))
+        root.addView(search, LinearLayout.LayoutParams(-1, dp(50)).apply {
+            bottomMargin = dp(10)
+        })
+
         val list = LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
+            clipToPadding = false
+            setPadding(0, dp(2), 0, dp(8))
         }
-        root.addView(ScrollView(activity).apply { addView(list) },
-            LinearLayout.LayoutParams(-1, 0, 1f))
-        root.addView(label("MolidoVPN · $version").apply {
+        root.addView(ScrollView(activity).apply {
+            isVerticalScrollBarEnabled = false
+            overScrollMode = View.OVER_SCROLL_NEVER
+            addView(list)
+        }, LinearLayout.LayoutParams(-1, 0, 1f))
+
+        root.addView(label("MolidoVPN  ·  $version").apply {
             gravity = Gravity.CENTER
+            textSize = 10f
+            setPadding(0, dp(10), 0, 0)
         })
 
         fun normalize(s: String) = s.lowercase(Locale.ROOT)
@@ -89,29 +146,53 @@ class MolidoNavigationDrawer(
                 normalize(it.title + " " + it.detail + " " + it.group).contains(q)
             }
             matches.groupBy { it.group }.forEach { (group, items) ->
-                list.addView(label(group).apply {
-                    setPadding(dp(8), dp(20), dp(8), dp(8))
+                list.addView(label("✦  $group", true).apply {
+                    textSize = 11f
+                    setTextColor(palette.primaryText)
+                    setPadding(dp(7), dp(15), dp(7), dp(8))
                 })
                 items.forEach { entry ->
-                    list.addView(LinearLayout(activity).apply {
-                        orientation = LinearLayout.VERTICAL
-                        minimumHeight = dp(64)
+                    val row = LinearLayout(activity).apply {
+                        orientation = LinearLayout.HORIZONTAL
                         gravity = Gravity.CENTER_VERTICAL
-                        setPadding(dp(12), dp(10), dp(12), dp(10))
+                        minimumHeight = dp(58)
+                        setPadding(dp(14), dp(10), dp(12), dp(10))
+                        background = cardBackground()
+                        isClickable = true
                         isFocusable = true
-                        addView(label(entry.title, true))
-                        if (entry.detail.isNotEmpty())
-                            addView(label(entry.detail))
+                        contentDescription = entry.title
                         setOnClickListener {
                             dismiss()
                             entry.action()
                         }
-                    }, LinearLayout.LayoutParams(-1,
-                        ViewGroup.LayoutParams.WRAP_CONTENT))
+                    }
+                    val copy = LinearLayout(activity).apply {
+                        orientation = LinearLayout.VERTICAL
+                        gravity = Gravity.CENTER_VERTICAL
+                        addView(label(entry.title, true))
+                        if (entry.detail.isNotEmpty()) {
+                            addView(label(entry.detail).apply {
+                                setPadding(0, dp(3), 0, 0)
+                            })
+                        }
+                    }
+                    row.addView(copy, LinearLayout.LayoutParams(0, -2, 1f))
+                    row.addView(label("›", true).apply {
+                        textSize = 22f
+                        setTextColor(palette.primaryText)
+                        gravity = Gravity.CENTER
+                    }, LinearLayout.LayoutParams(dp(24), dp(32)))
+                    list.addView(row, LinearLayout.LayoutParams(-1, -2).apply {
+                        bottomMargin = dp(7)
+                    })
                 }
             }
-            if (matches.isEmpty())
-                list.addView(label(Strings.t("No matching menu")))
+            if (matches.isEmpty()) {
+                list.addView(label(Strings.t("No matching menu")).apply {
+                    gravity = Gravity.CENTER
+                    setPadding(0, dp(28), 0, dp(28))
+                })
+            }
         }
 
         search.addTextChangedListener(object : TextWatcher {
@@ -123,11 +204,12 @@ class MolidoNavigationDrawer(
         })
         render("")
         setContentView(root)
-        window?.setBackgroundDrawable(ColorDrawable(palette.canvas))
-        window?.setGravity(Gravity.RIGHT)
+        window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+        window?.setGravity(Gravity.END)
+        setCanceledOnTouchOutside(true)
         setOnShowListener {
             window?.setLayout(
-                minOf(dp(360), (activity.resources.displayMetrics.widthPixels * .9f).toInt()),
+                minOf(dp(380), (activity.resources.displayMetrics.widthPixels * .92f).toInt()),
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
             root.isFocusableInTouchMode = true

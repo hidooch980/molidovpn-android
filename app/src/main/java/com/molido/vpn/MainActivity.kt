@@ -62,6 +62,7 @@ class MainActivity : Activity() {
     private lateinit var orbitDial: OrbitDialView
     private lateinit var connectionTitle: TextView
     private lateinit var connectionDetail: TextView
+    private lateinit var quickConnectButton: TextView
     private lateinit var chipLatency: TextView
     private lateinit var chipProtocol: TextView
     private lateinit var tileDown: MetricTile
@@ -106,6 +107,7 @@ class MainActivity : Activity() {
     private var selectedProtocol = Protocol.AUTO
     /** Home-screen DNS chip under the rail; opens the same sheet as Settings. */
     private var homeDnsChip: TextView? = null
+    private var homeGamingShortcut: TextView? = null
 
     // Simple / Advanced home and collapsible settings.
     private var homeAdvancedBox: LinearLayout? = null
@@ -638,6 +640,21 @@ class MainActivity : Activity() {
             maxLines = 2
             ellipsize = android.text.TextUtils.TruncateAt.END
         }
+        quickConnectButton = label("", 16f, Color.WHITE, TypefaceStyle.MEDIUM).apply {
+            gravity = Gravity.CENTER
+            minHeight = dp(56)
+            setPadding(dp(18), dp(8), dp(18), dp(8))
+            letterSpacing = 0.015f
+            elevation = dp(3).toFloat()
+            isClickable = true
+            isFocusable = true
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+            setOnClickListener {
+                performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+                toggleTunnel()
+            }
+        }
+        renderQuickConnectButton()
         chipLatency = label(Strings.t("Latency —"), 12f, MUTED, TypefaceStyle.MEDIUM).apply {
             typeface = Typefaces.numeric(this@MainActivity)
             gravity = Gravity.CENTER
@@ -1535,6 +1552,50 @@ class MainActivity : Activity() {
             addView(statusPillText)
         }
         addView(statusPill)
+        addView(label("⚙", 20f, INK, TypefaceStyle.MEDIUM).apply {
+            gravity = Gravity.CENTER
+            contentDescription = Strings.t("Settings")
+            isFocusable = true
+            background = roundedBackground(SURFACE, 15, palette.divider)
+            setOnClickListener { openSettingsScreen() }
+        }, LinearLayout.LayoutParams(dp(42), dp(42)).apply {
+            marginStart = dp(8)
+        })
+    }
+
+    /** Keeps the large quick-action button truthful for every tunnel state. */
+    private fun renderQuickConnectButton() {
+        if (!::quickConnectButton.isInitialized) return
+        val (key, start, end) = when (visualState) {
+            OrbitDialView.State.CONNECTED, OrbitDialView.State.DEGRADED ->
+                Triple("Disconnect", palette.danger, palette.violet)
+            OrbitDialView.State.CONNECTING ->
+                Triple("Cancel connection", palette.amber, palette.primary)
+            OrbitDialView.State.FAILED ->
+                Triple("Try again", palette.primary, palette.violet)
+            OrbitDialView.State.DISCONNECTED ->
+                Triple("Quick connect", palette.primary, palette.violet)
+        }
+        quickConnectButton.text = "⏻   " + Strings.t(key)
+        quickConnectButton.contentDescription = Strings.t(key)
+        quickConnectButton.background = GradientDrawable(
+            GradientDrawable.Orientation.LEFT_RIGHT,
+            intArrayOf(start, end),
+        ).apply {
+            cornerRadius = dp(18).toFloat()
+            setStroke(dp(1), Sculpt.withAlpha(Color.WHITE, 0.30f))
+        }
+        quickConnectButton.setTextColor(Color.WHITE)
+        quickConnectButton.alpha =
+            if (visualState == OrbitDialView.State.CONNECTING) 0.94f else 1f
+    }
+
+    private fun gamingShortcutLabel(): String =
+        Strings.t("Gaming optimization") + " · " +
+            Strings.t(if (preferences().getBoolean(com.molido.vpn.engine.GamingQuality.PREF, false)) "On" else "Off")
+
+    private fun renderGamingShortcut() {
+        homeGamingShortcut?.text = "🎮  " + gamingShortcutLabel()
     }
 
     private fun railLabel(protocol: Protocol): String = when (protocol) {
@@ -1586,6 +1647,7 @@ class MainActivity : Activity() {
                 }
             )
         }
+        renderQuickConnectButton()
     }
 
     /**
@@ -1798,6 +1860,62 @@ class MainActivity : Activity() {
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.WRAP_CONTENT,
         ).apply { topMargin = detailGap })
+
+        // A dedicated, accessible one-tap action complements the animated dial.
+        // It follows the same toggle path, so connect, cancel and disconnect all
+        // use the existing VPN permission and service lifecycle.
+        addView(quickConnectButton, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            dp(56),
+        ).apply { topMargin = dp(12) })
+
+        // Three high-frequency destinations stay on the home screen; the full
+        // feature catalogue remains in the searchable navigation drawer.
+        val quickActions = LinearLayout(this@MainActivity).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+        }
+        fun quickAction(title: String, glyph: String, action: () -> Unit): TextView =
+            label("$glyph  $title", 11.5f, INK, TypefaceStyle.MEDIUM).apply {
+                gravity = Gravity.CENTER
+                minHeight = dp(42)
+                setPadding(dp(4), dp(6), dp(4), dp(6))
+                maxLines = 1
+                ellipsize = android.text.TextUtils.TruncateAt.END
+                background = Sculpt.sculptedBackground(
+                    resources.displayMetrics.density, palette.surface, 13,
+                    stroke = Sculpt.withAlpha(palette.divider, 0.8f),
+                )
+                isClickable = true
+                isFocusable = true
+                setOnClickListener { action() }
+            }
+        quickActions.addView(quickAction(Strings.t("Country"), "◎") {
+            showCountryPicker { homeLocationCard?.text = locationCardText() }
+        }, LinearLayout.LayoutParams(0, dp(44), 1f).apply { marginEnd = dp(6) })
+        lateinit var gamingShortcut: TextView
+        gamingShortcut = quickAction(gamingShortcutLabel(), "🎮") {
+            val enabled = !preferences().getBoolean(com.molido.vpn.engine.GamingQuality.PREF, false)
+            preferences().edit()
+                .putBoolean(com.molido.vpn.engine.GamingQuality.PREF, enabled)
+                .apply()
+            ConnectionLog.record(
+                "Secure gaming route scoring " + (if (enabled) "on" else "off") +
+                    " — applies on the next Smart Connect run; DNS stays tunnel-routed"
+            )
+            renderGamingShortcut()
+            toastShort(Strings.t(if (enabled) "Gaming optimization enabled" else "Gaming optimization disabled"))
+        }
+        homeGamingShortcut = gamingShortcut
+        quickActions.addView(gamingShortcut, LinearLayout.LayoutParams(0, dp(44), 1f).apply {
+            marginStart = dp(2); marginEnd = dp(2)
+        })
+        quickActions.addView(quickAction(Strings.t("Traffic monitor"), "↗") {
+            openTrafficMonitorScreen()
+        }, LinearLayout.LayoutParams(0, dp(44), 1f).apply { marginStart = dp(6) })
+        addView(quickActions, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(44),
+        ).apply { topMargin = dp(8) })
 
         val chipLine = LinearLayout(this@MainActivity).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -3932,6 +4050,7 @@ class MainActivity : Activity() {
                 "Secure gaming route scoring " + (if (enabled) "on" else "off") +
                     " — applies on the next Smart Connect run; DNS stays tunnel-routed"
             )
+            renderGamingShortcut()
         }, mainParams())
         // The switch this writes existed before, fed only the removed proxy mode's
         // SOCKS bind, and was deleted because in VPN mode it changed nothing the

@@ -94,7 +94,7 @@ class AppUpdater(private val activity: Activity) {
                             !UpdateSources.isNewerVersion(found.version, appVersion()) ->
                                 showMessage(Strings.t("You're up to date"), Strings.tf("MolidoVPN %s is installed", appVersion()))
                             else -> {
-                                publishHomeUpdate(found, ready = readyApk?.exists() == true)
+                                publishHomeUpdate(found, ready = availableRelease?.version == found.version && readyApk?.exists() == true)
                                 if (readyApk?.exists() == true) announceReady(found, readyApk!!) else announceUpdate(found)
                             }
                         }
