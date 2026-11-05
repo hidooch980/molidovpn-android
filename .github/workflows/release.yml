@@ -193,7 +193,7 @@ jobs:
           legacy_url="https://github.com/hidooch980/molidovpn-android/releases/download/v3.3.60/MolidoMeshAI-android-arm64.apk"
           curl --fail --location --retry 3 --silent --show-error "$legacy_url" -o baseline-v3.3.60.apk
           "$APKSIGNER" verify --verbose baseline-v3.3.60.apk
-          legacy_cert=$("$APKSIGNER" verify --print-certs baseline-v3.3.60.apk | \\
+          legacy_cert=$("$APKSIGNER" verify --print-certs baseline-v3.3.60.apk | \
             awk -F': ' '/Signer #1 certificate SHA-256 digest:/ {print tolower($2); exit}')
           test -n "$legacy_cert"
           if [[ "$legacy_cert" != "$expected_cert" ]]; then
