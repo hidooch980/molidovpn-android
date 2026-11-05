@@ -609,6 +609,7 @@ class MainActivity : Activity() {
         // every launch is how the job gets re-registered after an app update — a
         // package replace clears JobScheduler's registrations for the app.
         ShardRefreshJob.schedule(this)
+        DdnsRefreshJob.schedule(this)
         // And one opportunistic refresh now. The job's window is up to six hours
         // wide; someone who installs the app and taps SHARD immediately should not
         // have to wait for it. Returns without I/O if the list is already fresh.
@@ -3986,6 +3987,7 @@ class MainActivity : Activity() {
         ).apply { topMargin = dp(top) }
         content.addView(sectionLabel(Strings.t("Main settings")), mainParams(0))
         content.addView(navRow(Strings.t("Language"), AppLanguage.label(currentLanguagePref())) { chooseLanguage() }, mainParams(10))
+        content.addView(navRow(Strings.t("Dynamic DNS (DDNS)"), DdnsManager.summary(this)) { DdnsManager.show(this) }, mainParams())
         content.addView(createToggleRow(
             Strings.t("Live updates (5 s)"),
             Strings.t("Refresh lists without interrupting the tunnel"),

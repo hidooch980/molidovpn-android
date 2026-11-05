@@ -9,7 +9,7 @@ internal object LocalizedStrings {
     private val arabic = mapOf(
         "Connect" to "اتصال", "Disconnect" to "قطع الاتصال", "Connected" to "متصل",
         "Disconnected" to "غير متصل", "Connecting…" to "جارٍ الاتصال…",
-        "Settings" to "الإعدادات", "Language" to "اللغة", "Follow system" to "اتباع لغة النظام",
+        "Settings" to "الإعدادات", "Language" to "اللغة", "Dynamic DNS (DDNS)" to "نظام DNS الديناميكي", "Not configured" to "غير مُعدّ", "Follow system" to "اتباع لغة النظام",
         "English" to "الإنجليزية",
         "Uses a supported device language; English otherwise" to "استخدام لغة الجهاز المدعومة؛ وإلا فالإنجليزية", "فارسی" to "الفارسية", "中文" to "الصينية",
         "Arabic" to "العربية", "Turkish" to "التركية", "VPN" to "الشبكة الخاصة الافتراضية",
@@ -41,7 +41,7 @@ internal object LocalizedStrings {
     private val turkish = mapOf(
         "Connect" to "Bağlan", "Disconnect" to "Bağlantıyı kes", "Connected" to "Bağlandı",
         "Disconnected" to "Bağlantı kesildi", "Connecting…" to "Bağlanıyor…",
-        "Settings" to "Ayarlar", "Language" to "Dil", "Follow system" to "Sistem dilini kullan",
+        "Settings" to "Ayarlar", "Language" to "Dil", "Dynamic DNS (DDNS)" to "Dinamik DNS", "Not configured" to "Yapılandırılmadı", "Follow system" to "Sistem dilini kullan",
         "English" to "İngilizce",
         "Uses a supported device language; English otherwise" to "Desteklenen cihaz dili kullanılır; aksi hâlde İngilizce", "فارسی" to "Farsça", "中文" to "Çince",
         "Arabic" to "Arapça", "Turkish" to "Türkçe", "VPN" to "VPN",

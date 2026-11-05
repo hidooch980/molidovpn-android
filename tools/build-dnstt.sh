@@ -16,6 +16,7 @@ ABIS="arm64-v8a,armeabi-v7a"
 [ "${1:-}" = "--abi" ] && ABIS="$2"
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+OUT_ROOT="${DNSTT_OUTPUT_DIR:-$ROOT/app/src/main/jniLibs}"
 NDK="${ANDROID_NDK_HOME:-${ANDROID_HOME:-}/ndk/26.3.11579264}"
 TC="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
 [ -x "$TC/clang" ] || { echo "NDK not found at $NDK (set ANDROID_NDK_HOME)"; exit 1; }
@@ -35,7 +36,7 @@ for abi in "${LIST[@]}"; do
     x86_64)      GOARCH=amd64; GOARM=;  CC="$TC/x86_64-linux-android26-clang" ;;
     *) echo "skip unknown ABI $abi"; continue ;;
   esac
-  out="$ROOT/app/src/main/jniLibs/$abi/libdnstt.so"
+  out="$OUT_ROOT/$abi/libdnstt.so"
   mkdir -p "$(dirname "$out")"
   (cd "$WORK/dnstt/dnstt-client" && \
     GOFLAGS=-mod=readonly CGO_ENABLED=1 GOOS=android GOARCH=$GOARCH GOARM=$GOARM CC="$CC" \
