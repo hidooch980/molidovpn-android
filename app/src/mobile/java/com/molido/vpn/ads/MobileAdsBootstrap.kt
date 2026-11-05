@@ -51,6 +51,9 @@ object MobileAdsBootstrap {
         )
     }
 
+    @JvmStatic
+    fun isConfigured(activity: Activity): Boolean = configuredAppId(activity) != null
+
     /** Call from a visible, user-initiated Privacy choices setting. */
     @JvmStatic
     fun showPrivacyOptions(activity: Activity) {
