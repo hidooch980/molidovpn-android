@@ -176,6 +176,11 @@ object UpdateSources {
 
     private val HEX64 = Regex("^[0-9a-f]{64}$")
 
+    /** Fail closed when release metadata omits or corrupts the expected APK digest. */
+    fun matchesSha256(expected: String?, actual: String): Boolean =
+        expected != null && HEX64.matches(expected.lowercase()) && HEX64.matches(actual.lowercase()) &&
+            MessageDigest.isEqual(expected.lowercase().toByteArray(Charsets.US_ASCII), actual.lowercase().toByteArray(Charsets.US_ASCII))
+
     /** `"digest": "sha256:<hex>"` (GitHub) or `"sha256": "<hex>"` (our mirrors); null when absent/invalid. */
     fun assetSha256(asset: JSONObject): String? {
         val raw = asset.optString("sha256", "").ifEmpty {
