@@ -11,8 +11,8 @@ import java.net.URI
  * Where the in-app updater looks, and how it checks what it got. Pure (unit tested); the network
  * and PackageManager parts stay in [AppUpdater].
  *
- * Order: static subscription mirrors → GitHub API → our update worker → configured mirrors
- * ([ResilienceConfig.updateMirrors], e.g. a second worker, R2 or ArvanCloud). A mirror is a plain
+ * Order: static GitHub mirrors → GitHub Releases API → configured mirrors
+ * ([ResilienceConfig.updateMirrors], e.g. R2 or ArvanCloud). A mirror is a plain
  * folder holding `latest.json` (GitHub "latest release" shape) next to the APK files.
  *
  * Trust: a mirror is never trusted. The APK must (1) include a valid SHA-256 in release metadata
@@ -32,7 +32,6 @@ object UpdateSources {
         (declaredBytes < 0L || declaredBytes <= MAX_APK_BYTES) &&
             receivedBytes in 0L..MAX_APK_BYTES
 
-    const val WORKER_RELEASE_URL = "https://molido-sub.hidooch980.workers.dev/app/latest.json"
     const val GITHUB_RELEASE_URL = "https://api.github.com/repos/hidooch980/molidovpn-android/releases/latest"
 
     data class Release(
