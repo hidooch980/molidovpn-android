@@ -111,6 +111,8 @@ class MainActivity : Activity() {
 
     // Simple / Advanced home and collapsible settings.
     private var homeAdvancedBox: LinearLayout? = null
+    private var homeQuickActions: LinearLayout? = null
+    private var homeTelemetryLine: LinearLayout? = null
     private var homeLocationCard: TextView? = null
     private var homeRetryButton: TextView? = null
     private var homeSupportButton: TextView? = null
@@ -1578,13 +1580,17 @@ class MainActivity : Activity() {
         }
         quickConnectButton.text = "⏻   " + Strings.t(key)
         quickConnectButton.contentDescription = Strings.t(key)
+        // A restrained 3D surface: a lit upper edge, deep lower gradient and
+        // real elevation. Keep this effect on the primary action only.
         quickConnectButton.background = GradientDrawable(
-            GradientDrawable.Orientation.LEFT_RIGHT,
-            intArrayOf(start, end),
+            GradientDrawable.Orientation.TOP_BOTTOM,
+            intArrayOf(Sculpt.lighten(start, 0.22f), start, end),
         ).apply {
-            cornerRadius = dp(18).toFloat()
-            setStroke(dp(1), Sculpt.withAlpha(Color.WHITE, 0.30f))
+            cornerRadius = dp(20).toFloat()
+            setStroke(dp(1), Sculpt.withAlpha(Color.WHITE, 0.38f))
         }
+        quickConnectButton.elevation = dp(9).toFloat()
+        quickConnectButton.translationZ = dp(2).toFloat()
         quickConnectButton.setTextColor(Color.WHITE)
         quickConnectButton.alpha =
             if (visualState == OrbitDialView.State.CONNECTING) 0.94f else 1f
@@ -1595,7 +1601,18 @@ class MainActivity : Activity() {
             Strings.t(if (preferences().getBoolean(com.molido.vpn.engine.GamingQuality.PREF, false)) "On" else "Off")
 
     private fun renderGamingShortcut() {
-        homeGamingShortcut?.text = "🎮  " + gamingShortcutLabel()
+        val enabled = preferences().getBoolean(com.molido.vpn.engine.GamingQuality.PREF, false)
+        homeGamingShortcut?.apply {
+            text = "🎮  " + gamingShortcutLabel()
+            background = Sculpt.sculptedBackground(
+                resources.displayMetrics.density,
+                Sculpt.withAlpha(if (enabled) palette.violet else palette.surface, if (enabled) 0.22f else 1f),
+                14,
+                Sculpt.withAlpha(if (enabled) palette.violet else palette.divider, 0.55f),
+            )
+            contentDescription = Strings.t("Gaming optimization") + " · " +
+                Strings.t(if (enabled) "On" else "Off")
+        }
     }
 
     private fun railLabel(protocol: Protocol): String = when (protocol) {
@@ -1869,8 +1886,43 @@ class MainActivity : Activity() {
             dp(56),
         ).apply { topMargin = dp(12) })
 
-        // Three high-frequency destinations stay on the home screen; the full
-        // feature catalogue remains in the searchable navigation drawer.
+        // Dedicated Gaming control stays visible in Simple mode. It only
+        // toggles the existing secure Smart Connect scoring preference; DNS and
+        // tunnel security policy are unchanged.
+        val gamingShortcut = label("", 13f, INK, TypefaceStyle.MEDIUM).apply {
+            gravity = Gravity.CENTER
+            minHeight = dp(42)
+            setPadding(dp(14), dp(7), dp(14), dp(7))
+            isClickable = true
+            isFocusable = true
+            background = Sculpt.sculptedBackground(
+                resources.displayMetrics.density,
+                Sculpt.withAlpha(palette.violet, 0.14f),
+                14,
+                Sculpt.withAlpha(palette.violet, 0.42f),
+            )
+            setOnClickListener {
+                val enabled = !preferences().getBoolean(com.molido.vpn.engine.GamingQuality.PREF, false)
+                preferences().edit()
+                    .putBoolean(com.molido.vpn.engine.GamingQuality.PREF, enabled)
+                    .apply()
+                ConnectionLog.record(
+                    "Secure gaming route scoring " + (if (enabled) "on" else "off") +
+                        " — applies on the next Smart Connect run; DNS stays tunnel-routed"
+                )
+                renderGamingShortcut()
+                toastShort(Strings.t(if (enabled) "Gaming optimization enabled" else "Gaming optimization disabled"))
+            }
+        }
+        homeGamingShortcut = gamingShortcut
+        renderGamingShortcut()
+        addView(gamingShortcut, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            dp(42),
+        ).apply { topMargin = dp(8) })
+
+        // Secondary destinations remain in Advanced mode; the full feature
+        // catalogue is also available in the searchable navigation drawer.
         val quickActions = LinearLayout(this@MainActivity).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
@@ -1893,26 +1945,10 @@ class MainActivity : Activity() {
         quickActions.addView(quickAction(Strings.t("Country"), "◎") {
             showCountryPicker { homeLocationCard?.text = locationCardText() }
         }, LinearLayout.LayoutParams(0, dp(44), 1f).apply { marginEnd = dp(6) })
-        lateinit var gamingShortcut: TextView
-        gamingShortcut = quickAction(gamingShortcutLabel(), "🎮") {
-            val enabled = !preferences().getBoolean(com.molido.vpn.engine.GamingQuality.PREF, false)
-            preferences().edit()
-                .putBoolean(com.molido.vpn.engine.GamingQuality.PREF, enabled)
-                .apply()
-            ConnectionLog.record(
-                "Secure gaming route scoring " + (if (enabled) "on" else "off") +
-                    " — applies on the next Smart Connect run; DNS stays tunnel-routed"
-            )
-            renderGamingShortcut()
-            toastShort(Strings.t(if (enabled) "Gaming optimization enabled" else "Gaming optimization disabled"))
-        }
-        homeGamingShortcut = gamingShortcut
-        quickActions.addView(gamingShortcut, LinearLayout.LayoutParams(0, dp(44), 1f).apply {
-            marginStart = dp(2); marginEnd = dp(2)
-        })
         quickActions.addView(quickAction(Strings.t("Traffic monitor"), "↗") {
             openTrafficMonitorScreen()
         }, LinearLayout.LayoutParams(0, dp(44), 1f).apply { marginStart = dp(6) })
+        homeQuickActions = quickActions
         addView(quickActions, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, dp(44),
         ).apply { topMargin = dp(8) })
@@ -1926,6 +1962,7 @@ class MainActivity : Activity() {
             addView(label("  ·  ", 12f, Sculpt.withAlpha(MUTED, 0.5f)))
             addView(chipProtocol)
         }
+        homeTelemetryLine = chipLine
         addView(chipLine, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.WRAP_CONTENT,
             ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -2176,6 +2213,10 @@ class MainActivity : Activity() {
     private fun applyHomeMode() {
         val simple = homeSimple()
         homeAdvancedBox?.visibility = if (simple) View.GONE else View.VISIBLE
+        // Keep the first screen focused on one action. Discovery shortcuts and
+        // technical readouts remain available in Advanced mode / the navigation drawer.
+        homeQuickActions?.visibility = if (simple) View.GONE else View.VISIBLE
+        homeTelemetryLine?.visibility = if (simple) View.GONE else View.VISIBLE
         homeLocationCard?.visibility = if (simple) View.VISIBLE else View.GONE
         homeLocationCard?.text = locationCardText()
         homeAdvancedLink?.text = if (simple) Strings.t("Advanced mode") else Strings.t("Simple mode")

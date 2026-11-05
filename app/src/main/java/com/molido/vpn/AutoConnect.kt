@@ -83,7 +83,7 @@ class BootReceiver : BroadcastReceiver() {
             AutoConnect.connect(app)
         } catch (e: Exception) {
             // Background FGS start restrictions or similar: never crash on boot.
-            Log.w("AutoConnect", "Boot auto-connect failed: ${e.message}")
+            Log.w("AutoConnect", LogRedactor.redact("Boot auto-connect failed: ${e.message}"))
         }
     }
 }

@@ -298,10 +298,24 @@ object LogRedactor {
      */
     private val WG_KEY = Regex("(?<![A-Za-z0-9+/])[A-Za-z0-9+/]{43}=")
 
+    /** Credentials may arrive in exception messages or native event payloads. */
+    private val SECRET_FIELD = Regex(
+        """(?i)(?<![A-Za-z0-9_])(["']?(?:authorization|proxy-authorization|password|passwd|passphrase|token|access[_-]?token|refresh[_-]?token|api[_-]?key|secret|client[_-]?secret|private[_-]?key|credential)["']?\s*[:=]\s*)(?:"[^"]*"|'[^']*'|(?:bearer|basic)\s+\S+|\S+)"""
+    )
+
+    /** Email addresses and shareable VPN configuration URIs are never support-log data. */
+    private val EMAIL = Regex("""(?i)\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b""")
+    private val CONFIG_URI = Regex(
+        """(?i)\b(?:vmess|vless|trojan|ss|ssr|hysteria2|tuic|wireguard)://[^\s"'<>]+"""
+    )
+
     fun redact(line: String): String {
         if (line.isEmpty()) return line
-        val keyless = WG_KEY.replace(line) { "k" + digest(it.value, 4) }
+        val secretless = SECRET_FIELD.replace(line) { it.groupValues[1] + "[redacted]" }
+        val keyless = WG_KEY.replace(secretless) { "k" + digest(it.value, 4) }
         var out = PATH.replace(keyless) { "f" + digest(it.value, 4) }
+        out = CONFIG_URI.replace(out) { "cfg" + digest(it.value, 4) }
+        out = EMAIL.replace(out) { "mail" + digest(it.value, 4) }
         // Flags first: that collapses `AL 🇦🇱` to one spaceless field, which is what
         // lets LABEL_RUN match the label without reaching back into the prose.
         out = FLAG.replace(out) { "" }

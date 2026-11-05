@@ -134,7 +134,7 @@ class MolidoTileService : TileService() {
             // Never let a cosmetic shade animation break the toggle: some OEM
             // shells restrict activity starts from a tile. The connect/disconnect
             // has already been issued by this point.
-            Log.w(LOG_TAG, "Could not collapse the shade: ${error.message}")
+            Log.w(LOG_TAG, LogRedactor.redact("Could not collapse the shade: ${error.message}"))
         }
     }
 

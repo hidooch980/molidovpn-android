@@ -2101,7 +2101,7 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
                         reconnectAttempts = 0
                         startTunnel(AutoConnect.configJson(this))
                     } catch (e: Exception) {
-                        Log.w(LOG_TAG, "Always-on connect failed: ${e.message}")
+                        Log.w(LOG_TAG, LogRedactor.redact("Always-on connect failed: ${e.message}"))
                     }
                 }
             }
@@ -2386,7 +2386,9 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
                 }
             }
         } catch (e: Exception) {
-            Log.e(LOG_TAG, "Failed to parse event: $json", e)
+            // Native event payloads can contain user configuration; never mirror
+            // the raw JSON or exception stack into Android's shared log buffer.
+            Log.e(LOG_TAG, "Failed to parse native event (${json.length} chars): ${e.javaClass.simpleName}")
         }
     }
 
@@ -4190,7 +4192,7 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
             false
         }
         val blocked = !dnsOk
-        Log.i("MolidoUdp", "net=$key dns=${if (dnsOk) "ok" else "fail"} warpSend=$warpSent blocked=$blocked")
+        Log.i("MolidoUdp", LogRedactor.redact("net=$key dns=${if (dnsOk) "ok" else "fail"} warpSend=$warpSent blocked=$blocked"))
         prefs.edit().putLong("udp_at_$key", System.currentTimeMillis()).putBoolean("udp_blocked_$key", blocked).apply()
         return blocked
     }
@@ -4511,7 +4513,7 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
 
             val bestText = Strings.tf("Best: %s (%sms)", chosen.label, winnerMs) +
                 (if (iranExit) " · " + Strings.t("Exit is in Iran; some services (e.g. Gemini) won't work") else "")
-            if (iranExit) Log.w(autoLogTag, "every working candidate exits in IR; using ${chosen.label}")
+            if (iranExit) Log.w(autoLogTag, LogRedactor.redact("every working candidate exits in IR; using ${chosen.label}"))
             if (live == chosen && connected.get() && !autoTrialFailed) {
                 // The winner is the candidate that is up right now: keep it.
                 autoTrialActive.set(false)
@@ -5370,7 +5372,10 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
                 nativeExitWasUnexpected = diedOnItsOwn
             } catch (error: Exception) {
                 val detail = NativeCore.lastError().ifBlank { error.message ?: "Tunnel setup failed" }
-                Log.e(LOG_TAG, "Tunnel failed: $detail", error)
+                // Keep actionable context in the app log after redaction. Logcat
+                // receives only a safe summary, never a raw core error or stack.
+                ConnectionLog.record("Tunnel setup failed: $detail")
+                Log.e(LOG_TAG, "Tunnel setup failed (${error.javaClass.simpleName}): ${LogRedactor.redact(detail)}")
                 sendStatus(STATUS_FAILED, detail)
                 // A setup failure is not a dropped tunnel: there is nothing to
                 // restore, and retrying a config Android or the core rejected
@@ -6604,7 +6609,7 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
         val directConsent = DnsSettings.directGamingDnsAllowed(this)
         if (preset.gaming && !directConsent) {
             ConnectionLog.record("DNS ${preset.key}: direct gaming DNS not explicitly allowed; using tunnel DNS")
-            Log.i("MolidoDns", "path=$path preset=${preset.key} fallback=secure reason=no-explicit-consent")
+            Log.i("MolidoDns", LogRedactor.redact("path=$path preset=${preset.key} fallback=secure reason=no-explicit-consent"))
             return null
         }
         if (preset.gaming && !DnsSettings.shouldBypassTunnelForGamingDns(

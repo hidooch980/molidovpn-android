@@ -128,7 +128,7 @@ class WidgetActionReceiver : BroadcastReceiver() {
                         MolidoWidget.saveStatus(app, MolidoVpnService.STATUS_CONNECTING)
                     }
                 } catch (e: Exception) {
-                    Log.w("MolidoWidget", "toggle failed: ${e.message}")
+                    Log.w("MolidoWidget", LogRedactor.redact("toggle failed: ${e.message}"))
                 }
                 MolidoWidget.render(app)
             }

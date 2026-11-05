@@ -94,7 +94,7 @@ object CleanIpScanner {
             try {
                 scan(app)
             } catch (e: Exception) {
-                Log.w(TAG, "scan failed: ${e.message}")
+                Log.w(TAG, LogRedactor.redact("scan failed: ${e.message}"))
             } finally {
                 scanning.set(false)
             }
@@ -140,7 +140,7 @@ object CleanIpScanner {
         editor.apply()
         val line = "net=$key sni=$sni probed=${candidates.size} ok=${results.size} best=" +
             top.joinToString(",") { "${it.first}(${it.second}ms)" }
-        Log.i(TAG, line)
+        Log.i(TAG, LogRedactor.redact(line))
         ConnectionLog.record("Clean IP scan: $line")
     }
 
