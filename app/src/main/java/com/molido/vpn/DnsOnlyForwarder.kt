@@ -66,7 +66,7 @@ class DnsOnlyForwarder(
                 input.read(buf)
             } catch (e: Exception) {
                 if (running.get()) {
-                    Log.w(TAG, "tun read ended: ${e.message}")
+                    Log.w(TAG, LogRedactor.redact("tun read ended: ${e.message}"))
                     ConnectionLog.record("DNS-only: interface read ended: ${e.javaClass.simpleName} ${e.message}")
                 }
                 break
@@ -170,7 +170,7 @@ class DnsOnlyForwarder(
         } catch (e: Exception) {
             failed.incrementAndGet()
             if (running.get()) {
-                Log.w(TAG, "forward failed: ${e.message}")
+                Log.w(TAG, LogRedactor.redact("forward failed: ${e.message}"))
                 if (firstFailure.compareAndSet(false, true)) {
                     ConnectionLog.record("DNS-only: forward failed: ${e.javaClass.simpleName} ${e.message}")
                 }
