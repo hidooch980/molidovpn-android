@@ -1956,7 +1956,7 @@ class MainActivity : Activity() {
         // Split-heart primary control: left half connects, right half toggles Gaming.
         val splitHeart = FrameLayout(this@MainActivity).apply {
             layoutDirection = View.LAYOUT_DIRECTION_LTR
-            val heart = label("♥", 104f, Sculpt.withAlpha(palette.mint, 0.22f), TypefaceStyle.BOLD).apply {
+            val heart = label("♥", 104f, Sculpt.withAlpha(palette.mint, 0.22f), TypefaceStyle.MEDIUM).apply {
                 gravity = Gravity.CENTER
                 includeFontPadding = false
                 textAlignment = View.TEXT_ALIGNMENT_CENTER
@@ -1966,7 +1966,7 @@ class MainActivity : Activity() {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER
                 layoutDirection = View.LAYOUT_DIRECTION_LTR
-                addView(label("⏻\\n${Strings.t("Connect")}", 14f, palette.mint, TypefaceStyle.BOLD).apply {
+                addView(label("⏻\n${Strings.t("Connect")}", 14f, palette.mint, TypefaceStyle.MEDIUM).apply {
                     gravity = Gravity.CENTER
                     textAlignment = View.TEXT_ALIGNMENT_CENTER
                     isClickable = true
@@ -1975,7 +1975,7 @@ class MainActivity : Activity() {
                     setOnClickListener { quickConnectButton.performClick() }
                 }, LinearLayout.LayoutParams(dp(88), dp(76)))
                 addView(gamingShortcut.apply {
-                    text = "🎮\\n${Strings.t("Gaming")}"
+                    text = "🎮\n${Strings.t("Gaming")}"
                     textSize = 13f
                     setPadding(dp(4), dp(4), dp(4), dp(4))
                     background = Sculpt.sculptedBackground(
