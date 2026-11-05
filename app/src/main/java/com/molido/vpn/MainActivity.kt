@@ -1921,10 +1921,7 @@ class MainActivity : Activity() {
         // A dedicated, accessible one-tap action complements the animated dial.
         // It follows the same toggle path, so connect, cancel and disconnect all
         // use the existing VPN permission and service lifecycle.
-        addView(quickConnectButton, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            dp(56),
-        ).apply { topMargin = dp(12) })
+        // Added together with Gaming below in a compact two-action row.
 
         // Dedicated Gaming control stays visible in Simple mode. It only
         // toggles the existing secure Smart Connect scoring preference; DNS and
@@ -1956,10 +1953,46 @@ class MainActivity : Activity() {
         }
         homeGamingShortcut = gamingShortcut
         renderGamingShortcut()
-        addView(gamingShortcut, LinearLayout.LayoutParams(
+        // Split-heart primary control: left half connects, right half toggles Gaming.
+        val splitHeart = FrameLayout(this@MainActivity).apply {
+            layoutDirection = View.LAYOUT_DIRECTION_LTR
+            val heart = label("♥", 104f, Sculpt.withAlpha(palette.mint, 0.22f), TypefaceStyle.MEDIUM).apply {
+                gravity = Gravity.CENTER
+                includeFontPadding = false
+                textAlignment = View.TEXT_ALIGNMENT_CENTER
+            }
+            addView(heart, FrameLayout.LayoutParams(dp(176), dp(100), Gravity.CENTER))
+            val halves = LinearLayout(this@MainActivity).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER
+                layoutDirection = View.LAYOUT_DIRECTION_LTR
+                addView(label("⏻\n${Strings.t("Connect")}", 14f, palette.mint, TypefaceStyle.MEDIUM).apply {
+                    gravity = Gravity.CENTER
+                    textAlignment = View.TEXT_ALIGNMENT_CENTER
+                    isClickable = true
+                    isFocusable = true
+                    contentDescription = Strings.t("Connect")
+                    setOnClickListener { quickConnectButton.performClick() }
+                }, LinearLayout.LayoutParams(dp(88), dp(76)))
+                addView(gamingShortcut.apply {
+                    text = "🎮\n${Strings.t("Gaming")}"
+                    textSize = 13f
+                    setPadding(dp(4), dp(4), dp(4), dp(4))
+                    background = Sculpt.sculptedBackground(
+                        resources.displayMetrics.density,
+                        Sculpt.withAlpha(palette.violet, 0.22f),
+                        18,
+                        Sculpt.withAlpha(palette.violet, 0.65f),
+                    )
+                }, LinearLayout.LayoutParams(dp(88), dp(76)))
+            }
+            addView(halves, FrameLayout.LayoutParams(dp(184), dp(80), Gravity.CENTER))
+            contentDescription = Strings.t("Connect") + " / " + Strings.t("Gaming")
+        }
+        addView(splitHeart, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
-            dp(42),
-        ).apply { topMargin = dp(8) })
+            dp(100),
+        ).apply { topMargin = dp(6) })
 
         // Secondary destinations remain in Advanced mode; the full feature
         // catalogue is also available in the searchable navigation drawer.
@@ -2258,6 +2291,10 @@ class MainActivity : Activity() {
         homeQuickActions?.visibility = if (simple) View.GONE else View.VISIBLE
         homeTelemetryLine?.visibility = if (simple) View.GONE else View.VISIBLE
         homeLocationCard?.visibility = if (simple) View.VISIBLE else View.GONE
+        // Keep Gaming beside the primary connect action in both home modes.
+        // Only the decorative footer is removed from Simple mode to save height.
+        homeGamingShortcut?.visibility = View.VISIBLE
+        footerWave.visibility = if (simple) View.GONE else View.VISIBLE
         homeLocationCard?.text = locationCardText()
         homeAdvancedLink?.text = if (simple) Strings.t("Advanced mode") else Strings.t("Simple mode")
         val simpleTarget = simpleProtocol()
@@ -9392,15 +9429,11 @@ class MainActivity : Activity() {
          */
         const val FIT_SLACK_DP = 6
         /**
-         * Dial floor for fa/zh, v1.8.7. The localized fonts' tall line boxes
-         * used to make fitConsoleToViewport shrink the dial well below the
-         * English layout's settled size; the user's requirement is that the
-         * connect dial in Persian and Chinese be as large as the English one.
-         * 0.90 keeps a small safety margin under 1.0 (the English ideal) while
-         * the now-compact text block means the floor is rarely hit; below it
-         * the console scrolls instead of shrinking the dial further.
+         * Minimum dial scale for localized layouts. The compact home prioritizes
+         * keeping the complete connect flow and essential status in the viewport;
+         * the ScrollView remains only as a fallback for unusually short windows.
          */
-        const val LOCALIZED_DIAL_FLOOR = 0.90f
+        const val LOCALIZED_DIAL_FLOOR = 0.76f
         /**
          * Spare room required before the dial is allowed to grow back.
          *
