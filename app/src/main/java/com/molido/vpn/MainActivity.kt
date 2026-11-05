@@ -1520,7 +1520,7 @@ class MainActivity : Activity() {
             ConnectionDiagnosis.Finding.COUNTRY ->
                 dialog.setPositiveButton(Strings.t("Country")) { _, _ ->
                     showCountryPicker {
-                        homeLocationCard?.text = locationCardText()
+                        homeLocationCard?.text = Strings.t("SERVER LOCATION") + "\n" + locationCardText()
                     }
                 }
             ConnectionDiagnosis.Finding.EMPTY_POOL ->
@@ -2202,13 +2202,22 @@ class MainActivity : Activity() {
             ViewGroup.LayoutParams.WRAP_CONTENT,
         ).apply { topMargin = dp(4) })
 
-        val location = label(locationCardText(), 14f, INK, TypefaceStyle.MEDIUM).apply {
-            gravity = Gravity.CENTER
-            maxLines = 1
-            setPadding(dp(14), dp(12), dp(14), dp(12))
-            background = Sculpt.sculptedBackground(resources.displayMetrics.density, palette.surface, 16)
+        val location = label("", 13.5f, INK, TypefaceStyle.MEDIUM).apply {
+            gravity = Gravity.CENTER_VERTICAL
+            textAlignment = View.TEXT_ALIGNMENT_VIEW_START
+            maxLines = 2
+            setLineSpacing(dp(2).toFloat(), 1f)
+            setPadding(dp(16), dp(10), dp(16), dp(10))
+            minHeight = dp(60)
+            background = Sculpt.sculptedBackground(
+                resources.displayMetrics.density,
+                Sculpt.withAlpha(palette.mint, 0.10f),
+                18,
+                Sculpt.withAlpha(palette.mint, 0.34f),
+            )
             isClickable = true
             isFocusable = true
+            contentDescription = Strings.t("Change server location")
             setOnClickListener { showCountryPicker { homeLocationCard?.text = locationCardText() } }
         }
         homeLocationCard = location
@@ -2271,10 +2280,11 @@ class MainActivity : Activity() {
     private fun applyHomeMode() {
         val simple = homeSimple()
         homeAdvancedBox?.visibility = if (simple) View.GONE else View.VISIBLE
-        // Keep the first screen focused on one action. Discovery shortcuts and
-        // technical readouts remain available in Advanced mode / the navigation drawer.
-        homeQuickActions?.visibility = if (simple) View.GONE else View.VISIBLE
-        homeTelemetryLine?.visibility = if (simple) View.GONE else View.VISIBLE
+        // The refreshed home keeps useful destinations visible in both modes.
+        // Advanced adds transport and diagnostic controls; Simple stays uncluttered
+        // but still exposes country selection, traffic and live connection metadata.
+        homeQuickActions?.visibility = View.VISIBLE
+        homeTelemetryLine?.visibility = View.VISIBLE
         homeLocationCard?.visibility = if (simple) View.VISIBLE else View.GONE
         // Keep Gaming beside the primary connect action in both home modes.
         // Only the decorative footer is removed from Simple mode to save height.
