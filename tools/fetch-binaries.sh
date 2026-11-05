@@ -16,7 +16,6 @@ trap 'rm -rf "$WORK"' EXIT
 
 SINGBOX_VERSION="1.12.25"
 SINGBOX_API="https://api.github.com/repos/SagerNet/sing-box"
-GITHUB_API_TOKEN="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
 
 curl_retry() {
   curl --fail --location --silent --show-error \
@@ -120,11 +119,10 @@ singbox_sha() { # ABI -> SHA-256 of the pinned archive
 }
 
 # Resolve immutable release asset IDs from the pinned upstream tag, then
-# download through the authenticated GitHub API (avoids intermittent 403s
-# from browser/CDN release URLs). The digest remains pinned below.
+# download through the public GitHub Releases API. No repository-scoped
+# Actions token is sent to this unrelated public repository. The digest remains pinned below.
 curl_retry -H "Accept: application/vnd.github+json" \
   -H "X-GitHub-Api-Version: 2022-11-28" \
-  -H "Authorization: Bearer $GITHUB_API_TOKEN" \
   "${SINGBOX_API}/releases/tags/v${SINGBOX_VERSION}" -o "$WORK/singbox-release.json"
 
 for abi in arm64-v8a armeabi-v7a; do
@@ -138,7 +136,6 @@ for abi in arm64-v8a armeabi-v7a; do
   }
   curl_retry -H "Accept: application/octet-stream" \
     -H "X-GitHub-Api-Version: 2022-11-28" \
-    -H "Authorization: Bearer $GITHUB_API_TOKEN" \
     "$SINGBOX_API/releases/assets/$id" -o "$WORK/$name.tar.gz"
   (cd "$WORK" && echo "$expected  $name.tar.gz" | sha256sum -c -)
   tar -xzf "$WORK/$name.tar.gz" -C "$WORK"
