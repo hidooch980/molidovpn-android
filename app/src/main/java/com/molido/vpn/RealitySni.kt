@@ -8,12 +8,14 @@ import java.net.URL
  * Alternate SNIs for V2Ray REALITY nodes that fail their probe.
  *
  * Retry-only: [ShardManager] uses these only after a whole race found nothing,
- * with at most [MAX_ALTERNATES] alternates per node and never when the node's own
- * SNI is already one of them. A SNI that then carries a real request is
- * remembered per node ([remembered]) and used on later connects.
+ * with at most [MAX_ALTERNATES] alternates per node. Alternate names must be
+ * syntactically valid DNS hostnames; IP literals, URL fragments, ports,
+ * wildcards, whitespace and malformed labels are rejected.
  *
- * The list comes from remote/reality-sni.txt (raw.githubusercontent, then
- * jsDelivr), cached for a day; a short built-in list covers a first run offline.
+ * The remote list is a compatibility fallback, not proof that a hostname is
+ * authorized for a particular server. Production profiles should use the SNI
+ * supplied by their server operator. TLS certificate validation is never
+ * disabled by this helper.
  */
 object RealitySni {
 
@@ -32,13 +34,29 @@ object RealitySni {
 
     private fun prefs(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
-    private fun valid(host: String): Boolean =
-        host.length in 4..253 && host.contains('.') && host.all { it.isLetterOrDigit() || it == '.' || it == '-' }
+    /** Strict ASCII DNS hostname validation (not a URL or IP address). */
+    internal fun isValidHostname(host: String): Boolean {
+        if (host.length !in 4..253 || host.startsWith('.') || host.endsWith('.')) return false
+        if (host.any { it.code > 0x7f }) return false
+        val labels = host.split('.')
+        if (labels.size < 2) return false
+        if (labels.any { label ->
+                label.isEmpty() || label.length > 63 ||
+                    label.first() == '-' || label.last() == '-' ||
+                    label.any { !(it in 'a'..'z' || it in 'A'..'Z' || it in '0'..'9' || it == '-') }
+            }) return false
+        // Reject IPv4-shaped literals even when their octets are out of range.
+        if (labels.all { it.all(Char::isDigit) }) return false
+        return true
+    }
+
+    private fun valid(host: String): Boolean = isValidHostname(host)
 
     /** The alternate list; fetches (blocking, short timeouts) when the cache is stale. */
     fun list(context: Context): List<String> {
         val p = prefs(context)
-        val cached = p.getString(LIST_KEY, "").orEmpty().split('\n').filter { valid(it) }
+        val cached = p.getString(LIST_KEY, "").orEmpty().split('\n').map { it.trim() }
+            .filter { valid(it) }
         val age = System.currentTimeMillis() - p.getLong(AT_KEY, 0L)
         if (cached.isNotEmpty() && age in 0 until MAX_AGE_MS) return cached
         for (url in URLS) {
@@ -73,6 +91,7 @@ object RealitySni {
 
     /** Copy of [node] using [sni] (both the V2Ray SNI and the ShardNode serverName). */
     fun withSni(node: ShardNode, sni: String): ShardNode {
+        if (!valid(sni)) return node
         val v2 = node.v2ray ?: return node
         return node.copy(serverName = sni, v2ray = v2.copy(sni = sni))
     }
@@ -81,6 +100,7 @@ object RealitySni {
         prefs(context).getString("node_" + node.key, null)?.takeIf { valid(it) }
 
     fun remember(context: Context, node: ShardNode, sni: String) {
+        if (!valid(sni) || !isReality(node)) return
         prefs(context).edit().putString("node_" + node.key, sni).apply()
     }
 
