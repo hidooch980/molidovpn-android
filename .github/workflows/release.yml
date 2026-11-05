@@ -143,7 +143,7 @@ jobs:
           AETHERY_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           chmod +x gradlew
-          ./gradlew testMobileReleaseUnitTest testTvReleaseUnitTest assembleMobileRelease assembleTvRelease --no-daemon --stacktrace --info \
+          ./gradlew testMobileReleaseUnitTest testTvReleaseUnitTest assembleMobileRelease assembleTvRelease --no-daemon --stacktrace --info --max-workers=2 \
             -PtargetAbi=arm64-v8a,armeabi-v7a \
             -PaetheryKeystore=release.keystore \
             -PmolidoVersionCode=$((400000 + VERSION_CODE)) \
@@ -234,6 +234,7 @@ jobs:
           body: |
             MolidoVPN Android release ${{ env.VERSION }}.
 
-            - Signed phone ARM64, ARMv7 and universal APKs.\n            - Signed Android TV ARM64 and universal APKs with Leanback launcher support.
+            - Signed phone ARM64, ARMv7 and universal APKs.
+            - Signed Android TV ARM64 and universal APKs with Leanback launcher support.
             - SHA-256 digests are published with GitHub release assets and verified by the in-app updater.
             - Upgrade in place; do not uninstall the previous version.
