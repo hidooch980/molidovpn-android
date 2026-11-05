@@ -56,10 +56,7 @@ vless://4e4f1f70-5e56-4a76-bb9d-db087f4690c4@[2a06:98c1:3101::6812:202f]:443?sec
 trojan://7bpe9s002exll38s@199.68.156.250:2087?host=nexoshop.netvia.ir&path=%2Fwss&security=tls&sni=nexoshop.netvia.ir&type=ws#MolidoVPN
 vless://e3149c82-00f6-4227-b2c0-b78f1dd81279@172.67.199.126:2053?security=tls&type=ws&path=%2Fws-tesla&host=fast.145779.xyz&packetEncoding=xudp&alpn=http%2F1.1&sni=fast.145779.xyz&fp=chrome#MolidoVPN
 vless://e3149c82-00f6-4227-b2c0-b78f1dd81279@104.21.58.37:2053?security=tls&sni=fast.145779.xyz&type=ws&host=fast.145779.xyz&path=%2Fws-tesla&fp=chrome#MolidoVPN
-vless://50414e45-4c5f-5a45-5553-c67e6a7b76e9@104.27.56.173:443?security=tls&type=ws&path=%2Fstream%2FPANEL_ZEUS%2Fc67e6a7b76e9&host=kwzu1yelu3ms.ouzrzee5u7rs.workers.dev&packetEncoding=xudp&sni=kwzu1yelu3ms.ouzrzee5u7rs.workers.dev&fp=unsafe&encryption=none#MolidoVPN
+vless://e3149c82-00f6-4227-b2c0-b78f1dd81279@fast.145779.xyz:2053?path=%2Fws-tesla&security=tls&encryption=none&insecure=0&host=fast.145779.xyz&fp=chrome&type=ws&allowInsecure=0&sni=fast.145779.xyz#MolidoVPN
 vless://c83f15bf-1817-4ec8-a19f-6393d226434c@172.67.199.126:2053?security=tls&type=ws&path=%2Fws-tesla&host=fast.145779.xyz&packetEncoding=xudp&sni=fast.145779.xyz&fp=chrome#MolidoVPN
 vless://5f11c240-89df-494c-9c81-8b619023bb58@104.21.13.229:443?&security=tls&sni=789156.xyz&type=ws&headerType=none&host=789156.xyz&path=%2F#MolidoVPN
-vless://65d3f9b3-d289-4a8e-9c87-90bba156de30@172.67.128.201:443?host=ld.235231.xyz&path=%2F&security=tls&sni=ld.235231.xyz&type=ws#MolidoVPN
-vless://2cf94f4d-9d5b-49ca-81a3-ddc0529a2dac@172.66.44.133:443?security=tls&type=ws&path=/&host=web-tomcat.pages.dev&packetEncoding=xudp&sni=web-tomcat.pages.dev&fp=chrome#MolidoVPN
 vless://2cf94f4d-9d5b-49ca-81a3-ddc0529a2dac@172.66.47.123:443?security=tls&type=ws&path=/&host=web-tomcat.pages.dev&packetEncoding=xudp&sni=web-tomcat.pages.dev&fp=chrome#MolidoVPN
-vless://fceb3200-2516-47d2-8e28-d04ecde9427a@104.16.251.179:443?security=tls&type=ws&path=%2F&host=edge-fef90023.pages.dev&packetEncoding=xudp&sni=edge-fef90023.pages.dev&fp=chrome#MolidoVPN
