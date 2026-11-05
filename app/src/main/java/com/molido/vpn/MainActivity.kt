@@ -111,6 +111,8 @@ class MainActivity : Activity() {
 
     // Simple / Advanced home and collapsible settings.
     private var homeAdvancedBox: LinearLayout? = null
+    private var homeQuickActions: LinearLayout? = null
+    private var homeTelemetryLine: LinearLayout? = null
     private var homeLocationCard: TextView? = null
     private var homeRetryButton: TextView? = null
     private var homeSupportButton: TextView? = null
@@ -1578,13 +1580,17 @@ class MainActivity : Activity() {
         }
         quickConnectButton.text = "⏻   " + Strings.t(key)
         quickConnectButton.contentDescription = Strings.t(key)
+        // A restrained 3D surface: a lit upper edge, deep lower gradient and
+        // real elevation. Keep this effect on the primary action only.
         quickConnectButton.background = GradientDrawable(
-            GradientDrawable.Orientation.LEFT_RIGHT,
-            intArrayOf(start, end),
+            GradientDrawable.Orientation.TOP_BOTTOM,
+            intArrayOf(Sculpt.lighten(start, 0.22f), start, end),
         ).apply {
-            cornerRadius = dp(18).toFloat()
-            setStroke(dp(1), Sculpt.withAlpha(Color.WHITE, 0.30f))
+            cornerRadius = dp(20).toFloat()
+            setStroke(dp(1), Sculpt.withAlpha(Color.WHITE, 0.38f))
         }
+        quickConnectButton.elevation = dp(9).toFloat()
+        quickConnectButton.translationZ = dp(2).toFloat()
         quickConnectButton.setTextColor(Color.WHITE)
         quickConnectButton.alpha =
             if (visualState == OrbitDialView.State.CONNECTING) 0.94f else 1f
@@ -1913,6 +1919,7 @@ class MainActivity : Activity() {
         quickActions.addView(quickAction(Strings.t("Traffic monitor"), "↗") {
             openTrafficMonitorScreen()
         }, LinearLayout.LayoutParams(0, dp(44), 1f).apply { marginStart = dp(6) })
+        homeQuickActions = quickActions
         addView(quickActions, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, dp(44),
         ).apply { topMargin = dp(8) })
@@ -1926,6 +1933,7 @@ class MainActivity : Activity() {
             addView(label("  ·  ", 12f, Sculpt.withAlpha(MUTED, 0.5f)))
             addView(chipProtocol)
         }
+        homeTelemetryLine = chipLine
         addView(chipLine, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.WRAP_CONTENT,
             ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -2176,6 +2184,10 @@ class MainActivity : Activity() {
     private fun applyHomeMode() {
         val simple = homeSimple()
         homeAdvancedBox?.visibility = if (simple) View.GONE else View.VISIBLE
+        // Keep the first screen focused on one action. Discovery shortcuts and
+        // technical readouts remain available in Advanced mode / the navigation drawer.
+        homeQuickActions?.visibility = if (simple) View.GONE else View.VISIBLE
+        homeTelemetryLine?.visibility = if (simple) View.GONE else View.VISIBLE
         homeLocationCard?.visibility = if (simple) View.VISIBLE else View.GONE
         homeLocationCard?.text = locationCardText()
         homeAdvancedLink?.text = if (simple) Strings.t("Advanced mode") else Strings.t("Simple mode")
