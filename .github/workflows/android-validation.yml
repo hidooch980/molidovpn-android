@@ -80,7 +80,7 @@ jobs:
           MOLIDO_SCREENS: ${{ runner.temp }}/molido-screens
         run: |
           chmod +x gradlew
-          ./gradlew testReleaseUnitTest assembleRelease --no-daemon \
+          ./gradlew testReleaseUnitTest assembleRelease assembleDebug --no-daemon \
             -PtargetAbi=arm64-v8a,armeabi-v7a \
             -PmolidoVersionCode=49999 \
             -PmolidoVersionName=0.0.0-ci
@@ -109,7 +109,9 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: molido-mesh-ai-android-validation
-          path: app/build/outputs/apk/release/*.apk
+          path: |
+            app/build/outputs/apk/release/*.apk
+            app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
 
   android-startup-api-36:
@@ -139,7 +141,7 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
           script: |
-            APK=$(find validation-apks -type f -iname '*universal*.apk' | head -n 1)
+            APK=$(find validation-apks -type f -path '*/debug/*' -iname '*universal*.apk' | head -n 1)
             test -n "$APK"
             adb install -r "$APK"
             adb logcat -c
