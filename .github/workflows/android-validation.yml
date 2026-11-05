@@ -51,6 +51,49 @@ jobs:
       - name: Install Android platform, build tools, NDK and CMake
         run: sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;26.3.11579264" "cmake;3.22.1"
 
+      - name: Verify published upgrade path from oldest available Android release
+        shell: bash
+        run: |
+          set -euo pipefail
+          APKSIGNER="$ANDROID_HOME/build-tools/36.0.0/apksigner"
+          AAPT="$ANDROID_HOME/build-tools/36.0.0/aapt"
+          WORK="$(mktemp -d)"
+          trap 'rm -rf "$WORK"' EXIT
+          verify_release() {
+            local tag="$1" api="$2" apk="$WORK/$tag.apk" meta="$WORK/$tag.json"
+            curl --fail --location --silent --show-error --retry 3 \
+              -H 'Accept: application/vnd.github+json' "$api" -o "$meta"
+            local url digest
+            url="$(jq -er '.assets[] | select(.name == "MolidoMeshAI-android-arm64.apk") | .browser_download_url' "$meta")"
+            digest="$(jq -er '.assets[] | select(.name == "MolidoMeshAI-android-arm64.apk") | .digest | sub("^sha256:"; "")' "$meta")"
+            [[ "$digest" =~ ^[a-f0-9]{64}$ ]]
+            curl --fail --location --silent --show-error --retry 3 "$url" -o "$apk"
+            printf '%s  %s\n' "$digest" "$apk" | sha256sum --check --status
+            "$APKSIGNER" verify --verbose "$apk" >/dev/null
+            local cert badging package version_code
+            cert="$("$APKSIGNER" verify --print-certs "$apk" | awk -F': ' '/Signer #1 certificate SHA-256 digest:/ {print tolower($2); exit}')"
+            test -n "$cert"
+            badging="$("$AAPT" dump badging "$apk")"
+            package="$(sed -n "s/^package: name='\\([^']*\\)'.*/\\1/p" <<< "$badging" | head -n1)"
+            version_code="$(sed -n "s/^package:.*versionCode='\\([0-9][0-9]*\\)'.*/\\1/p" <<< "$badging" | head -n1)"
+            test "$package" = "com.mobin.mobin_vpn"
+            test -n "$version_code"
+            printf '%s|%s|%s\n' "$cert" "$version_code" "$package"
+          }
+          legacy="$(verify_release v3.3.60 https://api.github.com/repos/hidooch980/molidovpn-android/releases/tags/v3.3.60)"
+          current="$(verify_release latest https://api.github.com/repos/hidooch980/molidovpn-android/releases/latest)"
+          IFS='|' read -r legacy_cert legacy_code legacy_package <<< "$legacy"
+          IFS='|' read -r current_cert current_code current_package <<< "$current"
+          test "$legacy_cert" = "$current_cert" || {
+            echo "::error::Latest release signing certificate differs from v3.3.60; in-place upgrade is not safe."
+            exit 1
+          }
+          (( current_code > legacy_code )) || {
+            echo "::error::Latest release versionCode must exceed the v3.3.60 baseline."
+            exit 1
+          }
+          echo "Verified upgrade path: $legacy_package v3.3.60 (code $legacy_code) -> $current_package latest (code $current_code), same signer."
+
       - name: Install Rust Android targets
         run: |
           rustup target add aarch64-linux-android armv7-linux-androideabi
