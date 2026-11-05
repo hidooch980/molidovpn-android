@@ -123,7 +123,7 @@ class UpdateSourcesTest {
         {"name":"MolidoVPN-android-universal.apk","browser_download_url":"https://gh/uni.apk","digest":"sha256:$sha"}]}"""
 
     @Test
-    fun staleStaticCopyDoesNotBlockWorkerFallback() {
+    fun staleStaticCopyDoesNotBlockConfiguredFallback() {
         fun rel(v: String) = UpdateSources.Release(v, "a.apk", "https://gh/a.apk", null)
         val newer = { r: String, l: String -> r.split('.').map { it.toInt() }.zip(l.split('.').map { it.toInt() }).firstOrNull { it.first != it.second }?.let { it.first > it.second } ?: false }
         val urls = UpdateSources.releaseJsonUrls(emptyList())
@@ -135,7 +135,7 @@ class UpdateSourcesTest {
             listOf(urls[0], UpdateSources.GITHUB_RELEASE_URL) + urls.drop(1).filter { it != UpdateSources.GITHUB_RELEASE_URL },
             asked,
         )
-        assertTrue(asked.contains(UpdateSources.WORKER_RELEASE_URL))
+        assertTrue(asked.none { it.contains("workers.dev") })
         // Even when every endpoint has the same newer copy, all fallbacks are checked.
         asked.clear()
         assertEquals("3.2.157", UpdateSources.latest(urls, "3.2.156", newer) { u -> asked += u; rel("3.2.157") }!!.version)
@@ -184,7 +184,7 @@ class UpdateSourcesTest {
         assertEquals(
             listOf(LiveSync.RAW + "latest.json", LiveSync.CDN + "latest.json",
                 StaticFirst.RAW + "latest.json", StaticFirst.CDN + "latest.json",
-                UpdateSources.GITHUB_RELEASE_URL, UpdateSources.WORKER_RELEASE_URL,
+                UpdateSources.GITHUB_RELEASE_URL,
                 "https://m1.example.com/latest.json", "https://m2.example.com/latest.json"),
             UpdateSources.releaseJsonUrls(m),
         )

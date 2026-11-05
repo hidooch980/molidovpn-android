@@ -19,11 +19,13 @@ Nearby Share یا هر پیام‌رسانی (بله، روبیکا، ایتا) 
 
 ## ۳. آینه برای به‌روزرسانی و لینک اشتراک
 
-برنامه به این ترتیب امتحان می‌کند و با اولین موفق کار می‌کند:
+برنامه برای پیدا کردن نسخهٔ جدید به این ترتیب امتحان می‌کند:
 
-1. Worker کلادفلر (`molido-sub.hidooch980.workers.dev/app/latest.json`)
-2. API گیت‌هاب
-3. آینه‌های داخل `remote/resilience.json` ← `mirrors.update` (به همان ترتیب)
+1. آینهٔ ثابت GitHub در شاخهٔ `live` از مخزن `vpn-sub` (raw و jsDelivr)
+2. API انتشار رسمی GitHub در مخزن `molidovpn-android`
+3. آینه‌های اختیاری داخل `remote/resilience.json` ← `mirrors.update`
+
+بررسی نسخه و دریافت APK به Worker کلادفلر وابسته نیست. فایل دانلودشده فقط پس از تطبیق SHA-256 و تأیید زنجیرهٔ امضای معتبر نصب می‌شود.
 
 لینک اشتراک V2Ray: پنج لینک Worker ← `/ios` ← raw گیت‌هاب ← jsDelivr ← `mirrors.sub`.
 

@@ -11,12 +11,12 @@ import java.net.URI
  * Where the in-app updater looks, and how it checks what it got. Pure (unit tested); the network
  * and PackageManager parts stay in [AppUpdater].
  *
- * Order: static subscription mirrors → GitHub API → our update worker → configured mirrors
- * ([ResilienceConfig.updateMirrors], e.g. a second worker, R2 or ArvanCloud). A mirror is a plain
+ * Order: static GitHub mirrors → GitHub Releases API → configured mirrors
+ * ([ResilienceConfig.updateMirrors], e.g. R2 or ArvanCloud). A mirror is a plain
  * folder holding `latest.json` (GitHub "latest release" shape) next to the APK files.
  *
  * Trust: a mirror is never trusted. The APK must (1) include a valid SHA-256 in release metadata
- * (`digest` from GitHub or `sha256` from our worker) and match it byte-for-byte, and (2) ALWAYS be
+ * (`digest` from GitHub or `sha256` from a configured mirror) and match it byte-for-byte, and (2) ALWAYS be
  * signed with the same certificate lineage as the installed app — checked in [AppUpdater] before
  * the installer opens. Missing or malformed hashes make an APK ineligible for installation.
  */
@@ -32,7 +32,6 @@ object UpdateSources {
         (declaredBytes < 0L || declaredBytes <= MAX_APK_BYTES) &&
             receivedBytes in 0L..MAX_APK_BYTES
 
-    const val WORKER_RELEASE_URL = "https://molido-sub.hidooch980.workers.dev/app/latest.json"
     const val GITHUB_RELEASE_URL = "https://api.github.com/repos/hidooch980/molidovpn-android/releases/latest"
 
     data class Release(
@@ -56,13 +55,13 @@ object UpdateSources {
     }
 
     fun releaseJsonUrls(mirrors: List<String>): List<String> =
-        (listOf(LiveSync.RAW + "latest.json", LiveSync.CDN + "latest.json", StaticFirst.RAW + "latest.json", StaticFirst.CDN + "latest.json", GITHUB_RELEASE_URL, WORKER_RELEASE_URL) +
+        (listOf(LiveSync.RAW + "latest.json", LiveSync.CDN + "latest.json", StaticFirst.RAW + "latest.json", StaticFirst.CDN + "latest.json", GITHUB_RELEASE_URL) +
             mirrors.map { "${it.trimEnd('/')}/latest.json" }).filter(::isSecureHttpsUrl).distinct()
 
     /**
      * Try every configured source until one has a release newer than the installed app.
      * Static copies are double-checked against GitHub, but a stale or empty copy must not
-     * prevent the worker and user-configured mirrors from being tried.
+     * prevent GitHub and user-configured mirrors from being tried.
      */
     fun latest(urls: List<String>, installed: String, isNewer: (String, String) -> Boolean, fetch: (String) -> Release?): Release? {
         var lastError: Exception? = null
@@ -210,7 +209,7 @@ object UpdateSources {
                     val downloadUrl = asset.optString("browser_download_url", "")
                     if (!isSecureHttpsUrl(downloadUrl)) continue
                     // No APK is installable unless release metadata supplies a valid SHA-256.
-                    // GitHub's asset digest and our update worker both publish this field.
+                    // GitHub and configured release mirrors publish this field.
                     val sha256 = assetSha256(asset) ?: continue
                     return Release(version, name, downloadUrl, sha256, critical, notes)
                 }
