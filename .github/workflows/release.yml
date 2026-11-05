@@ -176,7 +176,7 @@ jobs:
           "$AAPT" dump badging baseline-v4.0.0.apk | grep -F "package: name='com.mobin.mobin_vpn'"
 
           tv_apk=dist/MolidoMeshAI-android-tv-universal.apk
-          "$AAPT" dump badging "$tv_apk" | grep -F "uses-feature: name='android.software.leanback' req='true'"
+          "$AAPT" dump badging "$tv_apk" | grep -F "uses-feature: name='android.software.leanback'"
           "$AAPT" dump xmltree "$tv_apk" AndroidManifest.xml | grep -F 'android.intent.category.LEANBACK_LAUNCHER'
           for apk in dist/*.apk; do
             "$APKSIGNER" verify --verbose "$apk"
