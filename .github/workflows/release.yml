@@ -13,6 +13,11 @@ on:
         required: true
         default: "4.0.4"
         type: string
+  # Publish automatically after a successful validation run on main.
+  workflow_run:
+    workflows: ["Android validation"]
+    types: [completed]
+    branches: [main]
 
 permissions:
   contents: write
@@ -25,31 +30,85 @@ env:
   VERSION_CODE: ${{ github.run_number }}
 
 jobs:
+  prepare:
+    if: >-
+      ${{ github.event_name != 'workflow_run' ||
+          (github.event.workflow_run.conclusion == 'success' &&
+           github.event.workflow_run.event == 'push' &&
+           github.event.workflow_run.head_branch == 'main') }}
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      commit_sha: ${{ steps.release.outputs.commit_sha }}
+      should_release: ${{ steps.release.outputs.should_release }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 0
+      - name: Select release version and safely skip already-published versions
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED_VERSION: ${{ github.event.inputs.version || '4.0.4' }}
+          EVENT_NAME: ${{ github.event_name }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+          WORKFLOW_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == "workflow_run" ]]; then
+            version="$(tr -d '[:space:]' < release-version.txt)"
+            commit_sha="$WORKFLOW_HEAD_SHA"
+          elif [[ "$REF_TYPE" == "tag" ]]; then
+            version="${REF_NAME#v}"
+            commit_sha="$GITHUB_SHA"
+          else
+            version="$REQUESTED_VERSION"
+            commit_sha="$GITHUB_SHA"
+          fi
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+            echo "::error::Invalid release version: $version"
+            exit 1
+          }
+          should_release=true
+          if [[ "$EVENT_NAME" == "workflow_run" ]]; then
+            if git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null 2>&1 ||
+               gh release view "v$version" >/dev/null 2>&1; then
+              echo "::notice::v$version is already published; automatic release skipped."
+              should_release=false
+            fi
+          else
+            if git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null 2>&1 ||
+               gh release view "v$version" >/dev/null 2>&1; then
+              echo "::error::v$version already exists; refusing to overwrite it."
+              exit 1
+            fi
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "commit_sha=$commit_sha" >> "$GITHUB_OUTPUT"
+          echo "should_release=$should_release" >> "$GITHUB_OUTPUT"
+
   android:
+    needs: prepare
+    if: needs.prepare.outputs.should_release == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v5
         with:
+          ref: ${{ needs.prepare.outputs.commit_sha }}
           fetch-depth: 0
 
-      - name: Normalize and validate requested version
+      - name: Normalize selected release version
         env:
-          REQUESTED_VERSION: ${{ github.event.inputs.version || '4.0.4' }}
+          REQUESTED_VERSION: ${{ needs.prepare.outputs.version }}
         shell: bash
         run: |
           set -euo pipefail
-          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
-            [[ "$GITHUB_REF_NAME" == v* ]] || { echo "Release tags must start with v" >&2; exit 1; }
-            version="${GITHUB_REF_NAME#v}"
-          else
-            version="$REQUESTED_VERSION"
-          fi
-          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Invalid release version: $version" >&2
-            exit 1
-          fi
-          echo "VERSION=$version" >> "$GITHUB_ENV"
+          [[ "$REQUESTED_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          echo "VERSION=$REQUESTED_VERSION" >> "$GITHUB_ENV"
 
       - uses: actions/setup-java@v5
         with:
@@ -242,7 +301,7 @@ jobs:
         with:
           tag_name: v${{ env.VERSION }}
           name: MolidoVPN ${{ env.VERSION }}
-          target_commitish: ${{ github.sha }}
+          target_commitish: ${{ needs.prepare.outputs.commit_sha }}
           draft: false
           prerelease: false
           make_latest: true
