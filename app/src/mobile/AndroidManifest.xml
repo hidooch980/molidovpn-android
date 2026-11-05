@@ -1,0 +1,9 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <!-- Supplied by -PadmobAppId=... only after the publisher registers the app.
+             Empty by default: UMP and ad requests remain disabled until configured. -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="${ADMOB_APP_ID}" />
+    </application>
+</manifest>
