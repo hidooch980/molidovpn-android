@@ -51,6 +51,11 @@ jobs:
       - name: Install Android platform, build tools, NDK and CMake
         run: sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;26.3.11579264" "cmake;3.22.1"
 
+      - name: Install Rust core host-test dependencies
+        run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libclang-dev
+      - name: Run Aether Rust core unit tests
+        run: cargo test --manifest-path core/aether/Cargo.toml --locked --lib
+
       - name: Install Rust Android targets
         run: |
           rustup target add aarch64-linux-android armv7-linux-androideabi
@@ -70,12 +75,23 @@ jobs:
         run: python3 tools/refresh-emergency-configs.py 40 --strict
 
       - name: Run Android unit tests and build unsigned release APKs
+        env:
+          MOLIDO_SCREENS: ${{ runner.temp }}/molido-screens
         run: |
           chmod +x gradlew
           ./gradlew testReleaseUnitTest assembleRelease --no-daemon \
             -PtargetAbi=arm64-v8a,armeabi-v7a \
             -PmolidoVersionCode=49999 \
             -PmolidoVersionName=0.0.0-ci
+
+      - name: Keep UI regression screenshots
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: android-ui-regression-screenshots
+          path: ${{ runner.temp }}/molido-screens/
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Keep Android unit-test reports
         if: always()
