@@ -54,4 +54,3 @@ vless://4e4f1f70-5e56-4a76-bb9d-db087f4690c4@127.0.0.1:40443?security=tls&type=w
 vless://4e4f1f70-5e56-4a76-bb9d-db087f4690c4@[2a06:98c1:3101::6812:202f]:443?security=tls&type=ws&host=jp3.yohototo.top&path=%2Ftyxyws&sni=jp3.yohototo.top&alpn=http%2F1.1&fp=hellochrome_120&fm=%7B%22tcp%22%3A%20%5B%7B%22type%22%3A%20%22merge%22%2C%20%22settings%22%3A%20%7B%22times%22%3A%20100%2C%20%22delayMs%22%3A%2030%2C%20%22maxBytes%22%3A%2016384%7D%7D%5D%7D&dialMode=oob.0&packetEncoding=xudp#IPv6%20oob%20%40DeltaKroneckerGithub%20%7C%20925def
 # --- MolidoVPN servers ---
 trojan://7bpe9s002exll38s@199.68.156.250:2087?host=nexoshop.netvia.ir&path=%2Fwss&security=tls&sni=nexoshop.netvia.ir&type=ws#MolidoVPN
-trojan://7bpe9s002exll38s@199.68.156.250:2087?allowInsecure=0&alpn=http/1.1&fp=chrome&host=nexoshop.netvia.ir&path=/wss&security=tls&sni=nexoshop.netvia.ir&type=ws#MolidoVPN
