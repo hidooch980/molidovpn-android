@@ -13,9 +13,12 @@ import org.junit.Test
  */
 class LegacyUpdateCompatibilityTest {
     @Test
-    fun legacy32161RecognizesCurrentStableReleaseAsNewer() {
+    fun legacy32161And32162RecognizeCurrentStableReleaseAsNewer() {
         assertTrue(UpdateSources.isNewerVersion("4.0.2", "3.2.161"))
         assertTrue(UpdateSources.isNewerVersion("4.0.3", "3.2.161"))
+        assertTrue(UpdateSources.isNewerVersion("4.0.2", "3.2.162"))
+        assertTrue(UpdateSources.isNewerVersion("4.0.3", "3.2.162"))
+        assertTrue(!UpdateSources.isNewerVersion("3.2.162", "4.0.2"))
         assertTrue(UpdateSources.isNewerVersion("4.0.2", "3.3.60"))
         assertTrue(!UpdateSources.isNewerVersion("3.2.161", "4.0.2"))
     }
@@ -53,6 +56,7 @@ class LegacyUpdateCompatibilityTest {
         assertEquals("MolidoMeshAI-android-arm64.apk", release?.assetName)
         assertEquals(digest, release?.sha256)
         assertTrue(UpdateSources.isNewerVersion(release!!.version, "3.2.161"))
+        assertTrue(UpdateSources.isNewerVersion(release.version, "3.2.162"))
     }
 
     @Test
