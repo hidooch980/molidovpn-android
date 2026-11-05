@@ -158,6 +158,20 @@ internal object DdnsManager {
 
     private fun itIsAscii(label: String): Boolean = label.all { it.code in 0x30..0x39 || it.code in 0x41..0x5A || it.code in 0x61..0x7A || it == '-' }
 
+    internal fun isIpLiteral(value: String): Boolean {
+        if (value.contains(':')) {
+            return runCatching {
+                value.matches(Regex("^[0-9a-fA-F:]+$")) &&
+                    java.net.InetAddress.getByName(value).address.size == 16
+            }.getOrDefault(false)
+        }
+        val parts = value.split('.')
+        return parts.size == 4 && parts.all { part ->
+            part.isNotEmpty() && part.length <= 3 && part.all(Char::isDigit) &&
+                part.toIntOrNull() in 0..255
+        }
+    }
+
     private fun update(config: Config) {
         validate(config)
         when (config.provider) {
@@ -185,7 +199,7 @@ internal object DdnsManager {
             }
             Provider.CLOUDFLARE -> {
                 val ip = request("https://api.ipify.org", "GET").trim()
-                require(ip.matches(Regex("^[0-9a-fA-F:.]{3,45}$"))) { "Could not determine a valid public IP address." }
+                require(isIpLiteral(ip)) { "Could not determine a valid public IP address." }
                 val payload = JSONObject().put("type", if (ip.contains(':')) "AAAA" else "A")
                     .put("name", config.hostname).put("content", ip).put("ttl", 120).put("proxied", false)
                 val connection = URL("https://api.cloudflare.com/client/v4/zones/${config.zoneId}/dns_records/${config.recordId}")
