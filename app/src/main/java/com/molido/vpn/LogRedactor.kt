@@ -300,13 +300,13 @@ object LogRedactor {
 
     /** Credentials may arrive in exception messages or native event payloads. */
     private val SECRET_FIELD = Regex(
-        """(?i)(?<![A-Za-z0-9_])(["']?(?:authorization|proxy-authorization|password|passwd|passphrase|token|access[_-]?token|refresh[_-]?token|api[_-]?key|secret|client[_-]?secret|private[_-]?key|credential)["']?\\s*[:=]\\s*)(?:"[^"]*"|'[^']*'|(?:bearer|basic)\\s+\\S+|\\S+)"""
+        """(?i)(?<![A-Za-z0-9_])(["']?(?:authorization|proxy-authorization|password|passwd|passphrase|token|access[_-]?token|refresh[_-]?token|api[_-]?key|secret|client[_-]?secret|private[_-]?key|credential)["']?\s*[:=]\s*)(?:"[^"]*"|'[^']*'|(?:bearer|basic)\s+\S+|\S+)"""
     )
 
     /** Email addresses and shareable VPN configuration URIs are never support-log data. */
-    private val EMAIL = Regex("""(?i)\\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}\\b""")
+    private val EMAIL = Regex("""(?i)\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b""")
     private val CONFIG_URI = Regex(
-        """(?i)\\b(?:vmess|vless|trojan|ss|ssr|hysteria2|tuic|wireguard)://[^\\s"'<>]+"""
+        """(?i)\b(?:vmess|vless|trojan|ss|ssr|hysteria2|tuic|wireguard)://[^\s"'<>]+"""
     )
 
     fun redact(line: String): String {
