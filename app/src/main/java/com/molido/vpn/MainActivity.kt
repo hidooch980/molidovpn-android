@@ -1636,10 +1636,6 @@ class MainActivity : Activity() {
             if (visualState == OrbitDialView.State.CONNECTING) 0.94f else 1f
     }
 
-    private fun gamingShortcutLabel(): String =
-        Strings.t("Gaming optimization") + " · " +
-            Strings.t(if (preferences().getBoolean(com.molido.vpn.engine.GamingQuality.PREF, false)) "On" else "Off")
-
     private fun renderGamingShortcut() {
         val enabled = preferences().getBoolean(com.molido.vpn.engine.GamingQuality.PREF, false)
         homeGamingShortcut?.apply {
