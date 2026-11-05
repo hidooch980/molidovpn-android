@@ -2258,6 +2258,10 @@ class MainActivity : Activity() {
         homeQuickActions?.visibility = if (simple) View.GONE else View.VISIBLE
         homeTelemetryLine?.visibility = if (simple) View.GONE else View.VISIBLE
         homeLocationCard?.visibility = if (simple) View.VISIBLE else View.GONE
+        // Simple home is the one-screen dashboard: keep optional shortcuts and
+        // decorative footer in Advanced mode so short phones do not need to scroll.
+        homeGamingShortcut?.visibility = if (simple) View.GONE else View.VISIBLE
+        footerWave.visibility = if (simple) View.GONE else View.VISIBLE
         homeLocationCard?.text = locationCardText()
         homeAdvancedLink?.text = if (simple) Strings.t("Advanced mode") else Strings.t("Simple mode")
         val simpleTarget = simpleProtocol()
@@ -9392,15 +9396,11 @@ class MainActivity : Activity() {
          */
         const val FIT_SLACK_DP = 6
         /**
-         * Dial floor for fa/zh, v1.8.7. The localized fonts' tall line boxes
-         * used to make fitConsoleToViewport shrink the dial well below the
-         * English layout's settled size; the user's requirement is that the
-         * connect dial in Persian and Chinese be as large as the English one.
-         * 0.90 keeps a small safety margin under 1.0 (the English ideal) while
-         * the now-compact text block means the floor is rarely hit; below it
-         * the console scrolls instead of shrinking the dial further.
+         * Minimum dial scale for localized layouts. The compact home prioritizes
+         * keeping the complete connect flow and essential status in the viewport;
+         * the ScrollView remains only as a fallback for unusually short windows.
          */
-        const val LOCALIZED_DIAL_FLOOR = 0.90f
+        const val LOCALIZED_DIAL_FLOOR = 0.76f
         /**
          * Spare room required before the dial is allowed to grow back.
          *
