@@ -77,6 +77,21 @@ jobs:
             -PmolidoVersionCode=49999 \
             -PmolidoVersionName=0.0.0-ci
 
+      - name: Verify Android TV launcher manifest
+        run: |
+          set -euo pipefail
+          AAPT="$ANDROID_HOME/build-tools/36.0.0/aapt"
+          TV_APK=$(find app/build/outputs/apk/tv/release -name '*universal*.apk' -print -quit)
+          MOBILE_APK=$(find app/build/outputs/apk/mobile/release -name '*universal*.apk' -print -quit)
+          test -s "$TV_APK"
+          test -s "$MOBILE_APK"
+          "$AAPT" dump badging "$TV_APK" | grep -F "uses-feature: name='android.software.leanback' req='true'"
+          "$AAPT" dump xmltree "$TV_APK" AndroidManifest.xml | grep -F 'android.intent.category.LEANBACK_LAUNCHER'
+          if "$AAPT" dump xmltree "$MOBILE_APK" AndroidManifest.xml | grep -Fq 'android.intent.category.LEANBACK_LAUNCHER'; then
+            echo "::error::Phone APK must not register as an Android TV launcher app"
+            exit 1
+          fi
+
       - name: Upload unsigned validation APKs
         uses: actions/upload-artifact@v6
         with:
