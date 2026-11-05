@@ -178,6 +178,10 @@ jobs:
           tv_apk=dist/MolidoMeshAI-android-tv-universal.apk
           "$AAPT" dump badging "$tv_apk" | grep -F "uses-feature: name='android.software.leanback'"
           "$AAPT" dump xmltree "$tv_apk" AndroidManifest.xml | grep -F 'android.intent.category.LEANBACK_LAUNCHER'
+          if "$AAPT" dump xmltree dist/MolidoMeshAI-android-universal.apk AndroidManifest.xml | grep -Fq 'android.intent.category.LEANBACK_LAUNCHER'; then
+            echo "Phone APK must not register as an Android TV launcher app" >&2
+            exit 1
+          fi
           for apk in dist/*.apk; do
             "$APKSIGNER" verify --verbose "$apk"
             actual_cert=$("$APKSIGNER" verify --print-certs "$apk" | \
