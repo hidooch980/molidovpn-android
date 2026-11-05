@@ -73,6 +73,8 @@ jobs:
           workspaces: core/aether -> target
 
       - name: Fetch pinned native binaries with checksum verification
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: bash tools/fetch-binaries.sh
 
       - uses: actions/setup-go@v6
