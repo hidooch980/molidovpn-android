@@ -20,7 +20,7 @@ import java.util.concurrent.Executors
 private typealias Release = UpdateSources.Release
 
 /**
- * "Check for updates": finds a newer release (our worker first, GitHub second), then downloads the
+ * "Check for updates": finds a newer release from GitHub mirrors / Releases API, then downloads the
  * right APK for this CPU inside the app and opens the system installer. The owner chose in-app install
  * over the browser hand-off; the one-time "install unknown apps" permission is requested when needed.
  * The browser is only a fallback when the in-app download fails.
