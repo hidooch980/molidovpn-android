@@ -55,13 +55,13 @@ object UpdateSources {
     }
 
     fun releaseJsonUrls(mirrors: List<String>): List<String> =
-        (listOf(LiveSync.RAW + "latest.json", LiveSync.CDN + "latest.json", StaticFirst.RAW + "latest.json", StaticFirst.CDN + "latest.json", GITHUB_RELEASE_URL, WORKER_RELEASE_URL) +
+        (listOf(LiveSync.RAW + "latest.json", LiveSync.CDN + "latest.json", StaticFirst.RAW + "latest.json", StaticFirst.CDN + "latest.json", GITHUB_RELEASE_URL) +
             mirrors.map { "${it.trimEnd('/')}/latest.json" }).filter(::isSecureHttpsUrl).distinct()
 
     /**
      * Try every configured source until one has a release newer than the installed app.
      * Static copies are double-checked against GitHub, but a stale or empty copy must not
-     * prevent the worker and user-configured mirrors from being tried.
+     * prevent GitHub and user-configured mirrors from being tried.
      */
     fun latest(urls: List<String>, installed: String, isNewer: (String, String) -> Boolean, fetch: (String) -> Release?): Release? {
         var lastError: Exception? = null
