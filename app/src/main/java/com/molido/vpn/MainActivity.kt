@@ -3947,6 +3947,7 @@ class MainActivity : Activity() {
         ).apply { topMargin = dp(top) }
         content.addView(sectionLabel(Strings.t("Main settings")), mainParams(0))
         content.addView(navRow(Strings.t("Language"), AppLanguage.label(currentLanguagePref())) { chooseLanguage() }, mainParams(10))
+        content.addView(navRow(Strings.t("Dynamic DNS (DDNS)"), DdnsManager.summary(this)) { DdnsManager.show(this) }, mainParams())
         content.addView(createToggleRow(
             Strings.t("Live updates (5 s)"),
             Strings.t("Refresh lists without interrupting the tunnel"),
