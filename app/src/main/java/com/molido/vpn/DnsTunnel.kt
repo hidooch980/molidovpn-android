@@ -13,12 +13,15 @@ import java.io.File
  *    without a release; `enabled` is false by default;
  *  * [candidates]: the order resolvers would be tried in, and [clientArgs]: the exact dnstt-client
  *    command line for each (both unit tested);
- *  * `tools/build-dnstt.sh`: builds the pinned dnstt client as `jniLibs/<abi>/libdnstt.so`
- *    (verified locally for arm64-v8a and armeabi-v7a, ~9 MB each). NOT run by CI yet, so release
- *    APKs do not contain it and [binaryPresent] is false there.
+ *  * `tools/build-dnstt.sh`: builds the pinned dnstt client for Android ABIs. CI now compiles
+ *    arm64-v8a and armeabi-v7a into a temporary runner directory as a build-integrity check;
+ *    those artifacts are deliberately NOT copied into the APK. Release APKs therefore still
+ *    do not contain the client and [binaryPresent] remains false until VPN-service integration
+ *    and end-to-end tests are complete.
  *
  * TODO (next PR, once the owner has a dnstt server — see docs/DNS-TUNNEL-SETUP.md):
- *  1. call tools/build-dnstt.sh in both release workflows (+~4 MB per APK, compressed);
+ *  1. after service integration and acceptance tests, add the verified client to release packaging
+ *     (CI currently builds to a temporary directory only; no dnstt binary is shipped);
  *  2. MolidoVpnService.startDnsTunnel(): TUN → `libdnstt.so <clientArgs> 127.0.0.1:[LOCAL_PORT]` per
  *     candidate until a SOCKS probe passes → TorSocksFront(listen, LOCAL_PORT, dns relay) →
  *     Tun2SocksManager(dnsOnlyUdpgw = true); a small UDP→TCP DNS relay through the tunnel; teardown
