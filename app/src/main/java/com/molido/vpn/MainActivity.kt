@@ -7742,7 +7742,7 @@ class MainActivity : Activity() {
         nativeIkev2 = manager
         if (!manager.isSupported()) {
             showDisconnected(Strings.t("IKEv2 requires Android 11+ and device IPsec support"))
-            Toast.makeText(this, "This device does not support native IKEv2", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, Strings.t("IKEv2 requires Android 11+ and device IPsec support"), Toast.LENGTH_LONG).show()
             return
         }
         val form = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24, 8, 24, 0) }
@@ -7755,7 +7755,7 @@ class MainActivity : Activity() {
         val username = field("Username")
         val password = field("Password", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD)
         val dialog = AlertDialog.Builder(this).setTitle("IKEv2 / IPsec")
-            .setMessage("Use credentials from a free provider account or your MolidoVPN dedicated server. Free accounts must be created with the provider first.")
+            .setMessage(Strings.t("IKEV2_ACCOUNT_HELP"))
             .setView(form).setNegativeButton(Strings.t("Cancel"), null).setPositiveButton(Strings.t("Connect"), null).create()
         dialog.setOnShowListener {
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
