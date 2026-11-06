@@ -781,6 +781,14 @@ class MainActivity : Activity() {
         }
         val header = createHeader()
         val console = createConnectionConsole()
+        // One-time migration: existing installs also open the new uncluttered home.
+        // Users can still switch to Advanced afterwards and keep that preference.
+        if (!preferences().getBoolean(HOME_LAYOUT_SIMPLIFIED_PREF, false)) {
+            preferences().edit()
+                .putBoolean(HOME_SIMPLE_PREF, true)
+                .putBoolean(HOME_LAYOUT_SIMPLIFIED_PREF, true)
+                .apply()
+        }
         applyHomeMode()
         // The console can still scroll, but it is meant not to need it: the dial
         // shrinks first (see [fitConsoleToViewport]) and scrolling is only the
@@ -9394,6 +9402,7 @@ class MainActivity : Activity() {
         const val MY_CONFIGS_QR_REQUEST = 1105
         const val V2RAY_OVER_PSIPHON_PREF = "v2ray_over_psiphon"
         const val HOME_SIMPLE_PREF = "home_simple"
+        private const val HOME_LAYOUT_SIMPLIFIED_PREF = "home_layout_simplified_20261106"
         const val ADVANCED_SETTINGS_TAG = "advanced_settings"
         const val ONBOARDING_PREF = "onboarding_done"
         /** Set when the user picks a connection mode themselves; until then the owner's default applies. */
