@@ -148,7 +148,7 @@ android {
     // Parse the public IKEv2 provider directory; only HTTPS pages on its own domain are followed.
     implementation("org.jsoup:jsoup:1.18.3")
     // StateFlow for UI state (ui/state) + Dispatchers.Main for collecting it. No AndroidX lifecycle needed.
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
     implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.aar"))))
     // Google Mobile Ads Next-Gen + UMP are mobile-only. The TV APK intentionally
     // excludes the ads SDK because Google's Android ads SDK does not support TV.
