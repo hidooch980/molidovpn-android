@@ -149,7 +149,10 @@ class ShardRefreshJob : android.app.job.JobService() {
          * four opportunities a day already means we are never more than a few
          * hours behind a rebuild.
          */
-        private const val PERIOD_MS = 60 * 60 * 1000L
+        // Android JobScheduler enforces a 15-minute minimum periodic interval.
+        // The foreground live sync checks every five minutes; this is the
+        // best-effort background fallback when the app is not active.
+        private const val PERIOD_MS = 15 * 60 * 1000L
 
         /** Daily "test servers from my internet" (Wi-Fi + charging, reports on). */
         private const val NODE_TEST_ID = 0x5A50
