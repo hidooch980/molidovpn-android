@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Ikev2VpnProfile
 import android.net.VpnManager
+import android.net.VpnProfileState
 import android.os.Build
 
 /** Android OS-managed IKEv2/IPsec. Do not layer this tunnel over MolidoVpnService. */
@@ -12,6 +13,7 @@ class NativeIkev2Manager(context: Context) {
     private val app = context.applicationContext
     private val manager: VpnManager? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) app.getSystemService(VpnManager::class.java) else null
     data class Credentials(val username: String, val password: String, val identity: String)
+    private var sessionKey: String? = null
     fun isSupported(): Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && app.packageManager.hasSystemFeature(PackageManager.FEATURE_IPSEC_TUNNELS) && manager != null
     fun provision(host: String, credentials: Credentials): Intent? {
         check(isSupported()) { "Android 11+ with IPsec support is required" }
@@ -22,9 +24,29 @@ class NativeIkev2Manager(context: Context) {
     }
     fun start(): String? {
         check(isSupported()) { "IKEv2/IPsec is not supported" }
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) manager!!.startProvisionedVpnProfileSession() else { @Suppress("DEPRECATION") manager!!.startProvisionedVpnProfile(); null }
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            manager!!.startProvisionedVpnProfileSession().also { sessionKey = it }
+        } else {
+            @Suppress("DEPRECATION")
+            manager!!.startProvisionedVpnProfile()
+            sessionKey = null
+            null
+        }
     }
-    fun stop() { if (isSupported()) manager!!.stopProvisionedVpnProfile() }
+    /** null means API 30–32: Android does not expose an app-scoped session state there. */
+    fun isOwnSessionConnected(): Boolean? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return null
+        val expected = sessionKey ?: return false
+        val state = manager!!.provisionedVpnProfileState ?: return false
+        return state.sessionId == expected && state.state == VpnProfileState.STATE_CONNECTED
+    }
+
+    fun stop() {
+        if (isSupported()) {
+            manager!!.stopProvisionedVpnProfile()
+            sessionKey = null
+        }
+    }
     fun remove() { if (isSupported()) { manager!!.stopProvisionedVpnProfile(); manager!!.deleteProvisionedVpnProfile() } }
     internal fun validHost(host: String): Boolean = isValidIkev2Host(host)
 
