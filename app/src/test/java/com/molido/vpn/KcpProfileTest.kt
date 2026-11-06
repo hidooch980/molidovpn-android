@@ -59,6 +59,14 @@ class KcpProfileTest {
     }
 
     @Test
+    fun rejectsNonFiniteAndOversizedJsonValues() {
+        assertNull(KcpProfile.fromJson(JSONObject().put("cwndMultiplier", Double.NaN)))
+        assertNull(KcpProfile.fromJson(JSONObject().put("cwndMultiplier", Double.POSITIVE_INFINITY)))
+        assertNull(KcpProfile.fromJson(JSONObject().put("maxSendingWindow", 16 * 1024 * 1024 + 1)))
+        assertNull(KcpProfile.fromJson(JSONObject().put("mtu", "not-a-number")))
+    }
+
+    @Test
     fun currentSettingsJsonDoesNotEmitRemovedLegacyFields() {
         val json = KcpProfile().toJson()
         assertTrue(json.has("mtu"))
