@@ -20,7 +20,7 @@ jobs:
           python-version: '3.12'
       - name: Apply safe formatting and lint fixes to agent-owned scripts
         run: |
-          python -m pip install --disable-pip-version-check ruff
+          python -m pip install --disable-pip-version-check ruff==0.17.4
           ruff check --fix scripts/agent_ci_triage.py scripts/test_agent_ci_triage.py
           ruff format scripts/agent_ci_triage.py scripts/test_agent_ci_triage.py
           ruff check scripts/agent_ci_triage.py scripts/test_agent_ci_triage.py
