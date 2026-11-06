@@ -74,7 +74,7 @@ class TransportCatalogTests(unittest.TestCase):
             else:
                 self.assertEqual(entry["status"], "client_path_present")
 
-    def test_only_unimplemented_options_are_mtproto_and_mkcp(self):
+    def test_only_unimplemented_option_is_mtproto(self):
         missing = {
             entry["id"]
             for entry in self.entries
