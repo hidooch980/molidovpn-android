@@ -7743,7 +7743,7 @@ class MainActivity : Activity() {
         }
         val form = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24, 8, 24, 0) }
         fun field(hintText: String, type: Int = InputType.TYPE_CLASS_TEXT): EditText = EditText(this).apply {
-            hint = hintText; inputType = type; singleLine = true
+            hint = hintText; inputType = type; setSingleLine(true)
             form.addView(this, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         }
         val host = field("IKEv2 server hostname")
