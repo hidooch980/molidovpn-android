@@ -23,16 +23,15 @@ import java.util.concurrent.atomic.AtomicBoolean
  * masks into `remote/smart-split.json` (this file's [SUBSCRIPTION_URL]) and the
  * phone fetches only that.
  *
- * The mirror is rebuilt by `.github/workflows/smart-split-sync.yml` every six
- * hours from the publisher's live subscription, so a publisher change reaches
- * the fleet with no build and no version bump — the same arrangement as the
- * SHARD node list and [RemotePolicy]'s edges.
+ * The mirror is refreshed by `.github/workflows/sync-lists.yml` every five
+ * minutes from upstream lists, so a publisher change reaches the fleet with no
+ * build and no version bump — the same arrangement as the SHARD node list.
  *
  * ## Cadence
  *
- * The same shape as [ShardSubscription]: a six-hour floor, an ETag so a
+ * The same shape as [ShardSubscription]: a five-minute floor, an ETag so a
  * no-change check is a few hundred bytes, refresh on app resume / Smart Split
- * connect / the periodic job, and best-effort failure — a failed refresh keeps
+ * connect / live sync / the periodic job, and best-effort failure — a failed refresh keeps
  * the previous cache, and a first run with no cache falls back to the seed
  * shipped in assets, so Smart Split still works offline on a fresh install.
  */
@@ -61,7 +60,7 @@ object SmartSplitSub {
     private const val ETAG_PREF = "smart_split_etag"
     private const val LAST_CHECK_PREF = "smart_split_last_check"
 
-    private const val MIN_INTERVAL_MS = 6 * 60 * 60 * 1000L
+    private const val MIN_INTERVAL_MS = 5 * 60 * 1000L
     private const val CONNECT_TIMEOUT_MS = 12_000
     private const val READ_TIMEOUT_MS = 20_000
 
@@ -148,9 +147,13 @@ object SmartSplitSub {
      * Refresh if due. Cheap to call from anywhere including the UI thread —
      * hands the work to a thread and returns immediately.
      */
-    fun refreshIfDue(context: Context, force: Boolean = false) {
+    fun refreshIfDue(
+        context: Context,
+        force: Boolean = false,
+        maxAgeMs: Long = MIN_INTERVAL_MS,
+    ) {
         val elapsed = System.currentTimeMillis() - lastCheckMillis(context)
-        if (!force && elapsed in 0 until MIN_INTERVAL_MS) return
+        if (!force && elapsed in 0 until maxAgeMs) return
         if (!refreshing.compareAndSet(false, true)) return
         Thread({
             try {
