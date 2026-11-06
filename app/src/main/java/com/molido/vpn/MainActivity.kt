@@ -154,6 +154,8 @@ class MainActivity : Activity() {
     private var homeRetryButton: TextView? = null
     private var homeSupportButton: TextView? = null
     private var homeAdvancedLink: TextView? = null
+    private var homeSocialRow: View? = null
+    private var homeShareRow: View? = null
     /** Owner announcement banner at the top of home ([renderNotice]); GONE when there is none. */
     private var homeNoticeBox: LinearLayout? = null
     /** Main-screen automatic update banner; hidden until a newer release is found. */
@@ -2118,8 +2120,8 @@ class MainActivity : Activity() {
             ViewGroup.LayoutParams.WRAP_CONTENT,
         ).apply { topMargin = dp(14) })
 
-        // Compact Telegram support row.
-        addView(LinearLayout(this@MainActivity).apply {
+        // Support and sharing live in the advanced area; keep the default home quiet.
+        val telegramSupportRow = LinearLayout(this@MainActivity).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
             setPadding(dp(14), dp(8), dp(14), dp(8))
@@ -2134,7 +2136,9 @@ class MainActivity : Activity() {
             addView(label(Strings.t("Telegram support: @Molido_Vpn"), 12.5f, INK, TypefaceStyle.MEDIUM).apply {
                 maxLines = 1
             })
-        }, LinearLayout.LayoutParams(
+        }
+        homeSocialRow = telegramSupportRow
+        addView(telegramSupportRow, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.WRAP_CONTENT,
         ).apply { topMargin = dp(10) })
@@ -2257,14 +2261,16 @@ class MainActivity : Activity() {
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.WRAP_CONTENT,
         ))
-        // "Tell your friends" (QR + share), under the mode link on both home views.
-        addView(label(Strings.t("Tell your friends"), 13f, palette.mint, TypefaceStyle.MEDIUM).apply {
+        // "Tell your friends" stays available in advanced mode, not on the clean home.
+        val shareShortcut = label(Strings.t("Tell your friends"), 13f, palette.mint, TypefaceStyle.MEDIUM).apply {
             gravity = Gravity.CENTER
             setPadding(dp(12), dp(6), dp(12), dp(4))
             isClickable = true
             isFocusable = true
             setOnClickListener { showShareSheet() }
-        }, childCount - 1, LinearLayout.LayoutParams(
+        }
+        homeShareRow = shareShortcut
+        addView(shareShortcut, childCount - 1, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.WRAP_CONTENT,
         ))
@@ -2290,15 +2296,14 @@ class MainActivity : Activity() {
     private fun applyHomeMode() {
         val simple = homeSimple()
         homeAdvancedBox?.visibility = if (simple) View.GONE else View.VISIBLE
-        // The refreshed home keeps useful destinations visible in both modes.
-        // Advanced adds transport and diagnostic controls; Simple stays uncluttered
-        // but still exposes country selection, traffic and live connection metadata.
-        homeQuickActions?.visibility = View.VISIBLE
+        // Default home: one connect action, server location and compact status.
+        // Secondary actions, Gaming, support and sharing remain one tap away in Advanced.
+        homeQuickActions?.visibility = if (simple) View.GONE else View.VISIBLE
         homeTelemetryLine?.visibility = View.VISIBLE
         homeLocationCard?.visibility = if (simple) View.VISIBLE else View.GONE
-        // Keep Gaming beside the primary connect action in both home modes.
-        // Only the decorative footer is removed from Simple mode to save height.
-        homeGamingShortcut?.visibility = View.VISIBLE
+        homeGamingShortcut?.visibility = if (simple) View.GONE else View.VISIBLE
+        homeSocialRow?.visibility = if (simple) View.GONE else View.VISIBLE
+        homeShareRow?.visibility = if (simple) View.GONE else View.VISIBLE
         footerWave.visibility = if (simple) View.GONE else View.VISIBLE
         homeLocationCard?.text = Strings.t("SERVER LOCATION") + "\n" + locationCardText()
         homeAdvancedLink?.text = if (simple) Strings.t("Advanced mode") else Strings.t("Simple mode")
