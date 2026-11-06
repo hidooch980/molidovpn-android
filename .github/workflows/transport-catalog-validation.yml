@@ -3,10 +3,12 @@ on:
   pull_request:
     paths:
       - 'config/network/transport-catalog.json'
+      - 'config/network/protocol-transport-matrix.json'
       - 'docs/NETWORK_TRANSPORT_COMPATIBILITY.md'
       - 'scripts/test_transport_catalog.py'
       - 'scripts/transport_gate.py'
       - 'scripts/test_transport_gate.py'
+      - 'scripts/test_protocol_transport_matrix.py'
       - 'app/src/main/java/com/molido/vpn/engine/protocol/**'
       - 'app/src/test/java/com/molido/vpn/engine/protocol/**'
       - 'scripts/transport_gate.py'
