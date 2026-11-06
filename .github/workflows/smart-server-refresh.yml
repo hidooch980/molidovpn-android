@@ -1,12 +1,9 @@
 name: Smart server refresh guard
 
 on:
-  schedule:
-    - cron: '47 * * * *'
   push:
     branches: [main]
     paths:
-      - "remote/shard-nodes.txt"
       - "scripts/smart_server_refresh.py"
       - "scripts/test_smart_server_refresh.py"
       - ".github/workflows/smart-server-refresh.yml"
