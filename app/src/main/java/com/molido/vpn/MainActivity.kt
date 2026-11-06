@@ -5,6 +5,7 @@ import kotlinx.coroutines.launch
 import com.molido.vpn.agent.AgentRuntime
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.app.Dialog
 import android.content.BroadcastReceiver
 import android.content.ClipData
@@ -22,6 +23,8 @@ import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
 import android.widget.ImageView.ScaleType
 import android.net.Uri
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.VpnService
 import android.os.Build
 import android.os.Bundle
@@ -210,6 +213,8 @@ class MainActivity : Activity() {
      */
     private var autoScanSettling = false
     private var pendingConfig: String? = null
+    private var nativeIkev2: NativeIkev2Manager? = null
+    private var ikev2ConnectPending = false
     /**
      * The backup JSON built before the file picker opened.
      *
@@ -1008,6 +1013,12 @@ class MainActivity : Activity() {
         }
         if (requestCode == MY_CONFIGS_QR_REQUEST) {
             if (resultCode == RESULT_OK) data?.data?.let(::readQrImage)
+            return
+        }
+        if (requestCode == IKEV2_REQUEST) {
+            if (resultCode == RESULT_OK && ikev2ConnectPending) startNativeIkev2Session()
+            else showDisconnected(Strings.t("IKEv2 permission was not granted"))
+            ikev2ConnectPending = false
             return
         }
         if (requestCode == VPN_REQUEST && resultCode == RESULT_OK) {
@@ -3368,6 +3379,10 @@ class MainActivity : Activity() {
      * the content, which is the honest place to reject a wrong pick.
      */
     private fun importSettings() {
+        if (selectedProtocol == Protocol.IKEV2 && (visualState == OrbitDialView.State.CONNECTED || visualState == OrbitDialView.State.CONNECTING)) {
+            stopNativeIkev2()
+            return
+        }
         if (TunnelStatus.isActive() || visualState == OrbitDialView.State.CONNECTING) {
             toastShort(Strings.t("Disconnect first — a restore changes what the tunnel uses"))
             return
@@ -7717,6 +7732,68 @@ class MainActivity : Activity() {
             .start()
     }
 
+    /** Native IKEv2 uses Android's VPN stack; credentials are never persisted by this app. */
+    private fun showNativeIkev2Setup() {
+        val manager = NativeIkev2Manager(this)
+        nativeIkev2 = manager
+        if (!manager.isSupported()) {
+            showDisconnected(Strings.t("IKEv2 requires Android 11+ and device IPsec support"))
+            Toast.makeText(this, "This device does not support native IKEv2", Toast.LENGTH_LONG).show()
+            return
+        }
+        val form = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24, 8, 24, 0) }
+        fun field(hintText: String, type: Int = InputType.TYPE_CLASS_TEXT): EditText = EditText(this).apply {
+            hint = hintText; inputType = type; singleLine = true
+            form.addView(this, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        }
+        val host = field("IKEv2 server hostname")
+        val identity = field("IKE identity (provider supplied)")
+        val username = field("Username")
+        val password = field("Password", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD)
+        val dialog = AlertDialog.Builder(this).setTitle("IKEv2 / IPsec")
+            .setMessage("Use credentials from a free provider account or your MolidoVPN dedicated server. Free accounts must be created with the provider first.")
+            .setView(form).setNegativeButton(Strings.t("Cancel"), null).setPositiveButton(Strings.t("Connect"), null).create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val h = host.text.toString().trim(); val id = identity.text.toString().trim()
+                val u = username.text.toString(); val p = password.text.toString()
+                if (h.isBlank() || id.isBlank() || u.isBlank() || p.isEmpty()) {
+                    Toast.makeText(this, "Complete all IKEv2 fields", Toast.LENGTH_SHORT).show(); return@setOnClickListener
+                }
+                try {
+                    val consent = manager.provision(h, NativeIkev2Manager.Credentials(u, p, id))
+                    dialog.dismiss(); ikev2ConnectPending = true; showConnecting()
+                    if (consent != null) startActivityForResult(consent, IKEV2_REQUEST) else startNativeIkev2Session()
+                } catch (e: Exception) {
+                    ikev2ConnectPending = false
+                    showDisconnected("IKEv2 profile setup failed: " + (e.message ?: "invalid profile"))
+                }
+            }
+        }
+        dialog.show()
+    }
+
+    private fun startNativeIkev2Session() {
+        try { (nativeIkev2 ?: NativeIkev2Manager(this).also { nativeIkev2 = it }).start(); showConnecting(); verifyNativeIkev2(0) }
+        catch (e: Exception) { showDisconnected("IKEv2 could not start: " + (e.message ?: "system error")) }
+    }
+
+    private fun verifyNativeIkev2(attempt: Int) {
+        if (selectedProtocol != Protocol.IKEV2 || isFinishing) return
+        val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val network = cm.activeNetwork
+        val connected = network?.let { cm.getNetworkCapabilities(it)?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) } == true
+        if (connected) { showConnected(); return }
+        if (attempt >= 12) { showDisconnected(Strings.t("IKEv2 connection could not be verified. Check credentials, server identity and network.")); return }
+        Handler(Looper.getMainLooper()).postDelayed({ verifyNativeIkev2(attempt + 1) }, 1500L)
+    }
+
+    private fun stopNativeIkev2() {
+        runCatching { (nativeIkev2 ?: NativeIkev2Manager(this)).stop() }
+        ikev2ConnectPending = false
+        showDisconnected(Strings.t("IKEv2 disconnected"))
+    }
+
     private fun toggleTunnel() {
         // Cancelling mid-connect must work. Previously this only asked
         // TunnelStatus.isActive(), which is false while Psiphon is still
@@ -7743,6 +7820,10 @@ class MainActivity : Activity() {
         // AmneziaWG without an import connects with the built-in config
         // (AmneziaConfig.builtinCoreJson); the import is an optional override.
         // My configs with nothing added: the My configs page IS the next step.
+        if (selectedProtocol == Protocol.IKEV2) {
+            showNativeIkev2Setup()
+            return
+        }
         if (selectedProtocol == Protocol.MY_CONFIGS && !MyConfigs.hasProxyNodes(this)) {
             openMyConfigs()
             return
@@ -9412,7 +9493,8 @@ class MainActivity : Activity() {
         V2RAY("V2Ray servers", "v2ray", "Public V2Ray servers, auto-selected"),
 
         /** The user's own configs and subscriptions ([MyConfigs]); SHARD path too. */
-        MY_CONFIGS("My configs", MyConfigs.PROTOCOL, "Your own configs and subscriptions");
+        MY_CONFIGS("My configs", MyConfigs.PROTOCOL, "Your own configs and subscriptions"),
+        IKEV2("IKEv2", "ikev2", "Native Android IKEv2/IPsec connection");
 
         val label: String get() = Strings.t(enLabel)
         val description: String get() = Strings.t(enDescription)
@@ -9564,6 +9646,7 @@ class MainActivity : Activity() {
 
     private companion object {
         const val VPN_REQUEST = 100
+        const val IKEV2_REQUEST = 1110
         const val NOTIFICATION_PERMISSION_REQUEST = 101
         const val BACKUP_EXPORT_REQUEST = 102
         const val BACKUP_IMPORT_REQUEST = 103
