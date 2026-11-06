@@ -34,7 +34,19 @@
       "runtime_selectable": false,
       "interop_status": "not_started",
       "integration_evidence": [],
-      "existing_tests": []
+      "existing_tests": [
+        "app/src/test/java/com/molido/vpn/engine/protocol/ProtocolEngineRegistryTest.kt"
+      ],
+      "non_implementation_evidence": [
+        {
+          "path": "app/src/main/java/com/molido/vpn/engine/protocol/ProtocolEngineRegistry.kt",
+          "marker": "ProtocolEngineId.MTPROTO_PROXY"
+        },
+        {
+          "path": "app/src/main/java/com/molido/vpn/engine/protocol/ProtocolEngineRegistry.kt",
+          "marker": "implemented = false"
+        }
+      ]
     },
     {
       "id": "tor",
@@ -412,7 +424,13 @@
       "runtime_selectable": false,
       "interop_status": "not_started",
       "integration_evidence": [],
-      "existing_tests": []
+      "existing_tests": [],
+      "non_implementation_evidence": [
+        {
+          "path": "app/src/main/java/com/molido/vpn/V2rayNodes.kt",
+          "marker": "private val NETWORKS = setOf(\"tcp\", \"ws\", \"grpc\", \"httpupgrade\", \"xhttp\")"
+        }
+      ]
     }
   ]
 }
