@@ -137,6 +137,7 @@ object V2rayNodes {
         val out = ArrayList<V2rayNode>()
         lines.forEach { line ->
             val node = parseOne(line) ?: return@forEach
+            if (!TransportRuntimePolicy.isSelectable(node.network)) return@forEach
             if (seen.add(node.uri)) out.add(node)
         }
         return out
