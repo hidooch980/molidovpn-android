@@ -22,8 +22,8 @@ def classify(log: str) -> dict:
     excerpt = []
     for line in log.splitlines():
         if re.search(r"(?i)error|failed|exception|timed? out|unavailable|429|502|503|504", line):
-            line = re.sub(r"(?i)(authorization:\\s*bearer\\s+)[^\\s]+", r"\\1[REDACTED]", line[:500])
-            line = re.sub(r"(?i)((?:token|password|secret|api[_-]?key)=)[^\\s&]+", r"\\1[REDACTED]", line)
+            line = re.sub(r"(?i)(authorization:\s*bearer\s+)[^\s]+", r"\1[REDACTED]", line[:500])
+            line = re.sub(r"(?i)((?:token|password|secret|api[_-]?key)=)[^\s&]+", r"\1[REDACTED]", line)
             excerpt.append(line)
     return {"category": "transient" if retry else ("deterministic" if deterministic else "unclassified"), "retry_recommended": retry, "transient_signals": transient, "deterministic_signals": deterministic, "excerpt": excerpt[-30:]}
 def main() -> int:
