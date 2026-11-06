@@ -33,3 +33,13 @@ AI provider. Every skill has a fixed owner, cadence and safety gate.
 - No server-supplied content is executed as code.
 - The Android operating system may delay background work; the five-minute cadence
   applies to active live sync. Background jobs remain subject to Android scheduling.
+
+## Self-healing and maintenance agent
+
+- Watches completion of Android validation, native IPv4/IPv6 regression and server-catalog guard workflows.
+- Classifies CI failures into transient, deterministic and unclassified groups.
+- Retries a transient failed run once only; repeated or deterministic failures create a deduplicated diagnostic issue.
+- Redacts common authorization/token values and includes only a bounded error excerpt in diagnostic issues.
+- Runs weekly Ruff lint/format fixes only on the agent-owned Python diagnostic files. Changes are proposed as a pull request and must pass tests/review before merge.
+- Dependabot proposes weekly Gradle and GitHub Actions dependency updates.
+- The agent never edits release signing keys, credentials, VPN security policy, user data, or application source automatically. It does not auto-merge its own fixes.
