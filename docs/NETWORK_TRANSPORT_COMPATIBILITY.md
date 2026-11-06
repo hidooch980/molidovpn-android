@@ -4,7 +4,7 @@
 
 This document is the source-audited implementation inventory and test contract for the twelve requested options. It deliberately separates code presence from real-world interoperability. A parser, native library or tunnel path is not proof that a given server, carrier or Android device works.
 
-The machine-readable inventory is \`config/network/transport-catalog.json\`. Its entries are descriptive only: they do not activate, select, download or execute any transport.
+The machine-readable inventory is `config/network/transport-catalog.json`. Its entries are descriptive only: they do not activate, select, download or execute any transport.
 
 ## Correct protocol layers
 
@@ -26,19 +26,19 @@ The following is based on the checked-in client source and unit-test files, not 
 | Option | Source status | Evidence in the repository | Remaining validation |
 |---|---|---|---|
 | MTProto Proxy | Not found in current client source scan | No adapter identified | Decide whether to add a Telegram-only proxy mode; test MTProto client/server interoperability |
-| Tor | Existing client path | \`TorManager.kt\`, \`TorSocksFront.kt\` | Real-device bridge bootstrap, DNS, reconnect and soak matrix |
+| Tor | Existing client path | `TorManager.kt`, `TorSocksFront.kt` | Real-device bridge bootstrap, DNS, reconnect and soak matrix |
 | TCP | Existing client path | V2Ray/Xray network parser; smoltcp TCP sockets | Profile/server matrix and network-switch tests |
 | UDP | Existing client path | smoltcp UDP sockets; sing-box Hysteria2/TUIC sidecar | NAT, UDP-blocking, loss and server compatibility matrix |
-| QUIC | Existing Aether path | quiche-based \`quic.rs\` and MASQUE | Gateway interoperability, UDP loss, NAT and battery tests |
-| WebSocket | Existing Xray/V2Ray path | \`V2rayNodes.kt\` parser and \`wsSettings\` builder | Matching server path, TLS, CDN/proxy and idle-timeout tests |
-| gRPC | Existing Xray/V2Ray path | \`grpcSettings\` outbound builder | Service-name/mode interoperability and streaming tests |
-| XHTTP | Existing Xray/V2Ray path | \`XhttpProfile.kt\`, \`xhttpSettings\` builder | Pinned Xray version, request modes and real-server matrix |
-| HTTP/2 | Existing experimental Aether path | \`masque_h2.rs\` | Known gateway interoperability limitations; do not assume general availability |
-| HTTP/3 | Existing Aether path | quiche HTTP/3 connection in \`quic.rs\` | Live gateway and network-profile validation |
-| HTTPUpgrade | Existing Xray/V2Ray path | Parser and \`httpupgradeSettings\` builder | Matching server configuration and reverse-proxy tests |
+| QUIC | Existing Aether path | quiche-based `quic.rs` and MASQUE | Gateway interoperability, UDP loss, NAT and battery tests |
+| WebSocket | Existing Xray/V2Ray path | `V2rayNodes.kt` parser and `wsSettings` builder | Matching server path, TLS, CDN/proxy and idle-timeout tests |
+| gRPC | Existing Xray/V2Ray path | `grpcSettings` outbound builder | Service-name/mode interoperability and streaming tests |
+| XHTTP | Existing Xray/V2Ray path | `XhttpProfile.kt`, `xhttpSettings` builder | Pinned Xray version, request modes and real-server matrix |
+| HTTP/2 | Existing experimental Aether path | `masque_h2.rs` | Known gateway interoperability limitations; do not assume general availability |
+| HTTP/3 | Existing Aether path | quiche HTTP/3 connection in `quic.rs` | Live gateway and network-profile validation |
+| HTTPUpgrade | Existing Xray/V2Ray path | Parser and `httpupgradeSettings` builder | Matching server configuration and reverse-proxy tests |
 | mKCP | Not found in current client source scan | Current V2Ray network allow-list does not include it | Verify bundled Xray support and maintained server compatibility before implementation |
 
-Relevant existing tests include \`VlessTransportTest.kt\`, \`XhttpProfileTest.kt\`, \`Hysteria2ImportTest.kt\`, \`WartimeTunnelsTest.kt\`, and Rust unit tests in \`core/aether/src/quic.rs\` and \`core/aether/src/masque_h2.rs\`. These are source/unit tests; they do not replace end-to-end tests against controlled servers.
+Relevant existing tests include `VlessTransportTest.kt`, `XhttpProfileTest.kt`, `Hysteria2ImportTest.kt`, `WartimeTunnelsTest.kt`, and Rust unit tests in `core/aether/src/quic.rs` and `core/aether/src/masque_h2.rs`. These are source/unit tests; they do not replace end-to-end tests against controlled servers.
 
 ## Adapter and server contract
 
@@ -97,17 +97,17 @@ Molido Agent may refresh the catalog, collect sanitized metrics, run approved te
 
 Store a sanitized JSON report for each client/server/device/network test run. Required top-level fields:
 
-- \`schema_version\` (currently \`1\`), \`transport_id\`, \`test_run_id\`
-- \`client_version\`, \`server_version\`, \`device_model\`, \`captured_at_utc\`
-- \`security\`: booleans for certificate validation, authentication, data-plane verification, DNS leak-free, IP leak-free and plaintext-fallback-disabled
-- \`network_profiles\`: at least two uniquely named profiles, each recording network type, sample count, handshake/reconnect success rates, median and p95 RTT, median upload/download Mbps, packet-loss percentage, soak duration and battery drain per hour
+- `schema_version` (currently `1`), `transport_id`, `test_run_id`
+- `client_version`, `server_version`, `device_model`, `captured_at_utc`
+- `security`: booleans for certificate validation, authentication, data-plane verification, DNS leak-free, IP leak-free and plaintext-fallback-disabled
+- `network_profiles`: at least two uniquely named profiles, each recording network type, sample count, handshake/reconnect success rates, median and p95 RTT, median upload/download Mbps, packet-loss percentage, soak duration and battery drain per hour
 
 Run the local report gate with:
 
-\`\`\`bash
+```bash
 python scripts/transport_gate.py --report path/to/transport-report.json --output transport-gate-result.json
-\`\`\`
+```
 
 The gate requires at least two network profiles, 10 samples per profile, 95% handshake and reconnect success, a 30-minute soak, non-zero bidirectional throughput, packet loss no greater than 5%, and all security flags true. Battery drain is recorded for same-device comparison rather than used as a universal cross-device threshold.
 
-A passing report means **eligible for manual review only**. The script deliberately returns \`validated: false\` and \`runtime_activation: never_automatic\`; it cannot enable a protocol or publish an app release. Reviewers must inspect the underlying test evidence and confirm the server/device cohort before changing the catalog state.
+A passing report means **eligible for manual review only**. The script deliberately returns `validated: false` and `runtime_activation: never_automatic`; it cannot enable a protocol or publish an app release. Reviewers must inspect the underlying test evidence and confirm the server/device cohort before changing the catalog state.
