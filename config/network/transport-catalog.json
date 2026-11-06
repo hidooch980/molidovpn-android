@@ -419,7 +419,7 @@
         "battery",
         "stability"
       ],
-      "notes": "Current pinned Xray 26.10.31 supports mKCP. Molido now parses kcp/mkcp aliases and emits bounded current kcpSettings. Legacy header/seed masks are intentionally rejected until FinalMask support is implemented. Live server and device interoperability tests remain pending.",
+      "notes": "Current pinned Xray 26.10.31 supports mKCP. Molido now parses kcp/mkcp aliases and emits bounded current kcpSettings for VLESS, VMess and Trojan. mKCP trades additional bandwidth for potentially lower latency. Legacy header/seed masks are intentionally rejected until FinalMask support is implemented. Live server and device interoperability tests remain pending.",
       "implementation_status": "implemented_client_path",
       "runtime_selectable": false,
       "interop_status": "live_server_matrix_pending_unmasked_only",
