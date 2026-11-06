@@ -446,7 +446,7 @@ class MainActivity : Activity() {
     private val statusPoll = object : Runnable {
         override fun run() {
             if (!uiForeground) return
-            if (selectedProtocol == Protocol.IKEV2) {
+            if (selectedProtocol == Protocol.IKEV2 && nativeIkev2 != null && (visualState == OrbitDialView.State.CONNECTED || ikev2ConnectPending)) {
                 val active = hasActiveVpnNetwork()
                 if (active && visualState != OrbitDialView.State.CONNECTED) showConnected()
                 else if (!active && visualState == OrbitDialView.State.CONNECTED) showDisconnected(Strings.t("IKEv2 tunnel was disconnected by Android"))
