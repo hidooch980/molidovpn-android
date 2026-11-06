@@ -1,7 +1,8 @@
-#!/usr/bin/env python3
 """Classify CI failure logs without executing or modifying repository code."""
 from __future__ import annotations
-import argparse, json, re
+import argparse
+import json
+import re
 from pathlib import Path
 TRANSIENT = {
  "network_timeout": r"timed? out|timeout|connection reset|temporary failure in name resolution",
@@ -16,7 +17,7 @@ DETERMINISTIC = {
  "configuration_error": r"yaml.*(error|invalid)|gradle.*could not|manifest merger failed",
 }
 def classify(log: str) -> dict:
-    transient = [k for k, p in TRANSIENT.items() if re.search(p, log, re.I)]
+    transient = [k for k, p in TRANSIENT.items() if re.search(p, log, re.IGNORECASE)]
     deterministic = [k for k, p in DETERMINISTIC.items() if re.search(p, log, re.I)]
     retry = bool(transient) and not deterministic
     excerpt = []
