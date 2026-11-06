@@ -576,7 +576,7 @@ object V2rayNodes {
 
 /**
  * The V2Ray servers pool: five mirror subscriptions merged, iOS feed as fallback,
- * cached in filesDir, refreshed at most hourly.
+ * cached in filesDir, refreshed on the five-minute live cadence.
  */
 object V2raySubscription {
 
