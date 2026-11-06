@@ -2,6 +2,7 @@ package com.molido.vpn
 
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import com.molido.vpn.agent.AgentRuntime
 
 import android.app.Activity
 import android.app.Dialog
@@ -308,6 +309,8 @@ class MainActivity : Activity() {
     private var proxyPortRow: OrbitSettingsRow? = null
 
     private var showingLogs = false
+    private var showingAgentHealth = false
+    private var agentHealthPage: View? = null
     private var showingScanner = false
     private var showingMode = false
     private var settingsPage: View? = null
@@ -2910,6 +2913,91 @@ class MainActivity : Activity() {
         animatePageOpen(page)
     }
 
+
+    /** Local Agent diagnostics. This page is observational and never controls the VPN tunnel. */
+    private fun openAgentHealthScreen() {
+        showingAgentHealth = true
+        agentHealthPage?.let(pageHost::removeView)
+        val page = FrameLayout(this).apply {
+            setBackgroundColor(CANVAS)
+            isClickable = true
+        }
+        val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val header = LinearLayout(this).apply {
+            gravity = Gravity.CENTER_VERTICAL
+            addView(createHeaderBackButton { closeAgentHealthScreen() }, LinearLayout.LayoutParams(dp(48), dp(56)))
+            addView(label("Molido Agent", 19f, INK, TypefaceStyle.SEMIBOLD), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        }
+        content.addView(header, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        val summary = label(textSize = 14f, color = INK).apply {
+            setPadding(dp(14), dp(14), dp(14), dp(14))
+            background = roundedBackground(SURFACE_VARIANT, 16, DIVIDER)
+        }
+        content.addView(summary, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(12) })
+        val toggle = TextView(this).apply {
+            gravity = Gravity.CENTER
+            textSize = 14f
+            setPadding(dp(14), dp(12), dp(14), dp(12))
+            isClickable = true
+            isFocusable = true
+            setOnClickListener {
+                AgentRuntime.setEnabled(this@MainActivity, !AgentRuntime.enabled(this@MainActivity))
+                renderAgentHealth()
+            }
+        }
+        content.addView(toggle, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) })
+        val details = label(textSize = 13f, color = INK).apply {
+            typeface = Typeface.MONOSPACE
+            setPadding(dp(14), dp(14), dp(14), dp(14))
+            background = roundedBackground(SURFACE, 14, DIVIDER)
+            setTextIsSelectable(true)
+        }
+        val scroll = ScrollView(this).apply { addView(details) }
+        content.addView(scroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f).apply { topMargin = dp(10) })
+        page.addView(content, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT).apply {
+            leftMargin = dp(22); rightMargin = dp(22); topMargin = dp(12); bottomMargin = dp(12)
+        })
+        page.setOnApplyWindowInsetsListener { _, insets ->
+            (content.layoutParams as FrameLayout.LayoutParams).apply {
+                topMargin = insets.systemWindowInsetTop + dp(12)
+                bottomMargin = insets.systemWindowInsetBottom + dp(12)
+                content.layoutParams = this
+            }
+            insets
+        }
+        fun refresh() {
+            if (!showingAgentHealth) return
+            val enabled = AgentRuntime.enabled(this)
+            val health = AgentRuntime.health(this)
+            summary.text = "Healthy ${health.healthy}   Degraded ${health.degraded}   Errors ${health.errors}\nNot run ${health.notRun}   Disabled ${health.disabled}   Total ${health.total}"
+            toggle.text = if (enabled) "Agent enabled  ·  Tap to pause" else "Agent paused  ·  Tap to enable"
+            details.text = health.items.joinToString("\n\n") { item ->
+                val age = item.ageMs?.let { "${it / 1000}s ago" } ?: "no activity yet"
+                "${item.skillId}\n${item.state}  ·  ${age}" + (item.detailCode?.let { "\nDetail: $it" } ?: "")
+            }.ifBlank { "No registered Agent skills." }
+        }
+        val handler = Handler(Looper.getMainLooper())
+        val ticker = object : Runnable {
+            override fun run() {
+                refresh()
+                if (showingAgentHealth) handler.postDelayed(this, 10_000L)
+            }
+        }
+        page.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+            override fun onViewAttachedToWindow(view: View) { ticker.run() }
+            override fun onViewDetachedFromWindow(view: View) { handler.removeCallbacks(ticker) }
+        })
+        agentHealthPage = page
+        pageHost.addView(page)
+        page.requestApplyInsets()
+        animatePageOpen(page)
+    }
+
+    private fun closeAgentHealthScreen() {
+        showingAgentHealth = false
+        agentHealthPage?.let { animatePageClose(it) { agentHealthPage = null } }
+    }
+
     private fun closeLogsScreen() {
         showingLogs = false
         logsPage?.let { animatePageClose(it) { logsPage = null } }
@@ -4093,6 +4181,8 @@ class MainActivity : Activity() {
         content.addView(advancedHeader, mainParams(26))
         // Everything added from here on moves into the collapsible container.
         val advancedFrom = content.childCount
+
+        content.addView(navRow("Molido Agent", "Health & activity") { openAgentHealthScreen() }, mainParams(8))
 
         content.addView(sectionLabel(Strings.t("PROTECTION")), LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
