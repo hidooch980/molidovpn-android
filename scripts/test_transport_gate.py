@@ -23,7 +23,10 @@ def valid_report():
         "test_run_id": "lab-2026-001",
         "client_version": "4.0.5",
         "server_version": "gateway-test-1",
+        "server_region": "test-region",
         "device_model": "test-device",
+        "android_api": 35,
+        "abi": "arm64-v8a",
         "captured_at_utc": "2026-11-06T00:00:00Z",
         "security": {
             "certificate_validation": True,
@@ -72,6 +75,22 @@ class TransportGateTests(unittest.TestCase):
     def test_unlisted_transport_is_rejected(self):
         report = valid_report()
         report["transport_id"] = "made-up-protocol"
+        self.assertFalse(evaluate(report)["eligible_for_manual_review"])
+
+    def test_success_rate_above_one_is_rejected(self):
+        report = valid_report()
+        report["network_profiles"][0]["handshake_success_rate"] = 1.5
+        self.assertFalse(evaluate(report)["eligible_for_manual_review"])
+
+    def test_missing_profile_identity_is_rejected(self):
+        report = valid_report()
+        report["network_profiles"][0].pop("profile_id")
+        self.assertFalse(evaluate(report)["eligible_for_manual_review"])
+
+    def test_missing_device_api_or_abi_is_rejected(self):
+        report = valid_report()
+        report.pop("android_api")
+        report.pop("abi")
         self.assertFalse(evaluate(report)["eligible_for_manual_review"])
 
 
