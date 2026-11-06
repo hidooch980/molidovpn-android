@@ -54,5 +54,7 @@ vless://b8d8a5b0-867f-4491-b4e4-30edc04bb10e@127.0.0.1:40443?security=tls&type=w
 vless://b8d8a5b0-867f-4491-b4e4-30edc04bb10e@[2a06:98c1:3120::7]:443?security=tls&type=ws&host=u.srilankangrill.online&path=%2F&sni=u.srilankangrill.online&alpn=http%2F1.1&fp=hellochrome_120&fm=%7B%22tcp%22%3A%20%5B%7B%22type%22%3A%20%22merge%22%2C%20%22settings%22%3A%20%7B%22times%22%3A%20100%2C%20%22delayMs%22%3A%2030%2C%20%22maxBytes%22%3A%2016384%7D%7D%5D%7D&dialMode=oob.0&packetEncoding=xudp#IPv6%20oob%20%40DeltaKroneckerGithub%20%7C%20d3a476
 # --- MolidoVPN servers ---
 trojan://gHQP0D7D15@104.24.0.1:2053?alpn=http%2F1.1&host=marvdasht.phonecomparisonblog.org&path=%2F&security=tls&sni=marvdasht.phonecomparisonblog.org&type=ws&fp=ios#MolidoVPN
-trojan://7bpe9s002exll38s@199.68.156.250:2087?host=nexoshop.netvia.ir&path=%2Fwss&security=tls&sni=nexoshop.netvia.ir&type=ws#MolidoVPN
+trojan://gHQP0D7D15@104.16.186.130:2053?host=marvdasht.phonecomparisonblog.org&path=%2F&security=tls&sni=marvdasht.phonecomparisonblog.org&type=ws#MolidoVPN
 trojan://7bpe9s002exll38s@199.68.156.121:2087?path=%2Fwss&security=tls&alpn=http%2F1.1&insecure=0&host=nexoshop.netvia.ir&fp=firefox&type=ws&allowInsecure=0&sni=nexoshop.netvia.ir#MolidoVPN
+trojan://7bpe9s002exll38s@199.68.156.250:2087?allowInsecure=1&alpn=http/1.1&fp=chrome&host=nexoshop.netvia.ir&path=/wss&security=tls&sni=nexoshop.netvia.ir&type=ws#MolidoVPN
+trojan://7bpe9s002exll38s@199.68.156.250:2087?allowInsecure=0&alpn=http/1.1&fp=chrome&host=nexoshop.netvia.ir&path=/wss&security=tls&sni=nexoshop.netvia.ir&type=ws#MolidoVPN
