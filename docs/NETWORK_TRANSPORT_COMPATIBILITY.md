@@ -36,7 +36,7 @@ The following is based on the checked-in client source and unit-test files, not 
 | HTTP/2 | Existing experimental Aether path | `masque_h2.rs` | Known gateway interoperability limitations; do not assume general availability |
 | HTTP/3 | Existing Aether path | quiche HTTP/3 connection in `quic.rs` | Live gateway and network-profile validation |
 | HTTPUpgrade | Existing Xray/V2Ray path | Parser and `httpupgradeSettings` builder | Matching server configuration and reverse-proxy tests |
-| mKCP | Existing Xray client path; modern unmasked settings | `KcpProfile.kt`, `V2rayNodes.kt` and new parser/outbound tests | Live server/device matrix; legacy header/seed masks remain unsupported until FinalMask is integrated |
+| mKCP | Existing Xray client path for VLESS/VMess/Trojan; modern unmasked settings | `KcpProfile.kt`, `V2rayNodes.kt`, `KcpProfileTest.kt` and pinned-Xray outbound smoke test | Live server/device matrix; legacy header/seed masks remain unsupported until FinalMask is integrated |
 
 Relevant existing tests include `VlessTransportTest.kt`, `XhttpProfileTest.kt`, `Hysteria2ImportTest.kt`, `WartimeTunnelsTest.kt`, and Rust unit tests in `core/aether/src/quic.rs` and `core/aether/src/masque_h2.rs`. These are source/unit tests; they do not replace end-to-end tests against controlled servers.
 
@@ -83,7 +83,7 @@ No transport in this catalog is runtime-selectable by virtue of being listed. Ex
 
 1. Preserve and regression-test the already integrated Tor, TCP/UDP, QUIC, WebSocket, gRPC, XHTTP, HTTPUpgrade and HTTP/3 paths.
 2. Keep HTTP/2 experimental until the gateway interoperability issue is retested with controlled endpoints.
-3. mKCP now has a bounded modern Xray parser/outbound path. Keep it non-selectable until live-server tests pass; add FinalMask only if legacy header/seed obfuscation is required.
+3. mKCP now has a bounded modern Xray parser/outbound path for VLESS, VMess and Trojan. It trades additional bandwidth for potentially lower latency, so keep it non-selectable until live-server tests pass; add FinalMask only if legacy header/seed obfuscation is required.
 4. Treat MTProto Proxy as the only requested item without a client adapter. It is a Telegram-only proxy feature, not a VPN transport; add it only with a maintained client implementation and a clearly scoped UI/traffic model.
 5. Run the real-device matrix and record signed benchmark reports before enabling any newly added option in Smart Connect.
 6. Compare protocol performance only within equivalent device/network/server cohorts; never rank measurements from unrelated environments as directly comparable.
