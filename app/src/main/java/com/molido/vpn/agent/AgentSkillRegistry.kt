@@ -48,7 +48,7 @@ object AgentSkillRegistry {
         AgentSkill(
             id = "app-update-manager",
             title = "App update manager",
-            description = "Fetch signed/validated remote app configuration and release metadata.",
+            description = "Fetch validated remote mode flags and admin announcements.",
             mode = AgentSkillMode.AUTOMATIC,
             intervalMs = FIVE_MINUTES_MS,
         ),
