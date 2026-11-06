@@ -19,8 +19,10 @@ on:
     branches: [main]
     paths:
       - 'config/network/transport-catalog.json'
+      - 'config/network/protocol-transport-matrix.json'
       - 'docs/NETWORK_TRANSPORT_COMPATIBILITY.md'
       - 'scripts/test_transport_catalog.py'
+      - 'scripts/test_protocol_transport_matrix.py'
       - 'config/network/protocol-transport-matrix.json'
       - 'scripts/test_protocol_transport_matrix.py'
 permissions:
