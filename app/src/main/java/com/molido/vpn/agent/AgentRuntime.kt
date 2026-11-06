@@ -19,7 +19,7 @@ data class AgentSkillStatus(
     val mode: AgentSkillMode,
     val dispatchCount: Long,
     val lastDispatchAt: Long,
-    val lastCompletedAt: Long,
+    val lastCallReturnedAt: Long,
     val lastErrorAt: Long,
     val lastError: String?,
     val blockedReason: String?,
@@ -82,7 +82,7 @@ object AgentRuntime {
                     }
                     prefs.edit()
                         .remove("last_error_${skill.id}")
-                        .putLong("last_completed_${skill.id}", System.currentTimeMillis())
+                        .putLong("last_call_returned_${skill.id}", System.currentTimeMillis())
                         .apply()
                 } catch (error: Exception) {
                     // Store only the exception class, never remote payloads or user data.
@@ -116,7 +116,7 @@ object AgentRuntime {
                 mode = skill.mode,
                 dispatchCount = prefs.getLong("dispatch_count_$id", 0L),
                 lastDispatchAt = lastDispatch,
-                lastCompletedAt = prefs.getLong("last_completed_$id", 0L),
+                lastCallReturnedAt = prefs.getLong("last_call_returned_$id", 0L),
                 lastErrorAt = prefs.getLong("last_error_at_$id", 0L),
                 lastError = prefs.getString("last_error_$id", null),
                 blockedReason = reason,
