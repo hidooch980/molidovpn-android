@@ -181,6 +181,19 @@ class VlessTransportTest {
         }
         links.add(uri("xhttp", "alpn=h3&mode=stream-up").replace("fp=firefox", "fp=unsafe"))
         links.add(uri("mkcp", "mtu=1350&tti=20&uplinkCapacity=5&downlinkCapacity=20"))
+        links.add(uri("mkcp").replace("vless://", "trojan://"))
+        val vmessKcp = JSONObject()
+            .put("v", "2")
+            .put("ps", "mKCP")
+            .put("add", "192.0.2.1")
+            .put("port", "443")
+            .put("id", id)
+            .put("aid", "0")
+            .put("net", "kcp")
+            .put("type", "none")
+            .put("tls", "tls")
+            .put("kcpSettings", JSONObject().put("mtu", 1350).put("tti", 20))
+        links.add("vmess://${Base64.getEncoder().encodeToString(vmessKcp.toString().toByteArray())}")
         for (link in links) {
             val node = V2rayNodes.parseOne(link)!!
             val file = File.createTempFile("vless-xray-", ".json")
