@@ -153,6 +153,13 @@ class VlessTransportTest {
         assertEquals(1.5, kcp.getDouble("cwndMultiplier"), 0.0)
     }
 
+    @Test fun mKcpCanBeParsedForValidationButIsExcludedFromAutomaticPools() {
+        val candidate = uri("mkcp")
+        assertNotNull(V2rayNodes.parseOne(candidate))
+        val pool = V2rayNodes.parse(listOf(uri("tcp"), candidate))
+        assertEquals(listOf("tcp"), pool.map { it.network })
+    }
+
     @Test fun kcpRejectsUnsupportedLegacyMasksAndUnsafeParameters() {
         assertNull(V2rayNodes.parseOne(uri("kcp", "headertype=srtp")))
         assertNull(V2rayNodes.parseOne(uri("mkcp", "seed=legacy-secret")))
