@@ -64,10 +64,10 @@ def redact(line: str) -> str:
 def classify(log: str) -> dict[str, Any]:
     """Classify one CI log; deterministic failures always suppress retry."""
     transient = [
-        key for key, pattern in TRANSIENT.items() if re.search(pattern, log, re.I)
+        key for key, pattern in TRANSIENT.items() if re.search(pattern, log, re.IGNORECASE)
     ]
     deterministic = [
-        key for key, pattern in DETERMINISTIC.items() if re.search(pattern, log, re.I)
+        key for key, pattern in DETERMINISTIC.items() if re.search(pattern, log, re.IGNORECASE)
     ]
     retry = bool(transient) and not deterministic
     excerpt = [redact(line) for line in log.splitlines() if ERROR_LINE.search(line)]
