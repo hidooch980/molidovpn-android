@@ -5,7 +5,6 @@ import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.BatteryManager
 import com.molido.vpn.AppRemote
-import com.molido.vpn.BackgroundScanner
 import com.molido.vpn.RemotePolicy
 import com.molido.vpn.ResilienceConfig
 import com.molido.vpn.ShardSubscription
