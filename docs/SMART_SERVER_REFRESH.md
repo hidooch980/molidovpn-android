@@ -1,6 +1,6 @@
 # Smart Server Refresh Agent
 
-The repository already has an hourly source collector, app-side refresh/cache fallback,
+The repository has a five-minute source collector, app-side refresh/cache fallback,
 and per-device health ranking. This agent adds a server-side publication guard so a
 bad or malformed refresh cannot silently replace the fleet's current SHARD catalog.
 
@@ -8,7 +8,7 @@ bad or malformed refresh cannot silently replace the fleet's current SHARD catal
 
 - The source collector remains responsible for gathering provider lists and ranking
   community-scored candidates.
-- This guard runs after the hourly collector (at minute 47), on catalog changes, and
+- This guard runs after catalog changes, on pull requests, and
   on demand.
 - It validates VLESS/Trojan WebSocket+TLS syntax, public endpoint/SNI fields, ports,
   duplicate entries, protocol distribution, and minimum usable catalog size.
