@@ -1,0 +1,67 @@
+name: Agent CI self-heal
+on:
+  workflow_run:
+    workflows: ["Android validation", "Android IPv4 IPv6 native packet regressions", "Smart server refresh guard"]
+    types: [completed]
+permissions:
+  actions: write
+  contents: read
+  issues: write
+concurrency:
+  group: agent-ci-self-heal-${{ github.event.workflow_run.id }}
+  cancel-in-progress: false
+jobs:
+  inspect-and-recover:
+    if: github.event.workflow_run.conclusion == 'failure' && github.event.workflow_run.repository.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Collect failed job logs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          set -euo pipefail
+          gh run view "$RUN_ID" --repo "$GITHUB_REPOSITORY" --log-failed > "$RUNNER_TEMP/failed.log" || true
+          test -s "$RUNNER_TEMP/failed.log" || printf "No downloadable failed-job log was available.\n" > "$RUNNER_TEMP/failed.log"
+      - name: Classify failure
+        id: diagnosis
+        run: |
+          python scripts/agent_ci_triage.py --log "$RUNNER_TEMP/failed.log" --output "$RUNNER_TEMP/diagnosis.json"
+          python -c 'import json,os; d=json.load(open(os.environ["RUNNER_TEMP"]+"/diagnosis.json")); f=open(os.environ["GITHUB_OUTPUT"],"a"); f.write("retry="+str(d["retry_recommended"]).lower()+"\ncategory="+d["category"]+"\n"); f.close()'
+      - name: Retry transient failure once
+        if: steps.diagnosis.outputs.retry == 'true' && github.event.workflow_run.run_attempt == 1
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: gh run rerun "$RUN_ID" --failed --repo "$GITHUB_REPOSITORY"
+      - name: Open diagnostic issue when code or configuration needs repair
+        if: steps.diagnosis.outputs.retry != 'true' || github.event.workflow_run.run_attempt > 1
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          RUN_NAME: ${{ github.event.workflow_run.name }}
+          CATEGORY: ${{ steps.diagnosis.outputs.category }}
+        run: |
+          set -euo pipefail
+          existing="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "Agent CI $RUN_ID in:title" --json number --jq length)"
+          if [ "$existing" != "0" ]; then echo "Existing diagnostic issue found"; exit 0; fi
+          python -c 'import json,os; d=json.load(open(os.environ["RUNNER_TEMP"]+"/diagnosis.json")); open(os.environ["RUNNER_TEMP"]+"/excerpt.txt","w").write("\\n".join(d["excerpt"]) or "No matching error lines were found.")'
+          {
+            echo "Automated diagnosis from Molido Agent"
+            echo "Workflow: $RUN_NAME"
+            echo "Run: $RUN_URL"
+            echo "Attempt: ${{ github.event.workflow_run.run_attempt }}"
+            echo "Classification: $CATEGORY"
+            echo "Sanitized error excerpt:"
+            cat "$RUNNER_TEMP/excerpt.txt"
+            echo "No application code, signing key, credential, security policy or user data was modified automatically."
+          } > "$RUNNER_TEMP/issue.md"
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "[Agent CI $RUN_ID] $CATEGORY failure in $RUN_NAME" --body-file "$RUNNER_TEMP/issue.md"
