@@ -8412,7 +8412,7 @@ class MainActivity : Activity() {
         val container = adBannerContainer ?: return
         runCatching {
             Class.forName("com.molido.vpn.ads.MobileBannerSlot")
-                .getMethod("sync", Activity::class.java, FrameLayout::class.java, Boolean::class.javaPrimitiveType)
+                .getMethod("sync", Activity::class.java, FrameLayout::class.java, Boolean::class.javaPrimitiveType!!)
                 .invoke(null, this@MainActivity, container, visualState == OrbitDialView.State.DISCONNECTED)
         }
     }
