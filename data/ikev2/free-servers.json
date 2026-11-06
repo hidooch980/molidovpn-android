@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "source": "https://www.vpnjantit.com/free-ikev2",
-  "generated_at": "2026-11-06T08:31:14.456913+00:00",
+  "generated_at": "2026-11-06T16:20:58.127567+00:00",
   "servers": [
     {
       "country": "Bangladesh",
@@ -113,6 +113,13 @@
       "host": "md1.vpnjantit.com",
       "identity": "vpnjantit",
       "accountUrl": "https://www.vpnjantit.com/create-free-account?server=md1&type=IKEV2",
+      "available": true
+    },
+    {
+      "country": "Philippines",
+      "host": "ph5.vpnjantit.com",
+      "identity": "vpnjantit",
+      "accountUrl": "https://www.vpnjantit.com/create-free-account?server=ph5&type=IKEV2",
       "available": true
     },
     {
