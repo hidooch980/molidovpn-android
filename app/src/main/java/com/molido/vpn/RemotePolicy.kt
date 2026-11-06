@@ -67,7 +67,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  *
  * ## Cadence
  *
- * The same 6-hour floor and ETag conditional request as [ShardSubscription], and
+ * The same five-minute floor and ETag conditional request as [ShardSubscription], and
  * it rides the same triggers — app resume, SHARD connect, the periodic job. A
  * `304` is a few hundred bytes. There is no separate wakeup and no extra radio
  * cost: when nothing changed this is cheaper than a single DNS lookup.
