@@ -104,6 +104,38 @@ class VlessTransportTest {
         assertEquals("cdn.example", upgradeSettings.getString("host"))
     }
 
+    @Test fun vlessKcpAliasesRenderCurrentXrayKcpSettings() {
+        for (network in listOf("kcp", "mkcp")) {
+            val node = V2rayNodes.parseOne(
+                uri(network, "security=tls&mtu=1300&tti=20&uplinkCapacity=10&downlinkCapacity=50&cwndMultiplier=2&maxSendingWindow=1048576"),
+            )!!
+            assertEquals("mkcp", node.network)
+            val stream = render(node).getJSONObject("streamSettings")
+            assertEquals("mkcp", stream.getString("network"))
+            val kcp = stream.getJSONObject("kcpSettings")
+            assertEquals(1300, kcp.getInt("mtu"))
+            assertEquals(20, kcp.getInt("tti"))
+            assertEquals(10, kcp.getInt("uplinkCapacity"))
+            assertEquals(50, kcp.getInt("downlinkCapacity"))
+            assertEquals(2.0, kcp.getDouble("cwndMultiplier"), 0.0)
+            assertEquals(1048576, kcp.getInt("maxSendingWindow"))
+            assertFalse(kcp.has("header"))
+            assertFalse(kcp.has("seed"))
+        }
+    }
+
+    @Test fun kcpRejectsUnsupportedLegacyMasksAndUnsafeParameters() {
+        assertNull(V2rayNodes.parseOne(uri("kcp", "headertype=srtp")))
+        assertNull(V2rayNodes.parseOne(uri("mkcp", "seed=legacy-secret")))
+        assertNull(V2rayNodes.parseOne(uri("kcp", "mtu=500")))
+        assertNull(V2rayNodes.parseOne(uri("kcp", "tti=101")))
+        assertNull(
+            V2rayNodes.parseOne(
+                uri("mkcp", "security=reality&pbk=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"),
+            ),
+        )
+    }
+
     @Test fun otherTransportRetryBehaviorIsUnchanged() {
         val tcp = V2rayNodes.toShardNode(V2rayNodes.parseOne(uri("tcp"))!!)
         assertEquals("chrome", RetryTweaks.fingerprintFor(tcp, 2))
