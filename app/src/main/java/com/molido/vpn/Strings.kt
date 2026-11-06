@@ -11,6 +11,17 @@ object Strings {
 
 
     private val table = mapOf(
+        "IKEV2_ACCOUNT_HELP" to Triple("Use credentials from a free provider account or your MolidoVPN dedicated server. Free accounts must be created with the provider first.", "از اطلاعات حساب سرویس‌دهنده رایگان یا سرور اختصاصی MolidoVPN استفاده کن. ابتدا باید در سرویس‌دهنده رایگان حساب بسازی.", "请使用免费服务商账户或 MolidoVPN 专用服务器账户。免费账户需先在服务商处创建。"),
+        "IKEv2 / IPsec" to Triple("IKEv2 / IPsec", "IKEv2 / آی‌پی‌سک", "IKEv2 / IPsec"),
+        "IKEv2 server hostname" to Triple("IKEv2 server hostname", "نام میزبان سرور IKEv2", "IKEv2 服务器主机名"),
+        "IKE identity (provider supplied)" to Triple("IKE identity (provider supplied)", "شناسه IKE ارائه‌شده توسط سرویس‌دهنده", "服务提供商提供的 IKE 身份"),
+        "IKEv2 requires Android 11+ and device IPsec support" to Triple("IKEv2 requires Android 11+ and device IPsec support", "برای IKEv2 به اندروید ۱۱ به بالا و پشتیبانی IPsec دستگاه نیاز است", "IKEv2 需要 Android 11+ 和设备 IPsec 支持"),
+        "IKEv2 permission was not granted" to Triple("IKEv2 permission was not granted", "مجوز اتصال IKEv2 داده نشد", "未授予 IKEv2 权限"),
+        "IKEv2 connection could not be verified. Check credentials, server identity and network." to Triple("IKEv2 connection could not be verified. Check credentials, server identity and network.", "اتصال IKEv2 تأیید نشد؛ اطلاعات ورود، هویت سرور و شبکه را بررسی کن", "无法验证 IKEv2 连接，请检查凭据、服务器身份和网络"),
+        "IKEv2 tunnel is up but internet traffic could not be verified." to Triple("IKEv2 tunnel is up but internet traffic could not be verified.", "تونل IKEv2 برقرار شده اما عبور ترافیک اینترنت تأیید نشد", "IKEv2 隧道已建立，但无法验证互联网流量"),
+        "IKEv2 tunnel was disconnected by Android" to Triple("IKEv2 tunnel was disconnected by Android", "اتصال IKEv2 توسط اندروید قطع شد", "Android 已断开 IKEv2 隧道"),
+        "IKEv2 disconnected" to Triple("IKEv2 disconnected", "IKEv2 قطع شد", "IKEv2 已断开"),
+        "Complete all IKEv2 fields" to Triple("Complete all IKEv2 fields", "همه فیلدهای IKEv2 را تکمیل کن", "请填写所有 IKEv2 字段"),
         "Internet latency %s ms" to Triple("Internet latency %s ms", "پینگ اینترنت %s میلی‌ثانیه", "互联网延迟 %s 毫秒"),
         "Internet latency n/a" to Triple("Internet latency n/a", "پینگ اینترنت نامشخص", "互联网延迟不可用"),
         "Measured on the underlying internet connection" to Triple("Measured on the underlying internet connection, not inside the VPN", "سنجش از اینترنت پایه انجام شده؛ پینگ داخل تونل نیست", "通过底层互联网测量，并非 VPN 内部延迟"),
