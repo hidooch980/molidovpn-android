@@ -65,3 +65,16 @@ and a real integration point.
 - Runs weekly Ruff lint/format fixes only on the agent-owned Python diagnostic files. Changes are proposed as a pull request and must pass tests/review before merge.
 - Dependabot proposes weekly Gradle and GitHub Actions dependency updates.
 - The agent never edits release signing keys, credentials, VPN security policy, user data, or application source automatically. It does not auto-merge its own fixes.
+
+## Agent as the backup and recovery supervisor
+
+The Agent is the **support plane**, not a replacement packet engine. The VPN service remains the sole authority for tunnel lifecycle and traffic routing.
+
+- **Primary recovery owner:** `MolidoVpnService` owns the live-tunnel watchdog, bounded SHARD node rotation, automatic reconnect backoff, connectivity-restoration callback and kill-switch sealing. A user-requested disconnect always cancels recovery.
+- **Agent backup role:** observe privacy-safe service/skill health, classify degraded or stale state, preserve a bounded diagnostic reason, and surface recovery status. It must not start a second tunnel, race the service's reconnect scheduler, or alter the selected profile while a recovery attempt is in flight.
+- **Fallback order:** keep the existing verified tunnel if healthy; let the service rotate a failed node where supported; let its reconnect path retry the stored, validated configuration; keep the kill switch sealed while a VPN-mode tunnel is down. Never fall back to direct/unencrypted traffic to make the status appear online.
+- **Escalation:** if the service recovery budget is exhausted or its scheduler is unavailable, the Agent may report the failure and offer a user-confirmed retry. It must not bypass Android VPN consent, kill-switch policy, certificate checks, profile validation or protocol capability gates.
+- **Failure isolation:** disabling or crashing the Agent must not stop an active tunnel or prevent the service watchdog from recovering it. Agent network work is bounded, serialized and separate from the packet data plane.
+- **Verification required before calling this fully operational:** tests for user-stop cancellation, reconnect backoff, network-restoration retry, kill-switch sealing, stale Agent health, duplicate recovery suppression and service/Agent process races, followed by physical-device network-switch and soak tests.
+
+The CI self-heal workflow is a separate backup for repository health: it retries a classified transient workflow failure once and opens a deduplicated diagnostic issue for deterministic/repeated failures. Its `skipped` result on a successful build is expected; it only runs recovery after a failed watched workflow.
