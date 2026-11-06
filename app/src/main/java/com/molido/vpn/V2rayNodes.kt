@@ -7,6 +7,7 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLDecoder
+import java.util.Base64
 import java.util.Locale
 import java.util.concurrent.Callable
 import java.util.concurrent.atomic.AtomicBoolean
@@ -453,7 +454,7 @@ object V2rayNodes {
     private fun base64Text(value: String): String? = try {
         var s = value.filterNot { it.isWhitespace() }.replace('-', '+').replace('_', '/')
         while (s.length % 4 != 0) s += "="
-        String(android.util.Base64.decode(s, android.util.Base64.DEFAULT), Charsets.UTF_8)
+        String(Base64.getDecoder().decode(s), Charsets.UTF_8)
     } catch (_: Exception) {
         null
     }
