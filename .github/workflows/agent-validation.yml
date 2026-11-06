@@ -2,6 +2,7 @@ name: Agent self-check
 on:
   pull_request:
     paths:
+      - 'app/src/main/java/com/molido/vpn/MainActivity.kt'
       - 'scripts/agent_ci_triage.py'
       - 'scripts/test_agent_ci_triage.py'
       - '.github/workflows/agent-ci-self-heal.yml'
@@ -11,6 +12,7 @@ on:
   push:
     branches: [main]
     paths:
+      - 'app/src/main/java/com/molido/vpn/MainActivity.kt'
       - 'scripts/agent_ci_triage.py'
       - 'scripts/test_agent_ci_triage.py'
       - '.github/workflows/agent-ci-self-heal.yml'
