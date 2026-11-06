@@ -2305,18 +2305,23 @@ class MainActivity : Activity() {
      * state. Secondary controls remain implemented but are not exposed here.
      */
     private fun applyHomeMode() {
+        val style = homeStyle()
         homeAdvancedBox?.visibility = View.GONE
-        homeQuickActions?.visibility = View.GONE
-        homeTelemetryLine?.visibility = View.GONE
-        homeLocationCard?.visibility = View.GONE
+        // Home layout is user-selectable: Minimal keeps only the connection
+        // essentials, Compact adds live latency, Balanced adds the manual server
+        // card, and Dashboard exposes the country/traffic shortcuts as well.
+        homeQuickActions?.visibility = if (style == HOME_STYLE_DASHBOARD) View.VISIBLE else View.GONE
+        homeTelemetryLine?.visibility = if (style == HOME_STYLE_MINIMAL) View.GONE else View.VISIBLE
+        homeLocationCard?.visibility = if (style == HOME_STYLE_BALANCED || style == HOME_STYLE_DASHBOARD) View.VISIBLE else View.GONE
         homeGamingShortcut?.visibility = View.GONE
         homeSocialRow?.visibility = View.GONE
         homeShareRow?.visibility = View.GONE
         homeSupportButton?.visibility = if (visualState == OrbitDialView.State.FAILED) View.VISIBLE else View.GONE
         homeAdvancedLink?.visibility = View.GONE
-        footerWave.visibility = View.GONE
+        footerWave.visibility = if (style == HOME_STYLE_DASHBOARD) View.VISIBLE else View.GONE
         // Agent-selected location and protocol are reflected by the compact
-        // connection status; do not expose manual transport controls on home.
+        // connection status; manual server selection remains available in the
+        // Balanced and Dashboard layouts through the location card.
         val simpleTarget = simpleProtocol()
         if (selectedProtocol != simpleTarget && !TunnelStatus.isActive() &&
             visualState != OrbitDialView.State.CONNECTING
@@ -4868,6 +4873,10 @@ class MainActivity : Activity() {
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.WRAP_CONTENT,
         ).apply { topMargin = dp(8) })
+        content.addView(navRow(Strings.t("Home screen design"), homeStyleLabel(homeStyle())) { chooseHomeStyle() }, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+        ).apply { topMargin = dp(8) })
         content.addView(navRow(Strings.t("Language"), AppLanguage.label(currentLanguagePref())) { chooseLanguage() }, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -5829,6 +5838,41 @@ class MainActivity : Activity() {
         AppAppearance.Mode.DARK.key -> Strings.t("Dark")
         AppAppearance.Mode.LIGHT.key -> Strings.t("Light — theme")
         else -> Strings.t("Follow system")
+    }
+
+    private fun homeStyle(): String =
+        preferences().getString(HOME_STYLE_PREF, HOME_STYLE_BALANCED) ?: HOME_STYLE_BALANCED
+
+    private fun homeStyleLabel(key: String): String = when (key) {
+        HOME_STYLE_MINIMAL -> Strings.t("Minimal")
+        HOME_STYLE_COMPACT -> Strings.t("Compact")
+        HOME_STYLE_DASHBOARD -> Strings.t("Dashboard")
+        else -> Strings.t("Balanced")
+    }
+
+    /** Choose a persistent home layout; rebuilding the activity never interrupts the VPN service. */
+    private fun chooseHomeStyle() {
+        val options = listOf(HOME_STYLE_MINIMAL, HOME_STYLE_COMPACT, HOME_STYLE_BALANCED, HOME_STYLE_DASHBOARD)
+        showChoiceSheet(
+            title = Strings.t("Home screen design"),
+            subtitle = Strings.t("Personalize the home screen. Changes apply immediately without disconnecting."),
+            options = options,
+            selected = homeStyle(),
+            label = { homeStyleLabel(it) },
+            description = { key ->
+                when (key) {
+                    HOME_STYLE_MINIMAL -> Strings.t("Connection essentials only")
+                    HOME_STYLE_COMPACT -> Strings.t("Adds live ping and protocol status")
+                    HOME_STYLE_DASHBOARD -> Strings.t("Adds manual server and traffic shortcuts")
+                    else -> Strings.t("Adds manual server selection and live status")
+                }
+            },
+        ) { chosen ->
+            if (chosen == homeStyle()) return@showChoiceSheet
+            preferences().edit().putString(HOME_STYLE_PREF, chosen).apply()
+            ConnectionLog.record("Home screen design changed to $chosen")
+            recreate()
+        }
     }
 
     /** Dark / light / follow system. Same shape as the language picker: store, recreate(). */
@@ -9403,6 +9447,11 @@ class MainActivity : Activity() {
         const val MY_CONFIGS_QR_REQUEST = 1105
         const val V2RAY_OVER_PSIPHON_PREF = "v2ray_over_psiphon"
         const val HOME_SIMPLE_PREF = "home_simple"
+        private const val HOME_STYLE_PREF = "home_screen_style"
+        private const val HOME_STYLE_MINIMAL = "minimal"
+        private const val HOME_STYLE_COMPACT = "compact"
+        private const val HOME_STYLE_BALANCED = "balanced"
+        private const val HOME_STYLE_DASHBOARD = "dashboard"
         private const val HOME_LAYOUT_SIMPLIFIED_PREF = "home_layout_simplified_20261106"
         const val ADVANCED_SETTINGS_TAG = "advanced_settings"
         const val ONBOARDING_PREF = "onboarding_done"
