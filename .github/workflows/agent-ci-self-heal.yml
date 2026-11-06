@@ -34,7 +34,18 @@ jobs:
         id: diagnosis
         run: |
           python scripts/agent_ci_triage.py --log "$RUNNER_TEMP/failed.log" --output "$RUNNER_TEMP/diagnosis.json"
-          python -c 'import json,os; d=json.load(open(os.environ["RUNNER_TEMP"]+"/diagnosis.json")); f=open(os.environ["GITHUB_OUTPUT"],"a"); f.write("retry="+str(d["retry_recommended"]).lower()+"\ncategory="+d["category"]+"\n"); f.close()'
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          diagnosis = json.loads(
+              (Path(os.environ["RUNNER_TEMP"]) / "diagnosis.json").read_text()
+          )
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"retry={str(diagnosis['retry_recommended']).lower()}\n")
+              output.write(f"category={diagnosis['category']}\n")
+          PY
       - name: Retry transient failure once
         if: steps.diagnosis.outputs.retry == 'true' && github.event.workflow_run.run_attempt == 1
         env:
@@ -53,7 +64,19 @@ jobs:
           set -euo pipefail
           existing="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "Agent CI $RUN_ID in:title" --json number --jq length)"
           if [ "$existing" != "0" ]; then echo "Existing diagnostic issue found"; exit 0; fi
-          python -c 'import json,os; d=json.load(open(os.environ["RUNNER_TEMP"]+"/diagnosis.json")); open(os.environ["RUNNER_TEMP"]+"/excerpt.txt","w").write("\\n".join(d["excerpt"]) or "No matching error lines were found.")'
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          diagnosis = json.loads(
+              (Path(os.environ["RUNNER_TEMP"]) / "diagnosis.json").read_text()
+          )
+          excerpt = "\n".join(diagnosis["excerpt"]) or "No matching error lines were found."
+          (Path(os.environ["RUNNER_TEMP"]) / "excerpt.txt").write_text(
+              excerpt, encoding="utf-8"
+          )
+          PY
           {
             echo "Automated diagnosis from Molido Agent"
             echo "Workflow: $RUN_NAME"
