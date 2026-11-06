@@ -9,7 +9,7 @@ import java.util.Locale
  * Legacy header/seed obfuscation is intentionally not translated here: current
  * Xray moved that behavior to FinalMask. Unknown legacy masks fail closed.
  */
-internal data class KcpProfile(
+data class KcpProfile(
     val mtu: Int = 1350,
     val tti: Int = 50,
     val uplinkCapacity: Int = 5,
