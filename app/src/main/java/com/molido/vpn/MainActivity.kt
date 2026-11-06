@@ -7783,6 +7783,10 @@ class MainActivity : Activity() {
     }
 
     private fun hasActiveVpnNetwork(): Boolean {
+        // API 33+ can identify the exact VpnManager session provisioned by us.
+        // API 30–32 expose only the active VPN transport, so retain the network
+        // probe fallback there and do not claim app-scoped session certainty.
+        nativeIkev2?.isOwnSessionConnected()?.let { return it }
         val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         val network = cm.activeNetwork
         return network?.let { cm.getNetworkCapabilities(it)?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) } == true
