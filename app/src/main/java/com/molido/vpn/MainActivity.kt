@@ -2942,7 +2942,7 @@ class MainActivity : Activity() {
             isFocusable = true
             setOnClickListener {
                 AgentRuntime.setEnabled(this@MainActivity, !AgentRuntime.enabled(this@MainActivity))
-                toggle.text = if (AgentRuntime.enabled(this@MainActivity)) "Agent enabled  ·  Tap to pause" else "Agent paused  ·  Tap to enable"
+                (view as TextView).text = if (AgentRuntime.enabled(this@MainActivity)) "Agent enabled  ·  Tap to pause" else "Agent paused  ·  Tap to enable"
             }
         }
         content.addView(toggle, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) })
