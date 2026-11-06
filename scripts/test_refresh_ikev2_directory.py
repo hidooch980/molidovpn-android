@@ -1,4 +1,6 @@
 import unittest
+from unittest.mock import patch
+from urllib.error import HTTPError
 
 from refresh_ikev2_directory import (
     HOST,
@@ -7,10 +9,38 @@ from refresh_ikev2_directory import (
     extract_country_servers,
     extract_index_pages,
     is_provider_url,
+    _is_transient_fetch_error,
+    _retry_delay,
 )
 
 
 class Ikev2DirectoryScraperTests(unittest.TestCase):
+
+    def test_http_429_and_5xx_are_retryable_but_4xx_are_not(self):
+        self.assertTrue(_is_transient_fetch_error(HTTPError(INDEX, 429, "limited", {}, None)))
+        self.assertTrue(_is_transient_fetch_error(HTTPError(INDEX, 500, "server", {}, None)))
+        self.assertFalse(_is_transient_fetch_error(HTTPError(INDEX, 404, "missing", {}, None)))
+
+    def test_retry_after_is_bounded(self):
+        error = HTTPError(INDEX, 429, "limited", {"Retry-After": "120"}, None)
+        self.assertEqual(_retry_delay(error, 0), 10.0)
+        self.assertEqual(_retry_delay(RuntimeError("temporary"), 2), 4.0)
+
+    @patch("refresh_ikev2_directory.time.sleep")
+    @patch("refresh_ikev2_directory.urlopen")
+    def test_get_retries_transient_500_then_succeeds(self, urlopen_mock, sleep_mock):
+        from refresh_ikev2_directory import get
+        from unittest.mock import MagicMock
+        response = MagicMock()
+        response.__enter__.return_value = response
+        response.__exit__.return_value = False
+        response.geturl.return_value = INDEX
+        response.read.return_value = b"ok"
+        urlopen_mock.side_effect = [HTTPError(INDEX, 500, "server", {}, None), response]
+        self.assertEqual(get(INDEX), "ok")
+        self.assertEqual(urlopen_mock.call_count, 2)
+        sleep_mock.assert_called_once()
+
     def test_provider_origin_rejects_userinfo_ports_and_external_hosts(self):
         self.assertTrue(is_provider_url(f"https://{HOST}/free-ikev2"))
         self.assertTrue(is_provider_url(f"https://{HOST}:443/free-ikev2"))
