@@ -1906,99 +1906,50 @@ class MainActivity : Activity() {
             }.start()
         }
 
-        addView(orbitDial, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT,
-        ).apply {
-            topMargin = dp(14)
-            // Cancel the console's 20dp side padding for this one child.
-            //
-            // The dial measures (RING + BLEED) * 2 so its glow has canvas to land
-            // on. The console's own padding would clamp that box and force the
-            // ring below its intended size; negative margins give the dial the
-            // full width back, so the ring keeps its size and the bleed still
-            // fits. clipToPadding=false (set above) is what lets it draw there.
-            leftMargin = -dp(20)
-            rightMargin = -dp(20)
-        })
-
-        // v1.8.7: English keeps the v1.8.5 margins exactly. fa/zh get a
-        // tighter block (title closer to the dial, detail closer to the title)
-        // to hand the reclaimed height back to the dial — see
-        // fitConsoleToViewport, which must net-neutral for English.
-        val titleGap = if (localizedTypography) dp(10) else dp(14)
-        val detailGap = if (localizedTypography) dp(1) else dp(3)
-        addView(connectionTitle, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT,
-        ).apply { topMargin = titleGap })
-        addView(connectionDetail, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT,
-        ).apply { topMargin = detailGap })
-
-        // A dedicated, accessible one-tap action complements the animated dial.
-        // It follows the same toggle path, so connect, cancel and disconnect all
-        // use the existing VPN permission and service lifecycle.
-        // Added together with Gaming below in a compact two-action row.
-
-        // Premium one-tap action card: one unmistakable primary action and
-        // one compact Gaming shortcut. The old split-heart artwork was decorative,
-        // hard to understand at a glance, and made both tap targets feel cramped.
-        val gamingShortcut = label("", 12.5f, INK, TypefaceStyle.MEDIUM).apply {
-            gravity = Gravity.CENTER
-            minHeight = dp(64)
-            setPadding(dp(6), dp(6), dp(6), dp(6))
-            maxLines = 2
-            isClickable = true
-            isFocusable = true
+        // Clean home: a compact connection card replaces the oversized dial
+        // and the extra gaming tile. The dial object remains available to the
+        // existing state/timer code, but the first screen prioritizes one action.
+        val connectionCard = LinearLayout(this@MainActivity).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            setPadding(dp(18), dp(18), dp(18), dp(18))
             background = Sculpt.sculptedBackground(
                 resources.displayMetrics.density,
                 palette.surface,
-                18,
-                Sculpt.withAlpha(palette.violet, 0.55f),
-            )
-            setOnClickListener {
-                val enabled = !preferences().getBoolean(com.molido.vpn.engine.GamingQuality.PREF, false)
-                preferences().edit()
-                    .putBoolean(com.molido.vpn.engine.GamingQuality.PREF, enabled)
-                    .apply()
-                ConnectionLog.record(
-                    "Secure gaming route scoring " + (if (enabled) "on" else "off") +
-                        " — applies on the next Smart Connect run; DNS stays tunnel-routed"
-                )
-                renderGamingShortcut()
-                toastShort(Strings.t(if (enabled) "Gaming optimization enabled" else "Gaming optimization disabled"))
-            }
-        }
-        homeGamingShortcut = gamingShortcut
-        renderGamingShortcut()
-
-        val heroActions = LinearLayout(this@MainActivity).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(8), dp(8), dp(8), dp(8))
-            background = Sculpt.sculptedBackground(
-                resources.displayMetrics.density,
-                palette.surface,
-                22,
-                Sculpt.withAlpha(palette.divider, 0.9f),
+                24,
+                Sculpt.withAlpha(palette.primary, 0.28f),
             )
         }
-        quickConnectButton.minHeight = dp(64)
-        quickConnectButton.setPadding(dp(12), dp(8), dp(12), dp(8))
-        heroActions.addView(
-            quickConnectButton,
-            LinearLayout.LayoutParams(0, dp(64), 1f).apply { marginEnd = dp(8) },
+        connectionCard.addView(
+            label("MOLIDO  ·  SMART CONNECTION", 10f, palette.primaryText, TypefaceStyle.MEDIUM).apply {
+                gravity = Gravity.CENTER
+                letterSpacing = 0.09f
+                maxLines = 1
+            },
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT),
         )
-        heroActions.addView(
-            gamingShortcut,
-            LinearLayout.LayoutParams(dp(104), dp(64)),
-        )
-        addView(heroActions, LinearLayout.LayoutParams(
+        connectionTitle.gravity = Gravity.CENTER
+        connectionCard.addView(connectionTitle, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
-            dp(80),
-        ).apply { topMargin = dp(8) })
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+        ).apply { topMargin = dp(12) })
+        connectionCard.addView(connectionDetail, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+        ).apply { topMargin = dp(3) })
+
+        quickConnectButton.minHeight = dp(58)
+        quickConnectButton.setPadding(dp(14), dp(8), dp(14), dp(8))
+        quickConnectButton.elevation = dp(4).toFloat()
+        quickConnectButton.translationZ = 0f
+        connectionCard.addView(quickConnectButton, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            dp(58),
+        ).apply { topMargin = dp(18) })
+        addView(connectionCard, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+        ).apply { topMargin = dp(18) })
 
         // Secondary destinations remain in Advanced mode; the full feature
         // catalogue is also available in the searchable navigation drawer.
@@ -2316,6 +2267,7 @@ class MainActivity : Activity() {
         homeQuickActions?.visibility = if (style == HOME_STYLE_DASHBOARD) View.VISIBLE else View.GONE
         homeTelemetryLine?.visibility = if (style == HOME_STYLE_MINIMAL) View.GONE else View.VISIBLE
         homeLocationCard?.visibility = if (style == HOME_STYLE_BALANCED || style == HOME_STYLE_DASHBOARD) View.VISIBLE else View.GONE
+        exitNodeCard.visibility = if (style == HOME_STYLE_MINIMAL) View.GONE else View.VISIBLE
         homeGamingShortcut?.visibility = View.GONE
         homeSocialRow?.visibility = View.GONE
         homeShareRow?.visibility = View.GONE
@@ -5931,7 +5883,7 @@ class MainActivity : Activity() {
     }
 
     private fun homeStyle(): String =
-        preferences().getString(HOME_STYLE_PREF, HOME_STYLE_BALANCED) ?: HOME_STYLE_BALANCED
+        preferences().getString(HOME_STYLE_PREF, HOME_STYLE_MINIMAL) ?: HOME_STYLE_MINIMAL
 
     private fun homeStyleLabel(key: String): String = when (key) {
         HOME_STYLE_MINIMAL -> Strings.t("Minimal")
