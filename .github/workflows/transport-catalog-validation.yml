@@ -5,6 +5,14 @@ on:
       - 'config/network/transport-catalog.json'
       - 'docs/NETWORK_TRANSPORT_COMPATIBILITY.md'
       - 'scripts/test_transport_catalog.py'
+      - 'scripts/transport_gate.py'
+      - 'scripts/test_transport_gate.py'
+      - 'app/src/main/java/com/molido/vpn/engine/protocol/**'
+      - 'app/src/test/java/com/molido/vpn/engine/protocol/**'
+      - 'scripts/transport_gate.py'
+      - 'scripts/test_transport_gate.py'
+      - 'app/src/main/java/com/molido/vpn/engine/protocol/**'
+      - 'app/src/test/java/com/molido/vpn/engine/protocol/**'
   push:
     branches: [main]
     paths:
