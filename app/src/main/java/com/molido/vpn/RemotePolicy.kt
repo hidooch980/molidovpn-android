@@ -100,7 +100,7 @@ object RemotePolicy {
     private const val LAST_CHECK_PREF = "policy_last_check"
 
     /** Same floor as the subscription: see [ShardSubscription.refreshIfDue]. */
-    private const val MIN_INTERVAL_MS = 6 * 60 * 60 * 1000L
+    private const val MIN_INTERVAL_MS = 5 * 60 * 1000L
 
     private const val CONNECT_TIMEOUT_MS = 12_000
     private const val READ_TIMEOUT_MS = 20_000
