@@ -98,7 +98,7 @@ Molido Agent may refresh the catalog, collect sanitized metrics, run approved te
 Store a sanitized JSON report for each client/server/device/network test run. Required top-level fields:
 
 - `schema_version` (currently `1`), `transport_id`, `test_run_id`
-- `client_version`, `server_version`, `device_model`, `captured_at_utc`
+- `client_version`, `server_version`, `server_region`, `device_model`, `android_api`, `abi`, `captured_at_utc`
 - `security`: booleans for certificate validation, authentication, data-plane verification, DNS leak-free, IP leak-free and plaintext-fallback-disabled
 - `network_profiles`: at least two uniquely named profiles, each recording network type, sample count, handshake/reconnect success rates, median and p95 RTT, median upload/download Mbps, packet-loss percentage, soak duration and battery drain per hour
 
