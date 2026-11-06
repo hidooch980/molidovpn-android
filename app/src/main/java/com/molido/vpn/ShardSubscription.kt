@@ -73,8 +73,8 @@ object ShardSubscription {
      * opens the app daily always has the current list within a day, sparse enough
      * that opening the app ten times in an afternoon costs one request.
      */
-    // Hourly: servers must stay fresh. Cheap — the ETag makes an unchanged list a 304.
-    private const val MIN_INTERVAL_MS = 60 * 60 * 1000L
+    // Five-minute refresh: ETag makes unchanged catalog checks a tiny 304 response.
+    private const val MIN_INTERVAL_MS = 5 * 60 * 1000L
 
     private const val CONNECT_TIMEOUT_MS = 12_000
     private const val READ_TIMEOUT_MS = 20_000
