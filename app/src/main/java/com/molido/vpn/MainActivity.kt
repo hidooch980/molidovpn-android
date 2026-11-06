@@ -612,17 +612,15 @@ class MainActivity : Activity() {
         // package replace clears JobScheduler's registrations for the app.
         ShardRefreshJob.schedule(this)
         DdnsRefreshJob.schedule(this)
-        // And one opportunistic refresh now. The job's window is up to six hours
-        // wide; someone who installs the app and taps SHARD immediately should not
-        // have to wait for it. Returns without I/O if the list is already fresh.
+        // Opportunistic five-minute catalog refresh. ETags keep unchanged checks tiny.
         ShardSubscription.refreshIfDue(this)
-        // V2Ray servers pool: hourly floor, background thread.
-        V2raySubscription.refreshIfDue(this)
+        // V2Ray server pool: same five-minute floor, background thread.
+        V2raySubscription.refreshIfDue(this, maxAgeMs = LiveCatalogSync.REMOTE_INTERVAL_MS)
         // Refresh the user's own subscription URLs on foreground entry too; the
         // JobScheduler repeats this while the app is closed, with the same hourly floor.
         MyConfigs.refreshIfDue(this)
         // Same trigger for the edge and geo-blocked lists. Separate file, separate
-        // ETag, same 6-hour floor — see [RemotePolicy]. Cheap enough to sit next to
+        // ETag, same five-minute floor — see [RemotePolicy]. Cheap enough to sit next to
         // the subscription fetch: a 304 is a few hundred bytes.
         RemotePolicy.refreshIfDue(this)
         ResilienceConfig.refreshIfDue(this)
@@ -4552,7 +4550,7 @@ class MainActivity : Activity() {
         ).apply { topMargin = dp(26) })
         val shardRow = navRow(Strings.t("Node list"), shardPoolSummary()) {
             // force = true: the whole point of tapping this is to bypass the
-            // six-hour interval the background job honours.
+            // five-minute interval the background and live refresh paths honour.
             shardPoolRow?.setValue(Strings.t("Updating…"))
             // The policy file rides the same tap. It is what decides how many paths
             // each node has, so refreshing the node list without it would leave the
@@ -9129,9 +9127,8 @@ class MainActivity : Activity() {
      * Subtitle for SHARD's node-list row: how many nodes, and how old the list is.
      *
      * Ages are rounded to the coarsest useful unit. The number that matters to a
-     * user deciding whether to hit refresh is "hours ago" or "days ago", and a
-     * precise minute count on a list the publisher rebuilds once a day would be
-     * false precision.
+     * user deciding whether to hit refresh is the last few minutes, and a precise
+     * minute count is useful now that the mirror refreshes every five minutes.
      */
     /** "Last server update: N min ago" — the newer of the SHARD and V2Ray lists. */
     private fun serversUpdatedText(): String {
