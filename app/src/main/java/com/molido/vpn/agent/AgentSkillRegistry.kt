@@ -80,21 +80,34 @@ object AgentSkillRegistry {
     fun automaticSkills(): List<AgentSkill> =
         all.filter { it.mode == AgentSkillMode.AUTOMATIC }
 
+    /**
+     * Returns a stable, machine-readable reason why a skill cannot be dispatched.
+     * Keeping this policy pure makes it testable and lets the UI explain decisions.
+     */
+    fun blockedReason(
+        skill: AgentSkill,
+        checkpoint: AgentCheckpoint,
+        now: Long,
+        environment: AgentEnvironment,
+    ): String? {
+        if (skill.mode != AgentSkillMode.AUTOMATIC) return "not_automatic"
+        if (skill.intervalMs <= 0L) return "invalid_interval"
+        if (checkpoint.lastDispatchAt > 0L) {
+            // Wall-clock rollback must not turn a persisted checkpoint into an immediate retry.
+            if (now < checkpoint.lastDispatchAt) return "clock_rollback"
+            if (now - checkpoint.lastDispatchAt < skill.intervalMs) return "not_due"
+        }
+        if (skill.requiresInternet && !environment.online) return "offline"
+        if (!skill.allowMetered && environment.metered) return "metered_network"
+        if (skill.requiresBatteryNotLow && !environment.batteryNotLow) return "battery_low"
+        if (skill.requiresTunnelIdle && !environment.tunnelIdle) return "tunnel_active"
+        return null
+    }
+
     fun isDue(
         skill: AgentSkill,
         checkpoint: AgentCheckpoint,
         now: Long,
         environment: AgentEnvironment,
-    ): Boolean {
-        if (skill.mode != AgentSkillMode.AUTOMATIC || skill.intervalMs <= 0L) return false
-        if (checkpoint.lastDispatchAt > 0L) {
-            val elapsed = now - checkpoint.lastDispatchAt
-            if (elapsed in 0 until skill.intervalMs) return false
-        }
-        if (skill.requiresInternet && !environment.online) return false
-        if (!skill.allowMetered && environment.metered) return false
-        if (skill.requiresBatteryNotLow && !environment.batteryNotLow) return false
-        if (skill.requiresTunnelIdle && !environment.tunnelIdle) return false
-        return true
-    }
+    ): Boolean = blockedReason(skill, checkpoint, now, environment) == null
 }
