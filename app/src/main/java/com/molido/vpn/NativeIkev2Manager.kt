@@ -26,32 +26,33 @@ class NativeIkev2Manager(context: Context) {
     }
     fun stop() { if (isSupported()) manager!!.stopProvisionedVpnProfile() }
     fun remove() { if (isSupported()) { manager!!.stopProvisionedVpnProfile(); manager!!.deleteProvisionedVpnProfile() } }
-    private fun validHost(host: String): Boolean {
-        if (host.isBlank() || host.length > 253 || host.any { it.isWhitespace() } ||
-            host.startsWith(".") || host.endsWith(".") || host.contains("..")) return false
+    internal fun validHost(host: String): Boolean = isValidIkev2Host(host)
 
-        // IPv6 literals must be parsed by the platform; a permissive character
-        // regex accepts malformed values such as "::::".
-        if (host.contains(":")) {
-            return runCatching {
-                val address = java.net.InetAddress.getByName(host)
-                address is java.net.Inet6Address
-            }.getOrDefault(false)
-        }
+}
 
-        // IPv4 must contain exactly four decimal octets in range.
-        if (host.all { it.isDigit() || it == '.' }) {
-            val octets = host.split(".")
-            return octets.size == 4 && octets.all { part ->
-                part.isNotEmpty() && part.length <= 3 &&
-                    part.all(Char::isDigit) && part.toIntOrNull() in 0..255
-            }
-        }
+internal fun isValidIkev2Host(host: String): Boolean {
+    if (host.isBlank() || host.length > 253 || host.any { it.isWhitespace() } ||
+        host.startsWith(".") || host.endsWith(".") || host.contains("..")) return false
 
-        val labels = host.split(".")
-        return labels.size >= 2 && labels.all { label ->
-            label.length in 1..63 &&
-                label.matches(Regex("^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$"))
+    if (host.contains(":")) {
+        return runCatching {
+            val address = java.net.InetAddress.getByName(host)
+            address is java.net.Inet6Address
+        }.getOrDefault(false)
+    }
+
+    if (host.all { it.isDigit() || it == '.' }) {
+        val octets = host.split(".")
+        return octets.size == 4 && octets.all { part ->
+            val value = part.toIntOrNull()
+            part.isNotEmpty() && part.length <= 3 &&
+                part.all { it.isDigit() } && value != null && value in 0..255
         }
+    }
+
+    val labels = host.split(".")
+    return labels.size >= 2 && labels.all { label ->
+        label.length in 1..63 &&
+            label.matches(Regex("^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$"))
     }
 }
