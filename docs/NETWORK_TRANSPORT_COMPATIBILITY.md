@@ -91,3 +91,23 @@ No transport in this catalog is runtime-selectable by virtue of being listed. Ex
 ## Agent responsibilities and safety
 
 Molido Agent may refresh the catalog, collect sanitized metrics, run approved test suites, detect regressions and open a reviewable pull request. It may not mark untested transports as supported, change VPN security defaults, silently enable a transport, execute remote code, or publish a release outside the normal CI, review and signing gates.
+
+
+## Benchmark report format and promotion gate
+
+Store a sanitized JSON report for each client/server/device/network test run. Required top-level fields:
+
+- \`schema_version\` (currently \`1\`), \`transport_id\`, \`test_run_id\`
+- \`client_version\`, \`server_version\`, \`device_model\`, \`captured_at_utc\`
+- \`security\`: booleans for certificate validation, authentication, data-plane verification, DNS leak-free, IP leak-free and plaintext-fallback-disabled
+- \`network_profiles\`: at least two uniquely named profiles, each recording network type, sample count, handshake/reconnect success rates, median and p95 RTT, median upload/download Mbps, packet-loss percentage, soak duration and battery drain per hour
+
+Run the local report gate with:
+
+\`\`\`bash
+python scripts/transport_gate.py --report path/to/transport-report.json --output transport-gate-result.json
+\`\`\`
+
+The gate requires at least two network profiles, 10 samples per profile, 95% handshake and reconnect success, a 30-minute soak, non-zero bidirectional throughput, packet loss no greater than 5%, and all security flags true. Battery drain is recorded for same-device comparison rather than used as a universal cross-device threshold.
+
+A passing report means **eligible for manual review only**. The script deliberately returns \`validated: false\` and \`runtime_activation: never_automatic\`; it cannot enable a protocol or publish an app release. Reviewers must inspect the underlying test evidence and confirm the server/device cohort before changing the catalog state.
