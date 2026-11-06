@@ -30,6 +30,7 @@ object LiveCatalogSync {
                     ShardSubscription.refreshIfDue(context, maxAgeMs = REMOTE_INTERVAL_MS)
                     RemotePolicy.refreshIfDue(context)
                     ResilienceConfig.refreshIfDue(context)
+                    SmartSplitSub.refreshIfDue(context, maxAgeMs = REMOTE_INTERVAL_MS)
                     AppRemote.refreshIfDue(context) {
                         main.post { owners.values.toList().forEach { it?.invoke() } }
                     }
