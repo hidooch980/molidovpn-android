@@ -1,0 +1,234 @@
+{
+  "schema_version": 1,
+  "catalog_status": "planning_and_test_contract",
+  "policy": {
+    "default_enabled": false,
+    "auto_select_only_after_all_required_gates_pass": true,
+    "never_infer_server_support_from_client_presence": true
+  },
+  "entries": [
+    {
+      "id": "mtproto_proxy",
+      "name": "MTProto Proxy",
+      "layer": "proxy_protocol",
+      "transport_dependencies": [
+        "tcp"
+      ],
+      "status": "planned",
+      "requires_server_support": true,
+      "tests": [
+        "handshake",
+        "telegram_compatibility",
+        "connectivity",
+        "latency",
+        "throughput",
+        "stability",
+        "reconnect",
+        "battery"
+      ],
+      "notes": "Telegram-oriented proxy; not a general-purpose VPN tunnel."
+    },
+    {
+      "id": "tor",
+      "name": "Tor",
+      "layer": "anonymity_network",
+      "transport_dependencies": [
+        "tcp"
+      ],
+      "status": "planned",
+      "requires_server_support": true,
+      "tests": [
+        "bootstrap",
+        "circuit_build",
+        "tcp_stream_compatibility",
+        "dns_leak",
+        "connectivity",
+        "latency",
+        "stability",
+        "battery"
+      ],
+      "notes": "TCP stream proxy; UDP applications are not transparently supported. Do not promise anonymity or bypass guarantees."
+    },
+    {
+      "id": "tcp",
+      "name": "TCP",
+      "layer": "transport",
+      "status": "planned",
+      "requires_server_support": true,
+      "tests": [
+        "connectivity",
+        "packet_loss",
+        "latency",
+        "throughput",
+        "reconnect",
+        "stability"
+      ]
+    },
+    {
+      "id": "udp",
+      "name": "UDP",
+      "layer": "transport",
+      "status": "planned",
+      "requires_server_support": true,
+      "tests": [
+        "connectivity",
+        "packet_loss",
+        "latency",
+        "throughput",
+        "nat_compatibility",
+        "stability"
+      ]
+    },
+    {
+      "id": "quic",
+      "name": "QUIC",
+      "layer": "transport",
+      "transport_dependencies": [
+        "udp"
+      ],
+      "status": "planned",
+      "requires_server_support": true,
+      "tests": [
+        "handshake",
+        "version_negotiation",
+        "loss_recovery",
+        "latency",
+        "throughput",
+        "nat_compatibility",
+        "stability"
+      ]
+    },
+    {
+      "id": "websocket",
+      "name": "WebSocket",
+      "layer": "tunnel_transport",
+      "transport_dependencies": [
+        "tcp"
+      ],
+      "status": "planned",
+      "requires_server_support": true,
+      "tests": [
+        "upgrade_handshake",
+        "proxy_compatibility",
+        "latency",
+        "throughput",
+        "idle_timeout",
+        "stability"
+      ]
+    },
+    {
+      "id": "grpc",
+      "name": "gRPC",
+      "layer": "tunnel_transport",
+      "transport_dependencies": [
+        "tcp",
+        "http2"
+      ],
+      "status": "planned",
+      "requires_server_support": true,
+      "tests": [
+        "http2_negotiation",
+        "streaming",
+        "proxy_compatibility",
+        "latency",
+        "throughput",
+        "stability"
+      ]
+    },
+    {
+      "id": "xhttp",
+      "name": "XHTTP",
+      "layer": "tunnel_transport",
+      "transport_dependencies": [
+        "http1_or_http2_or_http3"
+      ],
+      "status": "planned",
+      "requires_server_support": true,
+      "tests": [
+        "implementation_compatibility",
+        "request_response_modes",
+        "proxy_compatibility",
+        "latency",
+        "throughput",
+        "stability"
+      ]
+    },
+    {
+      "id": "http2",
+      "name": "HTTP/2",
+      "layer": "application_transport",
+      "transport_dependencies": [
+        "tcp",
+        "tls"
+      ],
+      "status": "planned",
+      "requires_server_support": true,
+      "tests": [
+        "alpn",
+        "multiplexing",
+        "flow_control",
+        "proxy_compatibility",
+        "latency",
+        "throughput",
+        "stability"
+      ]
+    },
+    {
+      "id": "http3",
+      "name": "HTTP/3",
+      "layer": "application_transport",
+      "transport_dependencies": [
+        "quic"
+      ],
+      "status": "planned",
+      "requires_server_support": true,
+      "tests": [
+        "alpn",
+        "quic_handshake",
+        "loss_recovery",
+        "proxy_compatibility",
+        "latency",
+        "throughput",
+        "stability"
+      ]
+    },
+    {
+      "id": "http_upgrade",
+      "name": "HTTPUpgrade",
+      "layer": "tunnel_transport",
+      "transport_dependencies": [
+        "tcp"
+      ],
+      "status": "planned",
+      "requires_server_support": true,
+      "tests": [
+        "upgrade_handshake",
+        "header_compatibility",
+        "proxy_compatibility",
+        "latency",
+        "throughput",
+        "stability"
+      ]
+    },
+    {
+      "id": "mkcp",
+      "name": "mKCP",
+      "layer": "reliable_udp_tunnel",
+      "transport_dependencies": [
+        "udp"
+      ],
+      "status": "planned",
+      "requires_server_support": true,
+      "tests": [
+        "loss_recovery",
+        "reordering",
+        "latency",
+        "throughput",
+        "cpu",
+        "battery",
+        "stability"
+      ],
+      "notes": "Legacy/high-overhead option; evaluate only against a maintained compatible implementation."
+    }
+  ]
+}
