@@ -1,0 +1,87 @@
+name: Smart server refresh guard
+
+on:
+  schedule:
+    - cron: '47 * * * *'
+  push:
+    branches: [main]
+    paths:
+      - "remote/shard-nodes.txt"
+      - "scripts/smart_server_refresh.py"
+      - "scripts/test_smart_server_refresh.py"
+      - ".github/workflows/smart-server-refresh.yml"
+  pull_request:
+    paths:
+      - "remote/shard-nodes.txt"
+      - "scripts/smart_server_refresh.py"
+      - "scripts/test_smart_server_refresh.py"
+      - ".github/workflows/smart-server-refresh.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: smart-server-refresh
+  cancel-in-progress: false
+
+jobs:
+  validate-and-protect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Run smart refresh safety tests
+        run: python -m unittest discover -s scripts -p 'test_*.py' -v
+      - name: Validate current server catalog
+        id: validate
+        continue-on-error: true
+        run: |
+          python scripts/smart_server_refresh.py \
+            --input remote/shard-nodes.txt \
+            --report "$RUNNER_TEMP/server-refresh-report.json"
+      - name: Restore most recent valid catalog on main
+        if: steps.validate.outcome == 'failure' && github.ref == 'refs/heads/main'
+        shell: bash
+        run: |
+          set -euo pipefail
+          restored=0
+          while read -r revision; do
+            [ -n "$revision" ] || continue
+            git show "$revision:remote/shard-nodes.txt" > "$RUNNER_TEMP/candidate.txt" || continue
+            if python scripts/smart_server_refresh.py \
+              --input "$RUNNER_TEMP/candidate.txt" \
+              --report "$RUNNER_TEMP/restore-report.json"; then
+              cp "$RUNNER_TEMP/candidate.txt" remote/shard-nodes.txt
+              restored=1
+              echo "Restored last-known-good catalog from $revision"
+              break
+            fi
+          done < <(git log --format=%H -- remote/shard-nodes.txt | tail -n +2)
+          if [ "$restored" -ne 1 ]; then
+            echo "::error::No valid historical server catalog found; refusing unsafe publication."
+            exit 1
+          fi
+          git config user.name "molido-bot"
+          git config user.email "molido-bot@users.noreply.github.com"
+          git add remote/shard-nodes.txt
+          git commit -m "chore: restore last-known-good server catalog"
+          git push
+      - name: Fail non-main validation when catalog is unsafe
+        if: steps.validate.outcome == 'failure' && github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::Server catalog failed smart validation."
+          exit 1
+      - name: Upload refresh quality report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smart-server-refresh-report
+          path: "$RUNNER_TEMP/*server-refresh-report.json"
+          if-no-files-found: ignore
+          retention-days: 14
