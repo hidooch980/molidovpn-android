@@ -25,4 +25,6 @@ jobs:
       - name: Validate JSON catalog
         run: python -m json.tool config/network/transport-catalog.json > /dev/null
       - name: Run transport catalog tests
-        run: python -m unittest discover -s scripts -p 'test_transport_catalog.py' -v
+        run: python -m unittest discover -s scripts -p 'test_transport_*.py' -v
+      - name: Compile transport gate CLI
+        run: python -m py_compile scripts/transport_gate.py
