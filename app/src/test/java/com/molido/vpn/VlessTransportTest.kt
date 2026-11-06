@@ -7,6 +7,7 @@ import org.junit.Assume.assumeTrue
 import org.junit.Test
 import java.io.File
 import java.net.URLEncoder
+import java.util.Base64
 import java.util.concurrent.TimeUnit
 
 class VlessTransportTest {
@@ -122,6 +123,34 @@ class VlessTransportTest {
             assertFalse(kcp.has("header"))
             assertFalse(kcp.has("seed"))
         }
+    }
+
+    @Test fun vmessKcpImportsModernKcpSettings() {
+        val profile = JSONObject()
+            .put("mtu", 1280)
+            .put("tti", 25)
+            .put("uplinkCapacity", 8)
+            .put("downlinkCapacity", 40)
+            .put("cwndMultiplier", 1.5)
+            .put("maxSendingWindow", 1048576)
+        val config = JSONObject()
+            .put("v", "2")
+            .put("ps", "mKCP")
+            .put("add", "192.0.2.1")
+            .put("port", "443")
+            .put("id", id)
+            .put("aid", "0")
+            .put("net", "kcp")
+            .put("type", "none")
+            .put("tls", "tls")
+            .put("kcpSettings", profile)
+        val encoded = Base64.getEncoder().encodeToString(config.toString().toByteArray())
+        val node = V2rayNodes.parseOne("vmess://$encoded")!!
+        assertEquals("mkcp", node.network)
+        val kcp = render(node).getJSONObject("streamSettings").getJSONObject("kcpSettings")
+        assertEquals(1280, kcp.getInt("mtu"))
+        assertEquals(25, kcp.getInt("tti"))
+        assertEquals(1.5, kcp.getDouble("cwndMultiplier"), 0.0)
     }
 
     @Test fun kcpRejectsUnsupportedLegacyMasksAndUnsafeParameters() {
