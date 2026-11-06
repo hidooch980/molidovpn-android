@@ -4,7 +4,10 @@
   "policy": {
     "default_enabled": false,
     "auto_select_only_after_all_required_gates_pass": true,
-    "never_infer_server_support_from_client_presence": true
+    "never_infer_server_support_from_client_presence": true,
+    "catalog_role": "capability_audit_and_test_plan_not_runtime_activation",
+    "runtime_selectable_by_this_catalog": false,
+    "existing_app_paths_remain_governed_by_their_current_validated_configs": true
   },
   "entries": [
     {
@@ -26,7 +29,12 @@
         "reconnect",
         "battery"
       ],
-      "notes": "Telegram-oriented proxy; not a general-purpose VPN tunnel."
+      "notes": "No MTProto Proxy client/adapter was found in the inspected app/core source. This is a Telegram-oriented proxy, not a full-device VPN transport; scope it as an optional app-specific proxy feature.",
+      "implementation_status": "not_implemented_in_current_client_source_scan",
+      "runtime_selectable": false,
+      "interop_status": "not_started",
+      "integration_evidence": [],
+      "existing_tests": []
     },
     {
       "id": "tor",
@@ -47,7 +55,23 @@
         "stability",
         "battery"
       ],
-      "notes": "TCP stream proxy; UDP applications are not transparently supported. Do not promise anonymity or bypass guarantees."
+      "notes": "Existing Tor process, SOCKS bridge and pluggable-transport ladder. Runtime support still depends on bridge reachability and device tests.",
+      "implementation_status": "implemented_client_path",
+      "runtime_selectable": false,
+      "interop_status": "real_device_and_bridge_matrix_pending",
+      "integration_evidence": [
+        {
+          "path": "app/src/main/java/com/molido/vpn/TorManager.kt",
+          "marker": "object TorManager"
+        },
+        {
+          "path": "app/src/main/java/com/molido/vpn/TorSocksFront.kt",
+          "marker": "object TorSocksFront"
+        }
+      ],
+      "existing_tests": [
+        "app/src/test/java/com/molido/vpn/WartimeTunnelsTest.kt"
+      ]
     },
     {
       "id": "tcp",
@@ -62,7 +86,24 @@
         "throughput",
         "reconnect",
         "stability"
-      ]
+      ],
+      "implementation_status": "implemented_client_path",
+      "runtime_selectable": false,
+      "interop_status": "server_profile_matrix_pending",
+      "integration_evidence": [
+        {
+          "path": "app/src/main/java/com/molido/vpn/V2rayNodes.kt",
+          "marker": "private val NETWORKS = setOf(\"tcp\""
+        },
+        {
+          "path": "core/aether/src/netstack.rs",
+          "marker": "socket-tcp"
+        }
+      ],
+      "existing_tests": [
+        "app/src/test/java/com/molido/vpn/VlessTransportTest.kt"
+      ],
+      "notes": "Base stream transport used by existing Xray/V2Ray profiles; not a standalone VPN protocol."
     },
     {
       "id": "udp",
@@ -77,7 +118,25 @@
         "throughput",
         "nat_compatibility",
         "stability"
-      ]
+      ],
+      "implementation_status": "implemented_client_path",
+      "runtime_selectable": false,
+      "interop_status": "server_profile_matrix_pending",
+      "integration_evidence": [
+        {
+          "path": "core/aether/src/netstack.rs",
+          "marker": "socket-udp"
+        },
+        {
+          "path": "app/src/main/java/com/molido/vpn/SingBox.kt",
+          "marker": "\"hysteria2\""
+        }
+      ],
+      "existing_tests": [
+        "app/src/test/java/com/molido/vpn/Hysteria2ImportTest.kt",
+        "app/src/test/java/com/molido/vpn/Hysteria2EndpointTest.kt"
+      ],
+      "notes": "Base datagram transport; server and carrier UDP support must be probed before selection."
     },
     {
       "id": "quic",
@@ -96,7 +155,24 @@
         "throughput",
         "nat_compatibility",
         "stability"
-      ]
+      ],
+      "implementation_status": "implemented_client_path",
+      "runtime_selectable": false,
+      "interop_status": "live_gateway_and_loss_profile_pending",
+      "integration_evidence": [
+        {
+          "path": "core/aether/src/quic.rs",
+          "marker": "quiche::connect"
+        },
+        {
+          "path": "core/aether/src/masque.rs",
+          "marker": "quiche::h3"
+        }
+      ],
+      "existing_tests": [
+        "core/aether/src/quic.rs"
+      ],
+      "notes": "Existing Aether QUIC/MASQUE path via vendored quiche; requires UDP reachability and compatible CONNECT-IP gateway."
     },
     {
       "id": "websocket",
@@ -114,7 +190,24 @@
         "throughput",
         "idle_timeout",
         "stability"
-      ]
+      ],
+      "implementation_status": "implemented_client_path",
+      "runtime_selectable": false,
+      "interop_status": "server_profile_matrix_pending",
+      "integration_evidence": [
+        {
+          "path": "app/src/main/java/com/molido/vpn/V2rayNodes.kt",
+          "marker": "\"ws\""
+        },
+        {
+          "path": "app/src/main/java/com/molido/vpn/V2rayNodes.kt",
+          "marker": "\"ws\" -> put(\"wsSettings\""
+        }
+      ],
+      "existing_tests": [
+        "app/src/test/java/com/molido/vpn/VlessTransportTest.kt"
+      ],
+      "notes": "Supported as the Xray/V2Ray ws stream network; not a separate VPN protocol."
     },
     {
       "id": "grpc",
@@ -133,7 +226,24 @@
         "latency",
         "throughput",
         "stability"
-      ]
+      ],
+      "implementation_status": "implemented_client_path",
+      "runtime_selectable": false,
+      "interop_status": "server_profile_matrix_pending",
+      "integration_evidence": [
+        {
+          "path": "app/src/main/java/com/molido/vpn/V2rayNodes.kt",
+          "marker": "\"grpc\""
+        },
+        {
+          "path": "app/src/main/java/com/molido/vpn/V2rayNodes.kt",
+          "marker": "\"grpc\" -> put(\"grpcSettings\""
+        }
+      ],
+      "existing_tests": [
+        "app/src/test/java/com/molido/vpn/VlessTransportTest.kt"
+      ],
+      "notes": "Supported by the Xray/V2Ray outbound profile builder; needs matching gRPC serviceName and server configuration."
     },
     {
       "id": "xhttp",
@@ -151,7 +261,25 @@
         "latency",
         "throughput",
         "stability"
-      ]
+      ],
+      "implementation_status": "implemented_client_path",
+      "runtime_selectable": false,
+      "interop_status": "server_profile_matrix_pending",
+      "integration_evidence": [
+        {
+          "path": "app/src/main/java/com/molido/vpn/XhttpProfile.kt",
+          "marker": "internal data class XhttpProfile"
+        },
+        {
+          "path": "app/src/main/java/com/molido/vpn/V2rayNodes.kt",
+          "marker": "\"xhttp\" -> put(\"xhttpSettings\""
+        }
+      ],
+      "existing_tests": [
+        "app/src/test/java/com/molido/vpn/XhttpProfileTest.kt",
+        "app/src/test/java/com/molido/vpn/VlessTransportTest.kt"
+      ],
+      "notes": "XHTTP/SplitHTTP import and outbound configuration exist; minimum compatible Xray version is pinned in the repo."
     },
     {
       "id": "http2",
@@ -171,7 +299,24 @@
         "latency",
         "throughput",
         "stability"
-      ]
+      ],
+      "implementation_status": "implemented_experimental_path",
+      "runtime_selectable": false,
+      "interop_status": "known_gateway_compatibility_limitations_need_retest",
+      "integration_evidence": [
+        {
+          "path": "core/aether/src/masque_h2.rs",
+          "marker": "h2::client::Builder"
+        },
+        {
+          "path": "core/README.md",
+          "marker": "MASQUE (HTTP/3 & HTTP/2)"
+        }
+      ],
+      "existing_tests": [
+        "core/aether/src/masque_h2.rs"
+      ],
+      "notes": "Aether has an HTTP/2 MASQUE path, but source notes record gateway interoperability failures. Keep opt-in and do not advertise broad support until endpoint matrix passes."
     },
     {
       "id": "http3",
@@ -190,7 +335,24 @@
         "latency",
         "throughput",
         "stability"
-      ]
+      ],
+      "implementation_status": "implemented_client_path",
+      "runtime_selectable": false,
+      "interop_status": "live_gateway_and_network_matrix_pending",
+      "integration_evidence": [
+        {
+          "path": "core/aether/src/quic.rs",
+          "marker": "h3::Connection"
+        },
+        {
+          "path": "core/README.md",
+          "marker": "HTTP/3 (QUIC)"
+        }
+      ],
+      "existing_tests": [
+        "core/aether/src/quic.rs"
+      ],
+      "notes": "HTTP/3 is carried over QUIC/UDP; not an independent base transport."
     },
     {
       "id": "http_upgrade",
@@ -208,7 +370,24 @@
         "latency",
         "throughput",
         "stability"
-      ]
+      ],
+      "implementation_status": "implemented_client_path",
+      "runtime_selectable": false,
+      "interop_status": "server_profile_matrix_pending",
+      "integration_evidence": [
+        {
+          "path": "app/src/main/java/com/molido/vpn/V2rayNodes.kt",
+          "marker": "\"httpupgrade\""
+        },
+        {
+          "path": "app/src/main/java/com/molido/vpn/V2rayNodes.kt",
+          "marker": "\"httpupgrade\" -> put(\"httpupgradeSettings\""
+        }
+      ],
+      "existing_tests": [
+        "app/src/test/java/com/molido/vpn/VlessTransportTest.kt"
+      ],
+      "notes": "Xray/V2Ray HTTPUpgrade stream network is present in the parser and outbound builder."
     },
     {
       "id": "mkcp",
@@ -228,7 +407,12 @@
         "battery",
         "stability"
       ],
-      "notes": "Legacy/high-overhead option; evaluate only against a maintained compatible implementation."
+      "notes": "Current V2rayNodes NETWORKS allow-list does not include mKCP. Add only if the bundled engine version still supports it and a maintained compatible server exists; benchmark CPU, battery and loss before promotion.",
+      "implementation_status": "not_implemented_in_current_client_source_scan",
+      "runtime_selectable": false,
+      "interop_status": "not_started",
+      "integration_evidence": [],
+      "existing_tests": []
     }
   ]
 }
