@@ -126,7 +126,7 @@ class VlessTransportTest {
 
     @Test fun vmessKcpImportsModernKcpSettings() {
         val vmessJson = """{"v":"2","ps":"mKCP","add":"192.0.2.1","port":"443","id":"$id","aid":"0","net":"kcp","type":"none","tls":"tls","scy":"auto","kcpSettings":{"mtu":1280,"tti":25,"uplinkCapacity":8,"downlinkCapacity":40,"cwndMultiplier":1.5,"maxSendingWindow":1048576}}"""
-        val encoded = android.util.Base64.encodeToString(vmessJson.toByteArray(), android.util.Base64.NO_WRAP)
+        val encoded = java.util.Base64.getEncoder().encodeToString(vmessJson.toByteArray())
         val node = V2rayNodes.parseOne("vmess://$encoded") ?: error("Could not parse VMess KCP fixture")
         assertEquals("mkcp", node.network)
         val kcp = render(node).getJSONObject("streamSettings").getJSONObject("kcpSettings")
@@ -172,7 +172,7 @@ class VlessTransportTest {
         links.add(uri("mkcp", "mtu=1350&tti=20&uplinkCapacity=5&downlinkCapacity=20"))
         links.add(uri("mkcp").replace("vless://", "trojan://"))
         val vmessKcp = """{"v":"2","ps":"mKCP","add":"192.0.2.1","port":"443","id":"$id","aid":"0","net":"kcp","type":"none","tls":"tls","scy":"auto","kcpSettings":{"mtu":1350,"tti":20}}"""
-        links.add("vmess://${android.util.Base64.encodeToString(vmessKcp.toByteArray(), android.util.Base64.NO_WRAP)}")
+        links.add("vmess://${java.util.Base64.getEncoder().encodeToString(vmessKcp.toByteArray())}")
         for (link in links) {
             val node = V2rayNodes.parseOne(link) ?: error("Could not parse Xray smoke fixture: $link")
             val file = File.createTempFile("vless-xray-", ".json")
