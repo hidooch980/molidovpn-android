@@ -2926,7 +2926,7 @@ class MainActivity : Activity() {
         val header = LinearLayout(this).apply {
             gravity = Gravity.CENTER_VERTICAL
             addView(createHeaderBackButton { closeAgentHealthScreen() }, LinearLayout.LayoutParams(dp(48), dp(56)))
-            addView(label("Molido Agent", 19f, INK, TypefaceStyle.SEMIBOLD), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            addView(label("Molido Agent", 19f, INK, TypefaceStyle.MEDIUM), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         }
         content.addView(header, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         val summary = label(textSize = 14f, color = INK).apply {
@@ -2942,7 +2942,7 @@ class MainActivity : Activity() {
             isFocusable = true
             setOnClickListener {
                 AgentRuntime.setEnabled(this@MainActivity, !AgentRuntime.enabled(this@MainActivity))
-                renderAgentHealth()
+                toggle.text = if (AgentRuntime.enabled(this@MainActivity)) "Agent enabled  ·  Tap to pause" else "Agent paused  ·  Tap to enable"
             }
         }
         content.addView(toggle, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) })
