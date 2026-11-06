@@ -96,7 +96,7 @@
           "marker": "private val NETWORKS = setOf(\"tcp\""
         },
         {
-          "path": "core/aether/src/netstack.rs",
+          "path": "core/aether/Cargo.toml",
           "marker": "socket-tcp"
         }
       ],
@@ -124,7 +124,7 @@
       "interop_status": "server_profile_matrix_pending",
       "integration_evidence": [
         {
-          "path": "core/aether/src/netstack.rs",
+          "path": "core/aether/Cargo.toml",
           "marker": "socket-udp"
         },
         {
