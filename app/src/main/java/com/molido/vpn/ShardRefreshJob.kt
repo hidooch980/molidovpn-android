@@ -22,8 +22,9 @@ import java.util.concurrent.TimeUnit
  * [JobScheduler] resolves both. It survives process death and reboot, and the OS
  * decides *when* inside our window — it batches our fetch with whatever else on the
  * device is already waking the radio, so in the common case the update costs no
- * extra radio wake at all. One HTTP GET against a text file every few hours, which
- * usually answers `304 Not Modified` and transfers nothing.
+ * extra radio wake at all. The active app checks every five minutes; the OS-managed
+ * background fallback runs no more frequently than Android's 15-minute minimum.
+ * ETag requests usually answer `304 Not Modified` and transfer almost nothing.
  *
  * ## Why it does not depend on the VPN
  *
