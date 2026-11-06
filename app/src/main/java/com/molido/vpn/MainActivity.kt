@@ -1983,7 +1983,7 @@ class MainActivity : Activity() {
             }
         }, LinearLayout.LayoutParams(0, dp(44), 1f).apply { marginEnd = dp(6) })
         quickActions.addView(quickAction(
-            Strings.t(if (preferences().getBoolean(com.molido.vpn.engine.GamingQuality.PREF, false)) "Gaming on" else "Gaming"),
+            Strings.t("Gaming"),
             "🎮",
         ) {
             val enabled = !preferences().getBoolean(com.molido.vpn.engine.GamingQuality.PREF, false)
