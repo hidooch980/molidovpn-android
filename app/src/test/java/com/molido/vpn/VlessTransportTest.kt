@@ -89,6 +89,21 @@ class VlessTransportTest {
         assertJsonEquivalent(JSONObject(extra).getJSONObject("downloadSettings"), download)
     }
 
+    @Test fun grpcAndHttpUpgradeRenderExpectedTransportSettings() {
+        val grpc = V2rayNodes.parseOne(uri("grpc", "path=molido-service&mode=multi&alpn=h2"))!!
+        val grpcSettings = render(grpc).getJSONObject("streamSettings").getJSONObject("grpcSettings")
+        assertEquals("grpc", grpc.network)
+        assertEquals("molido-service", grpcSettings.getString("serviceName"))
+        assertTrue(grpcSettings.getBoolean("multiMode"))
+
+        val upgrade = V2rayNodes.parseOne(uri("httpupgrade", "path=%2Fupgrade&alpn=http%2F1.1"))!!
+        val upgradeSettings = render(upgrade).getJSONObject("streamSettings")
+            .getJSONObject("httpupgradeSettings")
+        assertEquals("httpupgrade", upgrade.network)
+        assertEquals("/upgrade", upgradeSettings.getString("path"))
+        assertEquals("cdn.example", upgradeSettings.getString("host"))
+    }
+
     @Test fun otherTransportRetryBehaviorIsUnchanged() {
         val tcp = V2rayNodes.toShardNode(V2rayNodes.parseOne(uri("tcp"))!!)
         assertEquals("chrome", RetryTweaks.fingerprintFor(tcp, 2))
