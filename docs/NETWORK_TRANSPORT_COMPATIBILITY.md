@@ -111,3 +111,23 @@ python scripts/transport_gate.py --report path/to/transport-report.json --output
 The gate requires at least two network profiles, 10 samples per profile, 95% handshake and reconnect success, a 30-minute soak, non-zero bidirectional throughput, packet loss no greater than 5%, and all security flags true. Battery drain is recorded for same-device comparison rather than used as a universal cross-device threshold.
 
 A passing report means **eligible for manual review only**. The script deliberately returns `validated: false` and `runtime_activation: never_automatic`; it cannot enable a protocol or publish an app release. Reviewers must inspect the underlying test evidence and confirm the server/device cohort before changing the catalog state.
+
+
+## Modular Protocol Engine boundary
+
+The first implementation slice adds \`ProtocolEngineRegistry\` under
+\`app/src/main/java/com/molido/vpn/engine/protocol/\`. It provides stable engine IDs,
+runtime-family ownership, implementation state and fail-closed selection metadata.
+It is a registry boundary, not a second tunnel implementation: existing Xray,
+sing-box, Aether, Android IKEv2/SSTP and Tor launch paths remain the owners of
+actual sessions.
+
+The initial ten whole-device/profile engine IDs are VLESS, VMess, Trojan,
+Shadowsocks, Hysteria 2, TUIC, AnyTLS, WireGuard, IKEv2 and SSTP. Tor is kept as a
+separate proxy runtime because its SOCKS/TCP model is not a general UDP-capable
+whole-device transport. MTProto Proxy remains unavailable and is scoped to
+Telegram-specific proxy use until a maintained client adapter exists.
+
+Unit tests cover the initial-ten set, runtime-family resolution, Tor/MTProto
+separation and fail-closed unknown-scheme handling. Adding an ID to this registry
+does not by itself enable it in Smart Connect or create a server-side implementation.
