@@ -59,9 +59,9 @@ class KcpProfileTest {
     }
 
     @Test
-    fun rejectsNonFiniteAndOversizedJsonValues() {
-        assertNull(KcpProfile.fromJson(JSONObject().put("cwndMultiplier", Double.NaN)))
-        assertNull(KcpProfile.fromJson(JSONObject().put("cwndMultiplier", Double.POSITIVE_INFINITY)))
+    fun rejectsNonFiniteAndOversizedSettings() {
+        assertNull(KcpProfile.fromQuery(mapOf("cwndmultiplier" to "NaN")))
+        assertNull(KcpProfile.fromQuery(mapOf("cwndmultiplier" to "Infinity")))
         assertNull(KcpProfile.fromJson(JSONObject().put("maxSendingWindow", 16 * 1024 * 1024 + 1)))
         assertNull(KcpProfile.fromJson(JSONObject().put("mtu", "not-a-number")))
     }
