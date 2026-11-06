@@ -21,6 +21,17 @@ gaming, recovery, diagnostics, learning, battery/data and coordinator roles) rem
 roadmap and must only be marked implemented when each role has executable code, tests,
 and a real integration point.
 
+## Agent health insights
+
+- `AgentHealth.summarize` converts persisted runtime snapshots into deterministic
+  `HEALTHY`, `DEGRADED`, `ERROR`, `NOT_RUN`, `DISABLED` and `CLOCK_SKEW` states.
+- A newer provider exception overrides an older successful call; only the exception class
+  is exposed, never exception messages, credentials or fetched payloads.
+- A recent provider return is a heartbeat only. It does not claim that a remote catalog
+  changed or that data was applied.
+- The default stale threshold is 30 minutes and is configurable by the caller.
+- This is a tested diagnostics model; a dedicated in-app dashboard still requires UI wiring.
+
 ## Dispatch and observability rules
 
 - The automatic coordinator dispatches only skills explicitly marked AUTOMATIC.

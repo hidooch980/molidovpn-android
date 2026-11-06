@@ -124,6 +124,10 @@ object AgentRuntime {
         }
     }
 
+    /** Convenience snapshot for a diagnostics UI; performs no network work. */
+    fun health(context: Context, now: Long = System.currentTimeMillis()): AgentHealthSummary =
+        AgentHealth.summarize(statuses(context, now), now)
+
     fun dispatchCount(context: Context, skillId: String): Long =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .getLong("dispatch_count_$skillId", 0L)
