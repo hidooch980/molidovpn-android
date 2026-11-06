@@ -146,6 +146,7 @@ class MainActivity : Activity() {
     /** Home-screen DNS chip under the rail; opens the same sheet as Settings. */
     private var homeDnsChip: TextView? = null
     private var homeGamingShortcut: TextView? = null
+    private var homeModeShortcuts: LinearLayout? = null
 
     // Simple / Advanced home and collapsible settings.
     private var homeAdvancedBox: LinearLayout? = null
@@ -1637,7 +1638,7 @@ class MainActivity : Activity() {
             OrbitDialView.State.FAILED ->
                 Triple("Try again", palette.primary, palette.violet)
             OrbitDialView.State.DISCONNECTED ->
-                Triple("Quick connect", palette.primary, palette.violet)
+                Triple("Automatic connection", palette.primary, palette.violet)
         }
         quickConnectButton.text = "⏻   " + Strings.t(key)
         quickConnectButton.contentDescription = Strings.t(key)
@@ -1660,7 +1661,7 @@ class MainActivity : Activity() {
     private fun renderGamingShortcut() {
         val enabled = preferences().getBoolean(com.molido.vpn.engine.GamingQuality.PREF, false)
         homeGamingShortcut?.apply {
-            text = "🎮  " + Strings.t("Gaming") + "\n" +
+            text = "🎮  " + Strings.t("Gaming optimization") + "\n" +
                 Strings.t(if (enabled) "On" else "Off")
             background = Sculpt.sculptedBackground(
                 resources.displayMetrics.density,
@@ -1951,6 +1952,61 @@ class MainActivity : Activity() {
             ViewGroup.LayoutParams.WRAP_CONTENT,
         ).apply { topMargin = dp(18) })
 
+        // The two connection paths are first-class home actions on every layout.
+        // Manual opens the user's saved profiles and explicit server/mode pickers;
+        // Gaming toggles the existing secure route-scoring preference only.
+        val modeShortcuts = LinearLayout(this@MainActivity).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+        }
+        fun modeShortcut(title: String, subtitle: String, glyph: String): TextView =
+            label("$glyph  $title\n$subtitle", 12f, INK, TypefaceStyle.MEDIUM).apply {
+                gravity = Gravity.CENTER
+                minHeight = dp(62)
+                setPadding(dp(8), dp(8), dp(8), dp(8))
+                maxLines = 2
+                background = Sculpt.sculptedBackground(
+                    resources.displayMetrics.density, palette.surface, 16,
+                    stroke = Sculpt.withAlpha(palette.divider, 0.85f),
+                )
+                isClickable = true
+                isFocusable = true
+            }
+
+        val manualShortcut = modeShortcut(
+            Strings.t("Manual connection"),
+            Strings.t("Choose a saved config or server"),
+            "☷",
+        ).apply {
+            contentDescription = Strings.t("Manual connection")
+            setOnClickListener { openManualConnectionChoices() }
+        }
+        homeGamingShortcut = modeShortcut(
+            Strings.t("Gaming optimization"),
+            Strings.t("Off"),
+            "🎮",
+        ).apply {
+            setOnClickListener {
+                val enabled = !preferences().getBoolean(com.molido.vpn.engine.GamingQuality.PREF, false)
+                preferences().edit()
+                    .putBoolean(com.molido.vpn.engine.GamingQuality.PREF, enabled)
+                    .apply()
+                ConnectionLog.record(
+                    "Secure gaming route scoring " + (if (enabled) "on" else "off") +
+                        " — applies on the next Smart Connect run; DNS stays tunnel-routed"
+                )
+                renderGamingShortcut()
+                toastShort(Strings.t(if (enabled) "Gaming optimization enabled" else "Gaming optimization disabled"))
+            }
+        }
+        modeShortcuts.addView(manualShortcut, LinearLayout.LayoutParams(0, dp(62), 1f).apply { marginEnd = dp(5) })
+        modeShortcuts.addView(homeGamingShortcut, LinearLayout.LayoutParams(0, dp(62), 1f).apply { marginStart = dp(5) })
+        homeModeShortcuts = modeShortcuts
+        addView(modeShortcuts, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(62),
+        ).apply { topMargin = dp(10) })
+        renderGamingShortcut()
+
         // Secondary destinations remain in Advanced mode; the full feature
         // catalogue is also available in the searchable navigation drawer.
         val quickActions = LinearLayout(this@MainActivity).apply {
@@ -2238,6 +2294,31 @@ class MainActivity : Activity() {
 
     // ---------------------------------------------------------------- Simple home
 
+    private fun openManualConnectionChoices() {
+        val items = arrayOf(
+            Strings.t("My configs"),
+            Strings.t("Country"),
+            Strings.t("Connection mode"),
+        )
+        android.app.AlertDialog.Builder(this)
+            .setTitle(Strings.t("Manual connection"))
+            .setItems(items) { _, which ->
+                when (which) {
+                    0 -> openMyConfigs()
+                    1 -> showCountryPicker {
+                        homeLocationCard?.text = Strings.t("SERVER LOCATION") + "\n" + locationCardText()
+                    }
+                    2 -> if (TunnelStatus.isActive() || visualState == OrbitDialView.State.CONNECTING) {
+                        toastShort(Strings.t("Disconnect before changing connection mode"))
+                    } else {
+                        openModeScreen()
+                    }
+                }
+            }
+            .setNegativeButton(Strings.t("Close"), null)
+            .show()
+    }
+
     private fun homeSimple(): Boolean = preferences().getBoolean(HOME_SIMPLE_PREF, true)
 
     private fun locationCardText(): String {
@@ -2268,7 +2349,8 @@ class MainActivity : Activity() {
         homeTelemetryLine?.visibility = if (style == HOME_STYLE_MINIMAL) View.GONE else View.VISIBLE
         homeLocationCard?.visibility = if (style == HOME_STYLE_BALANCED || style == HOME_STYLE_DASHBOARD) View.VISIBLE else View.GONE
         exitNodeCard.visibility = if (style == HOME_STYLE_MINIMAL) View.GONE else View.VISIBLE
-        homeGamingShortcut?.visibility = View.GONE
+        homeModeShortcuts?.visibility = View.VISIBLE
+        homeGamingShortcut?.visibility = View.VISIBLE
         homeSocialRow?.visibility = View.GONE
         homeShareRow?.visibility = View.GONE
         homeSupportButton?.visibility = if (visualState == OrbitDialView.State.FAILED) View.VISIBLE else View.GONE
