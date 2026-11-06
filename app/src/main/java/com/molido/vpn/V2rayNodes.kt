@@ -576,7 +576,7 @@ object V2rayNodes {
 
 /**
  * The V2Ray servers pool: five mirror subscriptions merged, iOS feed as fallback,
- * cached in filesDir, refreshed at most hourly.
+ * cached in filesDir, refreshed on the five-minute live cadence.
  */
 object V2raySubscription {
 
@@ -595,7 +595,7 @@ object V2raySubscription {
     private const val CACHE_FILE = "v2ray-configs.txt"
     private const val LAST_CHECK_PREF = "v2ray_last_check"
     private const val LAST_COUNT_PREF = "v2ray_last_count"
-    private const val MIN_INTERVAL_MS = 60 * 60 * 1000L
+    private const val MIN_INTERVAL_MS = 5 * 60 * 1000L
     private const val CONNECT_TIMEOUT_MS = 10_000
     private const val READ_TIMEOUT_MS = 15_000
 

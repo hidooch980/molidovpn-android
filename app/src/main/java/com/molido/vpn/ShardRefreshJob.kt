@@ -22,8 +22,9 @@ import java.util.concurrent.TimeUnit
  * [JobScheduler] resolves both. It survives process death and reboot, and the OS
  * decides *when* inside our window — it batches our fetch with whatever else on the
  * device is already waking the radio, so in the common case the update costs no
- * extra radio wake at all. One HTTP GET against a text file every few hours, which
- * usually answers `304 Not Modified` and transfers nothing.
+ * extra radio wake at all. The active app checks every five minutes; the OS-managed
+ * background fallback runs no more frequently than Android's 15-minute minimum.
+ * ETag requests usually answer `304 Not Modified` and transfer almost nothing.
  *
  * ## Why it does not depend on the VPN
  *
@@ -143,13 +144,14 @@ class ShardRefreshJob : android.app.job.JobService() {
         private const val PREWARM_PERIOD_MS = 30 * 60 * 1000L
 
         /**
-         * How often the OS may run us. Six hours matches
-         * [ShardSubscription]'s own min-interval, and the publisher rebuilds the
-         * list once a day at 10:00 UTC — measured from their own workflow — so
-         * four opportunities a day already means we are never more than a few
-         * hours behind a rebuild.
+         * Android's periodic JobScheduler minimum is 15 minutes. While the app
+         * is active, LiveCatalogSync refreshes the catalog every five minutes;
+         * this job is only a best-effort background fallback when the app is idle.
          */
-        private const val PERIOD_MS = 60 * 60 * 1000L
+        // Android JobScheduler enforces a 15-minute minimum periodic interval.
+        // The foreground live sync checks every five minutes; this is the
+        // best-effort background fallback when the app is not active.
+        private const val PERIOD_MS = 15 * 60 * 1000L
 
         /** Daily "test servers from my internet" (Wi-Fi + charging, reports on). */
         private const val NODE_TEST_ID = 0x5A50

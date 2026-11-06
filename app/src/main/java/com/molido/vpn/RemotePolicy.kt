@@ -67,7 +67,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  *
  * ## Cadence
  *
- * The same 6-hour floor and ETag conditional request as [ShardSubscription], and
+ * The same five-minute floor and ETag conditional request as [ShardSubscription], and
  * it rides the same triggers — app resume, SHARD connect, the periodic job. A
  * `304` is a few hundred bytes. There is no separate wakeup and no extra radio
  * cost: when nothing changed this is cheaper than a single DNS lookup.
@@ -100,7 +100,7 @@ object RemotePolicy {
     private const val LAST_CHECK_PREF = "policy_last_check"
 
     /** Same floor as the subscription: see [ShardSubscription.refreshIfDue]. */
-    private const val MIN_INTERVAL_MS = 6 * 60 * 60 * 1000L
+    private const val MIN_INTERVAL_MS = 5 * 60 * 1000L
 
     private const val CONNECT_TIMEOUT_MS = 12_000
     private const val READ_TIMEOUT_MS = 20_000

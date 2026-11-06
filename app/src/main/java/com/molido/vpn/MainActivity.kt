@@ -154,6 +154,8 @@ class MainActivity : Activity() {
     private var homeRetryButton: TextView? = null
     private var homeSupportButton: TextView? = null
     private var homeAdvancedLink: TextView? = null
+    private var homeSocialRow: View? = null
+    private var homeShareRow: View? = null
     /** Owner announcement banner at the top of home ([renderNotice]); GONE when there is none. */
     private var homeNoticeBox: LinearLayout? = null
     /** Main-screen automatic update banner; hidden until a newer release is found. */
@@ -610,17 +612,15 @@ class MainActivity : Activity() {
         // package replace clears JobScheduler's registrations for the app.
         ShardRefreshJob.schedule(this)
         DdnsRefreshJob.schedule(this)
-        // And one opportunistic refresh now. The job's window is up to six hours
-        // wide; someone who installs the app and taps SHARD immediately should not
-        // have to wait for it. Returns without I/O if the list is already fresh.
+        // Opportunistic five-minute catalog refresh. ETags keep unchanged checks tiny.
         ShardSubscription.refreshIfDue(this)
-        // V2Ray servers pool: hourly floor, background thread.
-        V2raySubscription.refreshIfDue(this)
+        // V2Ray server pool: same five-minute floor, background thread.
+        V2raySubscription.refreshIfDue(this, maxAgeMs = LiveCatalogSync.REMOTE_INTERVAL_MS)
         // Refresh the user's own subscription URLs on foreground entry too; the
         // JobScheduler repeats this while the app is closed, with the same hourly floor.
         MyConfigs.refreshIfDue(this)
         // Same trigger for the edge and geo-blocked lists. Separate file, separate
-        // ETag, same 6-hour floor — see [RemotePolicy]. Cheap enough to sit next to
+        // ETag, same five-minute floor — see [RemotePolicy]. Cheap enough to sit next to
         // the subscription fetch: a 304 is a few hundred bytes.
         RemotePolicy.refreshIfDue(this)
         ResilienceConfig.refreshIfDue(this)
@@ -779,6 +779,14 @@ class MainActivity : Activity() {
         }
         val header = createHeader()
         val console = createConnectionConsole()
+        // One-time migration: existing installs also open the new uncluttered home.
+        // Users can still switch to Advanced afterwards and keep that preference.
+        if (!preferences().getBoolean(HOME_LAYOUT_SIMPLIFIED_PREF, false)) {
+            preferences().edit()
+                .putBoolean(HOME_SIMPLE_PREF, true)
+                .putBoolean(HOME_LAYOUT_SIMPLIFIED_PREF, true)
+                .apply()
+        }
         applyHomeMode()
         // The console can still scroll, but it is meant not to need it: the dial
         // shrinks first (see [fitConsoleToViewport]) and scrolling is only the
@@ -2118,8 +2126,8 @@ class MainActivity : Activity() {
             ViewGroup.LayoutParams.WRAP_CONTENT,
         ).apply { topMargin = dp(14) })
 
-        // Compact Telegram support row.
-        addView(LinearLayout(this@MainActivity).apply {
+        // Support and sharing live in the advanced area; keep the default home quiet.
+        val telegramSupportRow = LinearLayout(this@MainActivity).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
             setPadding(dp(14), dp(8), dp(14), dp(8))
@@ -2134,7 +2142,9 @@ class MainActivity : Activity() {
             addView(label(Strings.t("Telegram support: @Molido_Vpn"), 12.5f, INK, TypefaceStyle.MEDIUM).apply {
                 maxLines = 1
             })
-        }, LinearLayout.LayoutParams(
+        }
+        homeSocialRow = telegramSupportRow
+        addView(telegramSupportRow, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.WRAP_CONTENT,
         ).apply { topMargin = dp(10) })
@@ -2257,14 +2267,16 @@ class MainActivity : Activity() {
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.WRAP_CONTENT,
         ))
-        // "Tell your friends" (QR + share), under the mode link on both home views.
-        addView(label(Strings.t("Tell your friends"), 13f, palette.mint, TypefaceStyle.MEDIUM).apply {
+        // "Tell your friends" stays available in advanced mode, not on the clean home.
+        val shareShortcut = label(Strings.t("Tell your friends"), 13f, palette.mint, TypefaceStyle.MEDIUM).apply {
             gravity = Gravity.CENTER
             setPadding(dp(12), dp(6), dp(12), dp(4))
             isClickable = true
             isFocusable = true
             setOnClickListener { showShareSheet() }
-        }, childCount - 1, LinearLayout.LayoutParams(
+        }
+        homeShareRow = shareShortcut
+        addView(shareShortcut, childCount - 1, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.WRAP_CONTENT,
         ))
@@ -2290,15 +2302,14 @@ class MainActivity : Activity() {
     private fun applyHomeMode() {
         val simple = homeSimple()
         homeAdvancedBox?.visibility = if (simple) View.GONE else View.VISIBLE
-        // The refreshed home keeps useful destinations visible in both modes.
-        // Advanced adds transport and diagnostic controls; Simple stays uncluttered
-        // but still exposes country selection, traffic and live connection metadata.
-        homeQuickActions?.visibility = View.VISIBLE
+        // Default home: one connect action, server location and compact status.
+        // Secondary actions, Gaming, support and sharing remain one tap away in Advanced.
+        homeQuickActions?.visibility = if (simple) View.GONE else View.VISIBLE
         homeTelemetryLine?.visibility = View.VISIBLE
         homeLocationCard?.visibility = if (simple) View.VISIBLE else View.GONE
-        // Keep Gaming beside the primary connect action in both home modes.
-        // Only the decorative footer is removed from Simple mode to save height.
-        homeGamingShortcut?.visibility = View.VISIBLE
+        homeGamingShortcut?.visibility = if (simple) View.GONE else View.VISIBLE
+        homeSocialRow?.visibility = if (simple) View.GONE else View.VISIBLE
+        homeShareRow?.visibility = if (simple) View.GONE else View.VISIBLE
         footerWave.visibility = if (simple) View.GONE else View.VISIBLE
         homeLocationCard?.text = Strings.t("SERVER LOCATION") + "\n" + locationCardText()
         homeAdvancedLink?.text = if (simple) Strings.t("Advanced mode") else Strings.t("Simple mode")
@@ -4539,7 +4550,7 @@ class MainActivity : Activity() {
         ).apply { topMargin = dp(26) })
         val shardRow = navRow(Strings.t("Node list"), shardPoolSummary()) {
             // force = true: the whole point of tapping this is to bypass the
-            // six-hour interval the background job honours.
+            // five-minute interval the background and live refresh paths honour.
             shardPoolRow?.setValue(Strings.t("Updating…"))
             // The policy file rides the same tap. It is what decides how many paths
             // each node has, so refreshing the node list without it would leave the
@@ -9116,9 +9127,8 @@ class MainActivity : Activity() {
      * Subtitle for SHARD's node-list row: how many nodes, and how old the list is.
      *
      * Ages are rounded to the coarsest useful unit. The number that matters to a
-     * user deciding whether to hit refresh is "hours ago" or "days ago", and a
-     * precise minute count on a list the publisher rebuilds once a day would be
-     * false precision.
+     * user deciding whether to hit refresh is the last few minutes, and a precise
+     * minute count is useful now that the mirror refreshes every five minutes.
      */
     /** "Last server update: N min ago" — the newer of the SHARD and V2Ray lists. */
     private fun serversUpdatedText(): String {
@@ -9389,6 +9399,7 @@ class MainActivity : Activity() {
         const val MY_CONFIGS_QR_REQUEST = 1105
         const val V2RAY_OVER_PSIPHON_PREF = "v2ray_over_psiphon"
         const val HOME_SIMPLE_PREF = "home_simple"
+        private const val HOME_LAYOUT_SIMPLIFIED_PREF = "home_layout_simplified_20261106"
         const val ADVANCED_SETTINGS_TAG = "advanced_settings"
         const val ONBOARDING_PREF = "onboarding_done"
         /** Set when the user picks a connection mode themselves; until then the owner's default applies. */

@@ -139,6 +139,8 @@ class MolidoNavigationDrawer(
         fun normalize(s: String) = s.lowercase(Locale.ROOT)
             .replace('ي', 'ی').replace('ك', 'ک').trim()
 
+        val expandedGroups = mutableSetOf<String>()
+
         fun render(query: String) {
             list.removeAllViews()
             val q = normalize(query)
@@ -146,12 +148,31 @@ class MolidoNavigationDrawer(
                 normalize(it.title + " " + it.detail + " " + it.group).contains(q)
             }
             matches.groupBy { it.group }.forEach { (group, items) ->
-                list.addView(label("✦  $group", true).apply {
-                    textSize = 11f
-                    setTextColor(palette.primaryText)
-                    setPadding(dp(7), dp(15), dp(7), dp(8))
+                val expanded = q.isNotEmpty() || group in expandedGroups
+                val section = LinearLayout(activity).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                    minimumHeight = dp(48)
+                    setPadding(dp(12), dp(6), dp(12), dp(6))
+                    background = cardBackground()
+                    isClickable = true
+                    isFocusable = true
+                    addView(label("✦  $group", true), LinearLayout.LayoutParams(0, -2, 1f))
+                    addView(label(if (expanded) "−" else "+", true).apply {
+                        textSize = 19f
+                        gravity = Gravity.CENTER
+                        setTextColor(palette.primaryText)
+                    }, LinearLayout.LayoutParams(dp(28), dp(32)))
+                    setOnClickListener {
+                        if (group in expandedGroups) expandedGroups.remove(group)
+                        else expandedGroups.add(group)
+                        render(query)
+                    }
+                }
+                list.addView(section, LinearLayout.LayoutParams(-1, -2).apply {
+                    bottomMargin = dp(7)
                 })
-                items.forEach { entry ->
+                if (expanded) items.forEach { entry ->
                     val row = LinearLayout(activity).apply {
                         orientation = LinearLayout.HORIZONTAL
                         gravity = Gravity.CENTER_VERTICAL
@@ -184,6 +205,7 @@ class MolidoNavigationDrawer(
                     }, LinearLayout.LayoutParams(dp(24), dp(32)))
                     list.addView(row, LinearLayout.LayoutParams(-1, -2).apply {
                         bottomMargin = dp(7)
+                        marginStart = dp(12)
                     })
                 }
             }

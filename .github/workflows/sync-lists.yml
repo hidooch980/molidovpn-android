@@ -6,7 +6,7 @@ name: Sync server and policy lists
 # (VLESS/Trojan over WebSocket+TLS behind Cloudflare), capped so they cannot crowd out upstream nodes.
 on:
   schedule:
-    - cron: '17 * * * *'
+    - cron: '*/5 * * * *'
   workflow_dispatch: {}
 
 permissions:
@@ -19,6 +19,7 @@ concurrency:
 jobs:
   sync:
     runs-on: ubuntu-24.04
+    timeout-minutes: 8
     steps:
       - uses: actions/checkout@v5
 
@@ -124,6 +125,15 @@ jobs:
           print("appended", len(extra), "MolidoVPN nodes")
           PY
 
+      - name: Run smart refresh safety tests
+        run: python3 -m unittest discover -s scripts -p 'test_*.py' -v
+
+      - name: Validate refreshed server catalog before publication
+        run: |
+          python3 scripts/smart_server_refresh.py \
+            --input remote/shard-nodes.txt \
+            --report "$RUNNER_TEMP/server-refresh-report.json"
+
       - name: Commit changes
         run: |
           git config user.name "molido-bot"
@@ -133,20 +143,3 @@ jobs:
           git commit -q -m "Sync lists $(date -u +'%Y-%m-%d %H:%M UTC')"
           git pull -q --rebase
           git push -q
-
-  # GitHub often skips cron on quiet repos, so each run also starts the next one ~1 hour later.
-  schedule-next:
-    needs: sync
-    if: always()
-    runs-on: ubuntu-24.04
-    timeout-minutes: 70
-    permissions:
-      actions: write
-    env:
-      GH_TOKEN: ${{ github.token }}
-    steps:
-      - name: Start the next sync in ~55 min
-        run: |
-          sleep 3300
-          waiting=$(gh run list -R "$GITHUB_REPOSITORY" --workflow sync-lists.yml --json status --jq '[.[]|select(.status=="queued" or .status=="pending" or .status=="waiting")]|length')
-          [ "$waiting" = "0" ] && gh workflow run sync-lists.yml -R "$GITHUB_REPOSITORY" --ref main || echo "a sync is already queued"
