@@ -435,8 +435,13 @@
       ],
       "existing_tests": [
         "app/src/test/java/com/molido/vpn/VlessTransportTest.kt",
-        "app/src/test/java/com/molido/vpn/KcpProfileTest.kt"
-      ]
+        "app/src/test/java/com/molido/vpn/KcpProfileTest.kt",
+        "app/src/test/java/com/molido/vpn/TransportRuntimePolicyTest.kt"
+      ],
+      "runtime_gate_evidence": {
+        "path": "app/src/main/java/com/molido/vpn/TransportRuntimePolicy.kt",
+        "marker": "private val disabledPendingInterop = setOf(\"mkcp\")"
+      }
     }
   ]
 }
