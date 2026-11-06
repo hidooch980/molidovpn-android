@@ -37,13 +37,16 @@ ERROR_LINE = re.compile(
     re.IGNORECASE,
 )
 SECRET_PATTERNS = (
-    (re.compile(r"(authorization:\\s*bearer\\s+)[^\\s]+", re.IGNORECASE), r"\\1[REDACTED]"),
+    (
+        re.compile(r"(authorization:\s*bearer\s+)[^\s]+", re.IGNORECASE),
+        r"\1[REDACTED]",
+    ),
     (
         re.compile(
-            r"((?:token|password|secret|api[_-]?key)\\s*[=:]\\s*)[^\\s&]+",
+            r"((?:token|password|secret|api[_-]?key)\s*[=:]\s*)[^\s&]+",
             re.IGNORECASE,
         ),
-        r"\\1[REDACTED]",
+        r"\1[REDACTED]",
     ),
     (re.compile(r"gh[pousr]_[A-Za-z0-9_]{20,}"), "[REDACTED_GITHUB_TOKEN]"),
     (re.compile(r"github_pat_[A-Za-z0-9_]{20,}"), "[REDACTED_GITHUB_TOKEN]"),
@@ -88,11 +91,9 @@ def main() -> int:
     parser.add_argument("--log", required=True)
     parser.add_argument("--output", required=True)
     args = parser.parse_args()
-    result = classify(
-        Path(args.log).read_text(encoding="utf-8", errors="replace")
-    )
+    result = classify(Path(args.log).read_text(encoding="utf-8", errors="replace"))
     Path(args.output).write_text(
-        json.dumps(result, indent=2) + "\\n", encoding="utf-8"
+        json.dumps(result, indent=2) + "\n", encoding="utf-8"
     )
     print(json.dumps(result))
     return 0
