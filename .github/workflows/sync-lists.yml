@@ -130,7 +130,7 @@ jobs:
 
       - name: Validate refreshed server catalog before publication
         run: |
-          python3 scripts/smart_server_refresh.py \\
+          python3 scripts/smart_server_refresh.py \
             --input remote/shard-nodes.txt \\
             --report "$RUNNER_TEMP/server-refresh-report.json"
 
