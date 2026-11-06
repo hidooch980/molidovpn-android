@@ -89,6 +89,71 @@ class VlessTransportTest {
         assertJsonEquivalent(JSONObject(extra).getJSONObject("downloadSettings"), download)
     }
 
+    @Test fun grpcAndHttpUpgradeRenderExpectedTransportSettings() {
+        val grpc = V2rayNodes.parseOne(uri("grpc", "path=molido-service&mode=multi&alpn=h2"))!!
+        val grpcSettings = render(grpc).getJSONObject("streamSettings").getJSONObject("grpcSettings")
+        assertEquals("grpc", grpc.network)
+        assertEquals("molido-service", grpcSettings.getString("serviceName"))
+        assertTrue(grpcSettings.getBoolean("multiMode"))
+
+        val upgrade = V2rayNodes.parseOne(uri("httpupgrade", "path=%2Fupgrade&alpn=http%2F1.1"))!!
+        val upgradeSettings = render(upgrade).getJSONObject("streamSettings")
+            .getJSONObject("httpupgradeSettings")
+        assertEquals("httpupgrade", upgrade.network)
+        assertEquals("/upgrade", upgradeSettings.getString("path"))
+        assertEquals("cdn.example", upgradeSettings.getString("host"))
+    }
+
+    @Test fun vlessKcpAliasesRenderCurrentXrayKcpSettings() {
+        for (network in listOf("kcp", "mkcp")) {
+            val node = V2rayNodes.parseOne(
+                uri(network, "security=tls&mtu=1300&tti=20&uplinkCapacity=10&downlinkCapacity=50&cwndMultiplier=2&maxSendingWindow=1048576"),
+            )!!
+            assertEquals("mkcp", node.network)
+            val stream = render(node).getJSONObject("streamSettings")
+            assertEquals("mkcp", stream.getString("network"))
+            val kcp = stream.getJSONObject("kcpSettings")
+            assertEquals(1300, kcp.getInt("mtu"))
+            assertEquals(20, kcp.getInt("tti"))
+            assertEquals(10, kcp.getInt("uplinkCapacity"))
+            assertEquals(50, kcp.getInt("downlinkCapacity"))
+            assertEquals(2.0, kcp.getDouble("cwndMultiplier"), 0.0)
+            assertEquals(1048576, kcp.getInt("maxSendingWindow"))
+            assertFalse(kcp.has("header"))
+            assertFalse(kcp.has("seed"))
+        }
+    }
+
+    @Test fun vmessKcpImportsModernKcpSettings() {
+        val vmessJson = """{"v":"2","ps":"mKCP","add":"192.0.2.1","port":"443","id":"$id","aid":"0","net":"kcp","type":"none","tls":"tls","scy":"auto","kcpSettings":{"mtu":1280,"tti":25,"uplinkCapacity":8,"downlinkCapacity":40,"cwndMultiplier":1.5,"maxSendingWindow":1048576}}"""
+        val encoded = android.util.Base64.encodeToString(vmessJson.toByteArray(), android.util.Base64.NO_WRAP)
+        val node = V2rayNodes.parseOne("vmess://$encoded") ?: error("Could not parse VMess KCP fixture")
+        assertEquals("mkcp", node.network)
+        val kcp = render(node).getJSONObject("streamSettings").getJSONObject("kcpSettings")
+        assertEquals(1280, kcp.getInt("mtu"))
+        assertEquals(25, kcp.getInt("tti"))
+        assertEquals(1.5, kcp.getDouble("cwndMultiplier"), 0.0)
+    }
+
+    @Test fun mKcpCanBeParsedForValidationButIsExcludedFromAutomaticPools() {
+        val candidate = uri("mkcp")
+        assertNotNull(V2rayNodes.parseOne(candidate))
+        val pool = V2rayNodes.parse(listOf(uri("tcp"), candidate))
+        assertEquals(listOf("tcp"), pool.map { it.network })
+    }
+
+    @Test fun kcpRejectsUnsupportedLegacyMasksAndUnsafeParameters() {
+        assertNull(V2rayNodes.parseOne(uri("kcp", "headertype=srtp")))
+        assertNull(V2rayNodes.parseOne(uri("mkcp", "seed=legacy-secret")))
+        assertNull(V2rayNodes.parseOne(uri("kcp", "mtu=500")))
+        assertNull(V2rayNodes.parseOne(uri("kcp", "tti=101")))
+        assertNull(
+            V2rayNodes.parseOne(
+                uri("mkcp", "security=reality&pbk=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"),
+            ),
+        )
+    }
+
     @Test fun otherTransportRetryBehaviorIsUnchanged() {
         val tcp = V2rayNodes.toShardNode(V2rayNodes.parseOne(uri("tcp"))!!)
         assertEquals("chrome", RetryTweaks.fingerprintFor(tcp, 2))
@@ -104,8 +169,12 @@ class VlessTransportTest {
             links.add(uri("xhttp", "mode=$mode&path=%2Fx&alpn=h2&extra=${encode("{\"xmux\":{\"maxConnections\":1}}")}"))
         }
         links.add(uri("xhttp", "alpn=h3&mode=stream-up").replace("fp=firefox", "fp=unsafe"))
+        links.add(uri("mkcp", "mtu=1350&tti=20&uplinkCapacity=5&downlinkCapacity=20"))
+        links.add(uri("mkcp").replace("vless://", "trojan://"))
+        val vmessKcp = """{"v":"2","ps":"mKCP","add":"192.0.2.1","port":"443","id":"$id","aid":"0","net":"kcp","type":"none","tls":"tls","scy":"auto","kcpSettings":{"mtu":1350,"tti":20}}"""
+        links.add("vmess://${android.util.Base64.encodeToString(vmessKcp.toByteArray(), android.util.Base64.NO_WRAP)}")
         for (link in links) {
-            val node = V2rayNodes.parseOne(link)!!
+            val node = V2rayNodes.parseOne(link) ?: error("Could not parse Xray smoke fixture: $link")
             val file = File.createTempFile("vless-xray-", ".json")
             var process: Process? = null
             try {
