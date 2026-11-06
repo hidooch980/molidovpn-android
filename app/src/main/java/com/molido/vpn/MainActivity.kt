@@ -2940,7 +2940,7 @@ class MainActivity : Activity() {
             setPadding(dp(14), dp(12), dp(14), dp(12))
             isClickable = true
             isFocusable = true
-            setOnClickListener {
+            setOnClickListener { view ->
                 AgentRuntime.setEnabled(this@MainActivity, !AgentRuntime.enabled(this@MainActivity))
                 (view as TextView).text = if (AgentRuntime.enabled(this@MainActivity)) "Agent enabled  ·  Tap to pause" else "Agent paused  ·  Tap to enable"
             }
