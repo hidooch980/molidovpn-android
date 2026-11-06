@@ -448,8 +448,7 @@ class MainActivity : Activity() {
             if (!uiForeground) return
             if (selectedProtocol == Protocol.IKEV2 && nativeIkev2 != null && (visualState == OrbitDialView.State.CONNECTED || ikev2ConnectPending)) {
                 val active = hasActiveVpnNetwork()
-                if (active && visualState != OrbitDialView.State.CONNECTED) showConnected()
-                else if (!active && visualState == OrbitDialView.State.CONNECTED) showDisconnected(Strings.t("IKEv2 tunnel was disconnected by Android"))
+                if (!active && visualState == OrbitDialView.State.CONNECTED) showDisconnected(Strings.t("IKEv2 tunnel was disconnected by Android"))
             }
             renderStatus()
             statusHandler.postDelayed(this, STATUS_POLL_MS)
@@ -7791,10 +7790,29 @@ class MainActivity : Activity() {
 
     private fun verifyNativeIkev2(attempt: Int) {
         if (selectedProtocol != Protocol.IKEV2 || isFinishing) return
-        val connected = hasActiveVpnNetwork()
-        if (connected) { showConnected(); return }
-        if (attempt >= 12) { showDisconnected(Strings.t("IKEv2 connection could not be verified. Check credentials, server identity and network.")); return }
-        Handler(Looper.getMainLooper()).postDelayed({ verifyNativeIkev2(attempt + 1) }, 1500L)
+        val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val network = cm.activeNetwork
+        val vpnActive = network?.let { cm.getNetworkCapabilities(it)?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) } == true
+        if (!vpnActive || network == null) {
+            if (attempt >= 12) showDisconnected(Strings.t("IKEv2 connection could not be verified. Check credentials, server identity and network."))
+            else Handler(Looper.getMainLooper()).postDelayed({ verifyNativeIkev2(attempt + 1) }, 1500L)
+            return
+        }
+        Thread {
+            val trafficOk = try {
+                val connection = network.openConnection(java.net.URL("https://www.gstatic.com/generate_204")) as java.net.HttpURLConnection
+                connection.connectTimeout = 5000
+                connection.readTimeout = 5000
+                connection.instanceFollowRedirects = false
+                try { connection.responseCode == 204 } finally { connection.disconnect() }
+            } catch (_: Exception) { false }
+            runOnUiThread {
+                if (selectedProtocol != Protocol.IKEV2 || isFinishing) return@runOnUiThread
+                if (trafficOk) showConnected()
+                else if (attempt >= 12) showDisconnected(Strings.t("IKEv2 tunnel is up but internet traffic could not be verified."))
+                else Handler(Looper.getMainLooper()).postDelayed({ verifyNativeIkev2(attempt + 1) }, 1500L)
+            }
+        }.start()
     }
 
     private fun stopNativeIkev2() {
