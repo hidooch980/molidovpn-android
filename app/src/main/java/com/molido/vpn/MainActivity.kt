@@ -446,6 +446,11 @@ class MainActivity : Activity() {
     private val statusPoll = object : Runnable {
         override fun run() {
             if (!uiForeground) return
+            if (selectedProtocol == Protocol.IKEV2) {
+                val active = hasActiveVpnNetwork()
+                if (active && visualState != OrbitDialView.State.CONNECTED) showConnected()
+                else if (!active && visualState == OrbitDialView.State.CONNECTED) showDisconnected(Strings.t("IKEv2 tunnel was disconnected by Android"))
+            }
             renderStatus()
             statusHandler.postDelayed(this, STATUS_POLL_MS)
         }
@@ -7778,11 +7783,15 @@ class MainActivity : Activity() {
         catch (e: Exception) { showDisconnected("IKEv2 could not start: " + (e.message ?: "system error")) }
     }
 
-    private fun verifyNativeIkev2(attempt: Int) {
-        if (selectedProtocol != Protocol.IKEV2 || isFinishing) return
+    private fun hasActiveVpnNetwork(): Boolean {
         val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         val network = cm.activeNetwork
-        val connected = network?.let { cm.getNetworkCapabilities(it)?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) } == true
+        return network?.let { cm.getNetworkCapabilities(it)?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) } == true
+    }
+
+    private fun verifyNativeIkev2(attempt: Int) {
+        if (selectedProtocol != Protocol.IKEV2 || isFinishing) return
+        val connected = hasActiveVpnNetwork()
         if (connected) { showConnected(); return }
         if (attempt >= 12) { showDisconnected(Strings.t("IKEv2 connection could not be verified. Check credentials, server identity and network.")); return }
         Handler(Looper.getMainLooper()).postDelayed({ verifyNativeIkev2(attempt + 1) }, 1500L)
