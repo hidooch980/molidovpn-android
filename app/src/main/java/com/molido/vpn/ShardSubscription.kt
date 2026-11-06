@@ -20,8 +20,8 @@ import java.util.concurrent.atomic.AtomicBoolean
  *
  * The stored ETag is sent back as `If-None-Match`. When nothing changed GitHub
  * answers `304` with no body — a few hundred bytes for the whole check. Measured
- * against the live URL: the body is ~41 KB, so this is the difference between a
- * daily 41 KB and a daily ~0.
+ * against the live URL: the body is ~41 KB, while unchanged five-minute checks
+ * transfer only the small conditional request and response headers.
  *
  * ## Reachability
  *
@@ -39,8 +39,8 @@ object ShardSubscription {
      * The subscription. Our own mirror, not the publisher's URL: the SHARD
      * node list must be editable on GitHub and reach every installed app —
      * old and new, Smart Split on or off — with no release. The mirror is
-     * rebuilt by `.github/workflows/shard-nodes-sync.yml` every six hours
-     * from the publisher's live list, so a node change reaches the fleet
+     * rebuilt by `.github/workflows/sync-lists.yml` every five minutes
+     * from upstream lists, so a node change reaches the fleet
      * with no build and no version bump.
      *
      * v1.8.7 and later dial this URL. Versions before it read the publisher
@@ -67,9 +67,8 @@ object ShardSubscription {
     /**
      * Floor between two network checks.
      *
-     * Six hours against a once-a-day rebuild: frequent enough that a user who
-     * opens the app daily always has the current list within a day, sparse enough
-     * that opening the app ten times in an afternoon costs one request.
+     * Five-minute cadence: ETag requests return 304 when the catalog is unchanged,
+     * so frequent checks do not repeatedly download the full server list.
      */
     // Five-minute refresh: ETag makes unchanged catalog checks a tiny 304 response.
     private const val MIN_INTERVAL_MS = 5 * 60 * 1000L
