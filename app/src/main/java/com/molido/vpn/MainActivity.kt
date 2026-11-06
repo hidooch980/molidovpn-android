@@ -2299,22 +2299,26 @@ class MainActivity : Activity() {
      * Both home modes show exit IP, country and connection latency. Simple keeps
      * the dial, status and location picker; Advanced adds the transport controls.
      */
+    /**
+     * Agent-first home: the agent owns server, route and protocol decisions.
+     * Keep the home focused on the connection action and essential connection
+     * state. Secondary controls remain implemented but are not exposed here.
+     */
     private fun applyHomeMode() {
-        val simple = homeSimple()
-        homeAdvancedBox?.visibility = if (simple) View.GONE else View.VISIBLE
-        // Default home: one connect action, server location and compact status.
-        // Secondary actions, Gaming, support and sharing remain one tap away in Advanced.
-        homeQuickActions?.visibility = if (simple) View.GONE else View.VISIBLE
-        homeTelemetryLine?.visibility = View.VISIBLE
-        homeLocationCard?.visibility = if (simple) View.VISIBLE else View.GONE
-        homeGamingShortcut?.visibility = if (simple) View.GONE else View.VISIBLE
-        homeSocialRow?.visibility = if (simple) View.GONE else View.VISIBLE
-        homeShareRow?.visibility = if (simple) View.GONE else View.VISIBLE
-        footerWave.visibility = if (simple) View.GONE else View.VISIBLE
-        homeLocationCard?.text = Strings.t("SERVER LOCATION") + "\n" + locationCardText()
-        homeAdvancedLink?.text = if (simple) Strings.t("Advanced mode") else Strings.t("Simple mode")
+        homeAdvancedBox?.visibility = View.GONE
+        homeQuickActions?.visibility = View.GONE
+        homeTelemetryLine?.visibility = View.GONE
+        homeLocationCard?.visibility = View.GONE
+        homeGamingShortcut?.visibility = View.GONE
+        homeSocialRow?.visibility = View.GONE
+        homeShareRow?.visibility = View.GONE
+        homeSupportButton?.visibility = if (visualState == OrbitDialView.State.FAILED) View.VISIBLE else View.GONE
+        homeAdvancedLink?.visibility = View.GONE
+        footerWave.visibility = View.GONE
+        // Agent-selected location and protocol are reflected by the compact
+        // connection status; do not expose manual transport controls on home.
         val simpleTarget = simpleProtocol()
-        if (simple && selectedProtocol != simpleTarget && !TunnelStatus.isActive() &&
+        if (selectedProtocol != simpleTarget && !TunnelStatus.isActive() &&
             visualState != OrbitDialView.State.CONNECTING
         ) {
             updateConnectionMode(simpleTarget)
