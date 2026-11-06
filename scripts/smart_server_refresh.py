@@ -63,14 +63,18 @@ def analyze(text: str, min_configs: int = 3, min_nodes: int = 3) -> dict:
     valid, rejected, exact_seen, duplicates = [], Counter(), set(), 0
     for line in lines:
         canonical = line.split("#", 1)[0].strip()
+        try:
+            parsed_entry = parse_entry(line)
+        except (ValueError, TypeError) as exc:
+            # Invalid repeated garbage is still rejected input, not a harmless
+            # duplicate. Only syntactically valid configs enter deduplication.
+            rejected[str(exc)] += 1
+            continue
         if canonical in exact_seen:
             duplicates += 1
             continue
         exact_seen.add(canonical)
-        try:
-            valid.append(parse_entry(line))
-        except (ValueError, TypeError) as exc:
-            rejected[str(exc)] += 1
+        valid.append(parsed_entry)
     nodes = {identity for _, identity in valid}
     protocols = Counter(scheme for scheme, _ in valid)
     total, valid_count = len(lines), len(valid)
