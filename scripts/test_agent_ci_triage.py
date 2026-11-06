@@ -1,5 +1,7 @@
 import unittest
+
 from agent_ci_triage import classify
+
 class AgentCiTriageTests(unittest.TestCase):
     def test_network_timeout_is_retryable(self):
         r = classify("curl: Operation timed out"); self.assertEqual(r["category"], "transient"); self.assertTrue(r["retry_recommended"])
