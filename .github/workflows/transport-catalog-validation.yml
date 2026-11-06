@@ -5,26 +5,22 @@ on:
       - 'config/network/transport-catalog.json'
       - 'config/network/protocol-transport-matrix.json'
       - 'docs/NETWORK_TRANSPORT_COMPATIBILITY.md'
-      - 'scripts/test_transport_catalog.py'
       - 'scripts/transport_gate.py'
-      - 'scripts/test_transport_gate.py'
+      - 'scripts/test_transport_*.py'
       - 'scripts/test_protocol_transport_matrix.py'
-      - 'app/src/main/java/com/molido/vpn/engine/protocol/**'
-      - 'app/src/test/java/com/molido/vpn/engine/protocol/**'
-      - 'scripts/transport_gate.py'
-      - 'scripts/test_transport_gate.py'
-      - 'app/src/main/java/com/molido/vpn/engine/protocol/**'
-      - 'app/src/test/java/com/molido/vpn/engine/protocol/**'
+      - 'app/src/main/java/com/molido/vpn/**'
+      - 'app/src/test/java/com/molido/vpn/**'
   push:
     branches: [main]
     paths:
       - 'config/network/transport-catalog.json'
       - 'config/network/protocol-transport-matrix.json'
       - 'docs/NETWORK_TRANSPORT_COMPATIBILITY.md'
-      - 'scripts/test_transport_catalog.py'
+      - 'scripts/transport_gate.py'
+      - 'scripts/test_transport_*.py'
       - 'scripts/test_protocol_transport_matrix.py'
-      - 'config/network/protocol-transport-matrix.json'
-      - 'scripts/test_protocol_transport_matrix.py'
+      - 'app/src/main/java/com/molido/vpn/**'
+      - 'app/src/test/java/com/molido/vpn/**'
 permissions:
   contents: read
 jobs:
@@ -36,9 +32,11 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
-      - name: Validate JSON catalog
-        run: python -m json.tool config/network/transport-catalog.json > /dev/null
-      - name: Run transport catalog tests
+      - name: Validate JSON inventories
+        run: |
+          python -m json.tool config/network/transport-catalog.json > /dev/null
+          python -m json.tool config/network/protocol-transport-matrix.json > /dev/null
+      - name: Run transport catalog and benchmark gate tests
         run: python -m unittest discover -s scripts -p 'test_transport_*.py' -v
       - name: Test protocol transport compatibility matrix
         run: python -m unittest discover -s scripts -p 'test_protocol_transport_matrix.py' -v
