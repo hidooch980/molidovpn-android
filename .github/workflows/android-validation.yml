@@ -98,10 +98,11 @@ jobs:
           echo "Verified upgrade path: $legacy_package v3.3.60 (code $legacy_code) -> $current_package latest (code $current_code), same signer."
 
       - name: Install Rust core host-test dependencies
-        run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libclang-dev
-
-      - name: Install Rust core host-test dependencies
-        run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libclang-dev
+        timeout-minutes: 15
+        run: |
+          set -euo pipefail
+          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
+          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y clang cmake ninja-build pkg-config libclang-dev
 
       - name: Install Rust Android targets
         run: |
@@ -111,9 +112,6 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: core/aether -> target
-
-      - name: Run Aether Rust core unit tests
-        run: cargo test --manifest-path core/aether/Cargo.toml --locked --lib
 
       - name: Run Aether Rust core unit tests
         run: cargo test --manifest-path core/aether/Cargo.toml --locked --lib

@@ -7,6 +7,7 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLDecoder
+import java.util.Base64
 import java.util.Locale
 import java.util.concurrent.Callable
 import java.util.concurrent.atomic.AtomicBoolean
@@ -35,7 +36,7 @@ data class V2rayNode(
     /** vmess `scy` / ss method. */
     val method: String = "",
     val flow: String = "",
-    /** tcp, ws, grpc, httpupgrade. */
+    /** tcp, ws, grpc, httpupgrade, xhttp or mkcp. */
     val network: String = "tcp",
     /** none, tls, reality. */
     val security: String = "none",
@@ -53,6 +54,8 @@ data class V2rayNode(
     val xhttpMode: String = "auto",
     /** XHTTP `extra` JSON object text from the share link, or empty. */
     val xhttpExtra: String = "",
+    /** Current Xray mKCP parameters; used only when network is mkcp. */
+    val kcpProfile: KcpProfile = KcpProfile(),
     /** hysteria2 salamander obfs password, or empty. */
     val obfsPassword: String = "",
     /** TLS verification off, as the share link asked (hysteria2/tuic/anytls only). */
@@ -72,7 +75,7 @@ object V2rayNodes {
     private const val TAG = "V2rayNodes"
 
     /** xhttp needs xray v24.9+; current core version is recorded in .github/core-versions.json. */
-    private val NETWORKS = setOf("tcp", "ws", "grpc", "httpupgrade", "xhttp")
+    private val NETWORKS = setOf("tcp", "ws", "grpc", "httpupgrade", "xhttp", "mkcp")
 
     private val XHTTP_MODES = setOf("auto", "packet-up", "stream-up", "stream-one")
 
@@ -81,6 +84,7 @@ object V2rayNodes {
         when (val value = raw.lowercase(Locale.US)) {
             "splithttp" -> "xhttp"
             "websocket" -> "ws"
+            "kcp", "mkcp" -> "mkcp"
             else -> value
         }
 
@@ -134,6 +138,7 @@ object V2rayNodes {
         val out = ArrayList<V2rayNode>()
         lines.forEach { line ->
             val node = parseOne(line) ?: return@forEach
+            if (!TransportRuntimePolicy.isSelectable(node.network)) return@forEach
             if (seen.add(node.uri)) out.add(node)
         }
         return out
@@ -191,6 +196,10 @@ object V2rayNodes {
         }
         val headerType = q["headertype"].orEmpty().lowercase(Locale.US)
         if (network == "tcp" && headerType.isNotEmpty() && headerType != "none") return null
+        if (network == "mkcp" &&
+            (headerType.isNotEmpty() && headerType != "none" || q["seed"].orEmpty().isNotBlank())
+        ) return null
+        val kcpProfile = if (network == "mkcp") KcpProfile.fromQuery(q) ?: return null else KcpProfile()
         val defaultSecurity = if (scheme == "trojan") "tls" else "none"
         val security = q["security"].orEmpty().lowercase(Locale.US).ifEmpty { defaultSecurity }
         if (security !in setOf("none", "tls", "reality")) return null
@@ -223,6 +232,7 @@ object V2rayNodes {
             grpcMulti = q["mode"].orEmpty().lowercase(Locale.US) == "multi",
             xhttpMode = xhttp?.mode ?: "auto",
             xhttpExtra = xhttp?.extra.orEmpty(),
+            kcpProfile = kcpProfile,
         )
         return node.takeIf { complete(it) }
     }
@@ -242,6 +252,9 @@ object V2rayNodes {
         if (network !in NETWORKS) return null
         val headerType = json.optString("type").lowercase(Locale.US)
         if (network == "tcp" && headerType.isNotEmpty() && headerType != "none") return null
+        if (network == "mkcp" && headerType.isNotEmpty() && headerType != "none") return null
+        val kcpJson = json.optJSONObject("kcpSettings") ?: json.optJSONObject("kcp")
+        val kcpProfile = if (network == "mkcp") KcpProfile.fromJson(kcpJson) ?: return null else KcpProfile()
         val tls = json.optString("tls").lowercase(Locale.US)
         val security = when (tls) {
             "", "none" -> "none"
@@ -269,6 +282,7 @@ object V2rayNodes {
             path = path,
             serviceName = if (network == "grpc") path else "",
             xhttpMode = if (network == "xhttp") xhttpMode(json.optString("mode")) else "auto",
+            kcpProfile = kcpProfile,
         )
         return node.takeIf { complete(it) }
     }
@@ -440,7 +454,7 @@ object V2rayNodes {
     private fun base64Text(value: String): String? = try {
         var s = value.filterNot { it.isWhitespace() }.replace('-', '+').replace('_', '/')
         while (s.length % 4 != 0) s += "="
-        String(android.util.Base64.decode(s, android.util.Base64.DEFAULT), Charsets.UTF_8)
+        String(Base64.getDecoder().decode(s), Charsets.UTF_8)
     } catch (_: Exception) {
         null
     }
@@ -562,6 +576,7 @@ object V2rayNodes {
                         runCatching { JSONObject(node.xhttpExtra) }.getOrNull()?.let { put("extra", it) }
                     }
                 })
+                "mkcp" -> put("kcpSettings", node.kcpProfile.toJson())
             }
         }
 
