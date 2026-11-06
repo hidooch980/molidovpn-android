@@ -53,6 +53,18 @@ class TransportCatalogTests(unittest.TestCase):
             for test_path in entry["existing_tests"]:
                 self.assertTrue((ROOT / test_path).is_file(), test_path)
 
+    def test_unimplemented_claims_have_explicit_source_evidence(self):
+        for entry in self.entries:
+            if entry["implementation_status"] != "not_implemented_in_current_client_source_scan":
+                continue
+            evidence = entry.get("non_implementation_evidence", [])
+            self.assertTrue(evidence, entry["id"])
+            for item in evidence:
+                source_path = ROOT / item["path"]
+                self.assertTrue(source_path.is_file(), item["path"])
+                source = source_path.read_text(encoding="utf-8", errors="replace")
+                self.assertIn(item["marker"], source, entry["id"])
+
     def test_catalog_status_matches_source_audit(self):
         for entry in self.entries:
             if entry["implementation_status"] == "not_implemented_in_current_client_source_scan":
