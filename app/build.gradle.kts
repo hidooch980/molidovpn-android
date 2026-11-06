@@ -28,6 +28,10 @@ android {
     productFlavors {
         create("mobile") {
             dimension = "distribution"
+            // Ads are opt-in at build time. Without a real publisher App ID the
+            // consent/ads bootstrap remains inert (fail-closed).
+            manifestPlaceholders["ADMOB_APP_ID"] =
+                (project.findProperty("admobAppId") as String?)?.trim().orEmpty()
         }
         create("tv") {
             dimension = "distribution"
@@ -146,6 +150,10 @@ android {
     // StateFlow for UI state (ui/state) + Dispatchers.Main for collecting it. No AndroidX lifecycle needed.
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.aar"))))
+    // Google Mobile Ads Next-Gen + UMP are mobile-only. The TV APK intentionally
+    // excludes the ads SDK because Google's Android ads SDK does not support TV.
+    add("mobileImplementation", "com.google.android.libraries.ads.mobile.sdk:ads-mobile-sdk:1.6.0")
+    add("mobileImplementation", "com.google.android.ump:user-messaging-platform:4.0.0")
     testImplementation("junit:junit:4.13.2")
     // Real org.json on the JVM test classpath (android.jar only has stubs).
     testImplementation("org.json:json:20240303")

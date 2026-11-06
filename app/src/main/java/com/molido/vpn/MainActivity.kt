@@ -844,6 +844,16 @@ class MainActivity : Activity() {
         configureTelevisionControls(pageHost)
         configureSystemBars()
         showOpeningOverlay()
+        // Ads are optional and mobile-only. Start UMP after the opening overlay;
+        // the flavor-specific bootstrap is loaded reflectively so Android TV
+        // neither packages nor references the unsupported mobile ads SDK.
+        if (!isTelevisionDevice) pageHost.postDelayed({
+            runCatching {
+                Class.forName("com.molido.vpn.ads.MobileAdsBootstrap")
+                    .getMethod("requestConsent", Activity::class.java)
+                    .invoke(null, this@MainActivity)
+            }
+        }, 2_000L)
         // After the splash overlay (~1.5 s) so the two never overlap.
         if (!isTelevisionDevice) pageHost.postDelayed({ maybeShowOnboarding() }, 1_700L)
         // Reattach to a tunnel that is already up. Without this the dial opens in
@@ -4902,6 +4912,23 @@ class MainActivity : Activity() {
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.WRAP_CONTENT,
         ).apply { topMargin = dp(8) })
+        val adsPrivacyConfigured = if (!isTelevisionDevice) runCatching {
+            Class.forName("com.molido.vpn.ads.MobileAdsBootstrap")
+                .getMethod("isConfigured", Activity::class.java)
+                .invoke(null, this@MainActivity) as? Boolean == true
+        }.getOrDefault(false) else false
+        if (adsPrivacyConfigured) {
+            content.addView(navRow(Strings.t("Ad privacy choices"), Strings.t("Manage")) {
+                runCatching {
+                    Class.forName("com.molido.vpn.ads.MobileAdsBootstrap")
+                        .getMethod("showPrivacyOptions", Activity::class.java)
+                        .invoke(null, this@MainActivity)
+                }
+            }, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ).apply { topMargin = dp(8) })
+        }
         content.addView(navRow(Strings.t("Tell your friends"), "QR") {
             showShareSheet()
         }, LinearLayout.LayoutParams(
