@@ -29,7 +29,7 @@
         "reconnect",
         "battery"
       ],
-      "notes": "No MTProto Proxy client/adapter was found in the inspected app/core source. This is a Telegram-oriented proxy, not a full-device VPN transport; scope it as an optional app-specific proxy feature.",
+      "notes": "The protocol registry explicitly marks MTProto Proxy not implemented. It is a Telegram-specific proxy, not a full-device VPN transport; scope it as an optional app-specific proxy feature.",
       "implementation_status": "not_implemented_in_current_client_source_scan",
       "runtime_selectable": false,
       "interop_status": "not_started",
@@ -408,7 +408,7 @@
       "transport_dependencies": [
         "udp"
       ],
-      "status": "not_implemented",
+      "status": "client_path_present",
       "requires_server_support": true,
       "tests": [
         "loss_recovery",
@@ -419,17 +419,23 @@
         "battery",
         "stability"
       ],
-      "notes": "Current V2rayNodes NETWORKS allow-list does not include mKCP. Add only if the bundled engine version still supports it and a maintained compatible server exists; benchmark CPU, battery and loss before promotion.",
-      "implementation_status": "not_implemented_in_current_client_source_scan",
+      "notes": "Current pinned Xray 26.10.31 supports mKCP. Molido now parses kcp/mkcp aliases and emits bounded current kcpSettings. Legacy header/seed masks are intentionally rejected until FinalMask support is implemented. Live server and device interoperability tests remain pending.",
+      "implementation_status": "implemented_client_path",
       "runtime_selectable": false,
-      "interop_status": "not_started",
-      "integration_evidence": [],
-      "existing_tests": [],
-      "non_implementation_evidence": [
+      "interop_status": "live_server_matrix_pending_unmasked_only",
+      "integration_evidence": [
         {
           "path": "app/src/main/java/com/molido/vpn/V2rayNodes.kt",
-          "marker": "private val NETWORKS = setOf(\"tcp\", \"ws\", \"grpc\", \"httpupgrade\", \"xhttp\")"
+          "marker": "\"kcp\", \"mkcp\" -> \"mkcp\""
+        },
+        {
+          "path": "app/src/main/java/com/molido/vpn/KcpProfile.kt",
+          "marker": "maxSendingWindow"
         }
+      ],
+      "existing_tests": [
+        "app/src/test/java/com/molido/vpn/VlessTransportTest.kt",
+        "app/src/test/java/com/molido/vpn/KcpProfileTest.kt"
       ]
     }
   ]
