@@ -1,5 +1,6 @@
 """Classify CI failure logs without executing or modifying repository code."""
 from __future__ import annotations
+
 import argparse
 import json
 import re
@@ -18,7 +19,7 @@ DETERMINISTIC = {
 }
 def classify(log: str) -> dict:
     transient = [k for k, p in TRANSIENT.items() if re.search(p, log, re.IGNORECASE)]
-    deterministic = [k for k, p in DETERMINISTIC.items() if re.search(p, log, re.I)]
+    deterministic = [k for k, p in DETERMINISTIC.items() if re.search(p, log, re.IGNORECASE)]
     retry = bool(transient) and not deterministic
     excerpt = []
     for line in log.splitlines():
