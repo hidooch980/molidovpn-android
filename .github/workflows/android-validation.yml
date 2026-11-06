@@ -140,12 +140,29 @@ jobs:
       - name: Refresh and validate offline emergency defaults
         run: python3 tools/refresh-emergency-configs.py 40 --strict
 
-      - name: Run Android unit tests and build unsigned release APKs
+      - name: Run Android mobile unit tests
+        timeout-minutes: 35
         env:
           MOLIDO_SCREENS: ${{ runner.temp }}/molido-screens
         run: |
           chmod +x gradlew
-          ./gradlew testMobileReleaseUnitTest testTvReleaseUnitTest assembleMobileRelease assembleTvRelease --no-daemon --max-workers=2 \
+          ./gradlew testMobileReleaseUnitTest --no-daemon --max-workers=2 --console=plain --stacktrace \
+            -PtargetAbi=arm64-v8a,armeabi-v7a \
+            -PmolidoVersionCode=49999 \
+            -PmolidoVersionName=0.0.0-ci
+
+      - name: Run Android TV unit tests
+        timeout-minutes: 35
+        run: |
+          ./gradlew testTvReleaseUnitTest --no-daemon --max-workers=2 --console=plain --stacktrace \
+            -PtargetAbi=arm64-v8a,armeabi-v7a \
+            -PmolidoVersionCode=49999 \
+            -PmolidoVersionName=0.0.0-ci
+
+      - name: Build unsigned mobile and TV release APKs
+        timeout-minutes: 35
+        run: |
+          ./gradlew assembleMobileRelease assembleTvRelease --no-daemon --max-workers=2 --console=plain --stacktrace \
             -PtargetAbi=arm64-v8a,armeabi-v7a \
             -PmolidoVersionCode=49999 \
             -PmolidoVersionName=0.0.0-ci
