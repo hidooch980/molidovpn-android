@@ -171,6 +171,24 @@
       "transport": "tcp",
       "runtime": "not_implemented",
       "status": "not_implemented"
+    },
+    {
+      "engine": "vless",
+      "transport": "mkcp",
+      "runtime": "xray",
+      "status": "client_path_present_unmasked_only"
+    },
+    {
+      "engine": "vmess",
+      "transport": "mkcp",
+      "runtime": "xray",
+      "status": "client_path_present_unmasked_only"
+    },
+    {
+      "engine": "trojan",
+      "transport": "mkcp",
+      "runtime": "xray",
+      "status": "client_path_present_unmasked_only"
     }
   ],
   "excluded_combinations": [
@@ -211,8 +229,8 @@
     },
     {
       "engine": "*",
-      "transport": "mkcp",
-      "reason": "mKCP is not implemented in the inspected current client source."
+      "transport": "mkcp_legacy_mask",
+      "reason": "Legacy mKCP header/seed obfuscation requires Xray FinalMask support and is deliberately rejected by the current adapter."
     }
   ]
 }
