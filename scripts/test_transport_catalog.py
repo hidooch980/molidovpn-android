@@ -81,7 +81,7 @@ class TransportCatalogTests(unittest.TestCase):
             if entry["implementation_status"]
             == "not_implemented_in_current_client_source_scan"
         }
-        self.assertEqual(missing, {"mtproto_proxy", "mkcp"})
+        self.assertEqual(missing, {"mtproto_proxy"})
 
     def test_quic_and_http3_dependencies_are_explicit(self):
         self.assertIn("udp", self.by_id["quic"]["transport_dependencies"])
@@ -90,10 +90,13 @@ class TransportCatalogTests(unittest.TestCase):
     def test_tor_is_not_declared_as_a_general_udp_transport(self):
         self.assertEqual(self.by_id["tor"]["transport_dependencies"], ["tcp"])
 
-    def test_mkcp_is_not_accepted_by_the_current_v2ray_parser(self):
+    def test_mkcp_is_accepted_by_the_current_v2ray_parser(self):
         source = (ROOT / "app/src/main/java/com/molido/vpn/V2rayNodes.kt").read_text(encoding="utf-8")
         allowlist = next(line for line in source.splitlines() if "private val NETWORKS" in line)
-        self.assertNotIn("\"mkcp\"", allowlist.lower())
+        self.assertIn("\"mkcp\"", allowlist.lower())
+        self.assertEqual(self.by_id["mkcp"]["status"], "client_path_present")
+        self.assertFalse(self.by_id["mkcp"]["runtime_selectable"])
+        self.assertIn("unmasked_only", self.by_id["mkcp"]["interop_status"])
 
     def test_http2_is_not_claimed_as_fully_validated(self):
         self.assertEqual(
