@@ -5,6 +5,7 @@ import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Handler
 import android.os.Looper
+import com.molido.vpn.agent.AgentRuntime
 import java.util.IdentityHashMap
 
 object LiveCatalogSync {
@@ -26,12 +27,7 @@ object LiveCatalogSync {
                 val enabled = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
                     .getBoolean(PREF, true)
                 if (online && enabled && claimRefresh(context)) {
-                    V2raySubscription.refreshIfDue(context, maxAgeMs = REMOTE_INTERVAL_MS)
-                    ShardSubscription.refreshIfDue(context, maxAgeMs = REMOTE_INTERVAL_MS)
-                    RemotePolicy.refreshIfDue(context)
-                    ResilienceConfig.refreshIfDue(context)
-                    SmartSplitSub.refreshIfDue(context, maxAgeMs = REMOTE_INTERVAL_MS)
-                    AppRemote.refreshIfDue(context) {
+                    AgentRuntime.runCycle(context) {
                         main.post { owners.values.toList().forEach { it?.invoke() } }
                     }
                 }
