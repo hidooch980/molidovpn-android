@@ -4,35 +4,46 @@ Molido Agent Hub is a deterministic, local-code coordinator for built-in VPN ski
 It does not download executable code, run remote prompts, or send user traffic to an
 AI provider. Every skill has a fixed owner, cadence and safety gate.
 
-## Automatic skills
+## Implemented skill ownership
 
-| Skill | Responsibility | Cadence |
-|---|---|---:|
-| Server discovery | Refresh V2Ray, SHARD and Smart Split catalogs | 5 minutes while live sync is active |
-| Network policy manager | Refresh edge, routing and resilience policy | 5-minute dispatch; each provider keeps its own backoff |
-| Remote app config manager | Fetch validated mode flags and admin announcements | 5-minute dispatch; provider cache/backoff applies |
+| Skill | Current owner / behavior | Execution |
+|---|---|---|
+| Server discovery | Refresh V2Ray, SHARD and Smart Split catalogs | Automatic dispatch every 5 minutes while live sync is active |
+| Network policy manager | Refresh edge, routing and resilience policy from trusted sources | 5-minute dispatch; provider cache/backoff remains authoritative |
+| Remote app config manager | Fetch validated mode flags and admin announcements | 5-minute dispatch; provider cache/backoff remains authoritative |
+| Connection optimizer | Smart Connect, SmartPlan, SmartScore and local network learning rank transports | On demand through existing connection flow |
+| Network health scanner | BackgroundScanner / JobScheduler bounded node probes | Android scheduled background job; not a guaranteed exact hourly timer |
+| Privacy guard | Local-only learning and bounded anonymous network-health reporting | Enforced by existing privacy/reporting code |
 
-## Delegated skills
+These six entries describe existing ownership and integration points. They are not six
+independent autonomous LLM agents. The larger ten-role design (routing, protocol advice,
+gaming, recovery, diagnostics, learning, battery/data and coordinator roles) remains a
+roadmap and must only be marked implemented when each role has executable code, tests,
+and a real integration point.
 
-- **Connection optimizer** is owned by Smart Connect, SmartPlan, SmartScore and
-  local network learning. It selects transports using measured connection quality.
-- **Network health scanner** remains owned by BackgroundScanner/JobScheduler. It
-  requires a network, avoids metered connections, waits for battery-not-low and
-  does not probe through a full VPN tunnel.
-- **Privacy guard** is enforced by local-only learning and existing anonymous,
-  bounded network-health reporting.
+## Dispatch and observability rules
+
+- The automatic coordinator dispatches only skills explicitly marked AUTOMATIC.
+- A pure policy function returns stable block reasons: `not_automatic`, `invalid_interval`,
+  `clock_rollback`, `not_due`, `offline`, `metered_network`, `battery_low`,
+  and `tunnel_active`.
+- Persisted wall-clock checkpoints are guarded against clock rollback, so a device clock
+  correction cannot cause an early retry storm.
+- A dispatch checkpoint means the skill was attempted, not that a provider successfully
+  downloaded or applied data. Provider logs and validated cache contents remain the
+  source of truth for success.
+- Android may delay scheduled background work; a five-minute cadence applies to active
+  live sync, not guaranteed background execution.
 
 ## Safety
 
 - Network-dependent skills do not run while offline.
-- Every automatic skill has a persisted dispatch checkpoint to avoid restart storms.
 - Existing provider-level ETag, last-known-good cache, validation and retry controls
   remain authoritative.
-- A refresh dispatch is not reported as a successful download. Provider-level logs
-  and validated cache contents remain the source of truth.
 - No server-supplied content is executed as code.
-- The Android operating system may delay background work; the five-minute cadence
-  applies to active live sync. Background jobs remain subject to Android scheduling.
+- The VPN tunnel and packet engine do not depend on the agent coordinator being enabled
+  or healthy. Agent failures must never be allowed to tear down an active tunnel.
+- Network probes remain bounded and must not scan through a full VPN tunnel.
 
 ## Self-healing and maintenance agent
 
