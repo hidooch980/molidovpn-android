@@ -10,9 +10,8 @@ class AgentCiTriageTests(unittest.TestCase):
         self.assertTrue(result["retry_recommended"])
 
     def test_http_503_is_retryable(self):
-        self.assertTrue(
-            classify("HTTP 503 Service Unavailable")["retry_recommended"]
-        )
+        result = classify("HTTP 503 Service Unavailable")
+        self.assertTrue(result["retry_recommended"])
 
     def test_compile_failure_is_not_retryable(self):
         result = classify("Unresolved reference: missingMethod")
@@ -20,7 +19,8 @@ class AgentCiTriageTests(unittest.TestCase):
         self.assertFalse(result["retry_recommended"])
 
     def test_test_failure_overrides_network_noise(self):
-        result = classify("download timeout warning\\nTests failed: AssertionError")
+        log = "download timeout warning\nTests failed: AssertionError"
+        result = classify(log)
         self.assertEqual(result["category"], "deterministic")
         self.assertFalse(result["retry_recommended"])
 
@@ -31,16 +31,17 @@ class AgentCiTriageTests(unittest.TestCase):
 
     def test_bearer_token_is_redacted(self):
         result = classify("ERROR Authorization: Bearer abcdef123456")
-        self.assertNotIn("abcdef123456", "\\n".join(result["excerpt"]))
+        self.assertNotIn("abcdef123456", "\n".join(result["excerpt"]))
 
     def test_query_secret_is_redacted(self):
-        result = classify("ERROR request failed https://example.test/?token=secret-value")
-        self.assertNotIn("secret-value", "\\n".join(result["excerpt"]))
+        log = "ERROR request failed https://example.test/?token=secret-value"
+        result = classify(log)
+        self.assertNotIn("secret-value", "\n".join(result["excerpt"]))
 
     def test_github_token_is_redacted(self):
         token = "ghp_" + ("A" * 36)
         result = classify(f"ERROR request failed with {token}")
-        self.assertNotIn(token, "\\n".join(result["excerpt"]))
+        self.assertNotIn(token, "\n".join(result["excerpt"]))
 
 
 if __name__ == "__main__":
