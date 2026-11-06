@@ -11,11 +11,9 @@ import java.util.concurrent.atomic.AtomicBoolean
  *
  * ## Cadence, and why there is no alarm or periodic worker
  *
- * The publisher rebuilds the list once a day (its own `#profile-update-interval`
- * says `1`, and its workflow cron is `0 10 * * *` — the "every 12 hours" figure
- * in the instructions was wrong). Nothing about that needs a wakeup: the refresh
- * runs when the app comes to the foreground and when a SHARD connect starts, and
- * only if [MIN_INTERVAL_MS] has elapsed. An app that is closed costs zero
+ * The repository mirror is refreshed every five minutes. The app checks it on the
+ * active foreground sync cadence and before SHARD use, with ETag requests keeping
+ * unchanged checks very small. An app that is closed costs zero
  * battery, because there is no scheduled work to fire.
  *
  * ## ETag, so a no-change refresh is nearly free
