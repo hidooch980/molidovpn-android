@@ -5,5 +5,8 @@
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
             android:value="${ADMOB_APP_ID}" />
+        <meta-data
+            android:name="com.molido.vpn.ads.BANNER_AD_UNIT_ID"
+            android:value="${ADMOB_BANNER_AD_UNIT_ID}" />
     </application>
 </manifest>
