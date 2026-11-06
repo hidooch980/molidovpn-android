@@ -180,6 +180,7 @@ class VlessTransportTest {
             links.add(uri("xhttp", "mode=$mode&path=%2Fx&alpn=h2&extra=${encode("{\"xmux\":{\"maxConnections\":1}}")}"))
         }
         links.add(uri("xhttp", "alpn=h3&mode=stream-up").replace("fp=firefox", "fp=unsafe"))
+        links.add(uri("mkcp", "mtu=1350&tti=20&uplinkCapacity=5&downlinkCapacity=20"))
         for (link in links) {
             val node = V2rayNodes.parseOne(link)!!
             val file = File.createTempFile("vless-xray-", ".json")
