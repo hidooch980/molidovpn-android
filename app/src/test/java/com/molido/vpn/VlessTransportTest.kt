@@ -5,10 +5,13 @@ import org.json.JSONObject
 import org.junit.Assert.*
 import org.junit.Assume.assumeTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
 import java.io.File
 import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
 
+@RunWith(RobolectricTestRunner::class)
 class VlessTransportTest {
     private val id = "11111111-1111-4111-8111-111111111111"
     private fun encode(s: String) = URLEncoder.encode(s, "UTF-8").replace("+", "%20")
