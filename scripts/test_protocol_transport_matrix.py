@@ -26,10 +26,17 @@ class ProtocolTransportMatrixTests(unittest.TestCase):
             self.assertTrue(item["runtime"])
             self.assertTrue(item["status"])
 
-    def test_forbidden_tor_and_mkcp_combinations_are_explicit(self):
+    def test_tor_udp_and_legacy_mkcp_masks_are_explicitly_excluded(self):
         excluded = {(x["engine"], x["transport"]) for x in MATRIX["excluded_combinations"]}
         self.assertIn(("tor", "udp"), excluded)
-        self.assertIn(("*", "mkcp"), excluded)
+        self.assertIn(("*", "mkcp_legacy_mask"), excluded)
+
+    def test_modern_unmasked_mkcp_paths_are_present_for_supported_xray_protocols(self):
+        valid = {(x["engine"], x["transport"]): x for x in MATRIX["valid_combinations"]}
+        for engine in ("vless", "vmess", "trojan"):
+            item = valid[(engine, "mkcp")]
+            self.assertEqual(item["runtime"], "xray")
+            self.assertEqual(item["status"], "client_path_present_unmasked_only")
 
     def test_unimplemented_mtproto_is_not_marked_supported(self):
         item = next(x for x in MATRIX["valid_combinations"] if x["engine"] == "mtproto_proxy")
