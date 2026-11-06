@@ -36,9 +36,20 @@ def evaluate(report: dict[str, Any]) -> dict[str, Any]:
     if transport_id not in known_ids:
         reasons.append("transport_id is not present in the Molido catalog")
 
-    for field in ("test_run_id", "client_version", "server_version", "device_model", "captured_at_utc"):
+    for field in (
+        "test_run_id",
+        "client_version",
+        "server_version",
+        "server_region",
+        "device_model",
+        "abi",
+        "captured_at_utc",
+    ):
         if not isinstance(report.get(field), str) or not report[field].strip():
             reasons.append(f"{field} is required")
+    android_api = report.get("android_api")
+    if not isinstance(android_api, int) or isinstance(android_api, bool) or android_api < 26:
+        reasons.append("android_api must be an integer of at least 26")
 
     security = report.get("security")
     if not isinstance(security, dict):
@@ -78,6 +89,8 @@ def evaluate(report: dict[str, Any]) -> dict[str, Any]:
         if not isinstance(profile, dict):
             reasons.append(f"{prefix} must be an object")
             continue
+        if not isinstance(profile.get("profile_id"), str) or not profile["profile_id"].strip():
+            reasons.append(f"{prefix}.profile_id is required")
         if not isinstance(profile.get("network_type"), str) or not profile["network_type"].strip():
             reasons.append(f"{prefix}.network_type is required")
         for field in required_numbers:
@@ -85,12 +98,12 @@ def evaluate(report: dict[str, Any]) -> dict[str, Any]:
                 reasons.append(f"{prefix}.{field} must be a finite number")
         if not all(_number(profile.get(field)) for field in required_numbers):
             continue
-        if profile["sample_count"] < 10:
-            reasons.append(f"{prefix} needs at least 10 samples")
-        if profile["handshake_success_rate"] < 0.95:
-            reasons.append(f"{prefix} handshake success must be at least 95%")
-        if profile["reconnect_success_rate"] < 0.95:
-            reasons.append(f"{prefix} reconnect success must be at least 95%")
+        if not isinstance(profile["sample_count"], int) or isinstance(profile["sample_count"], bool) or profile["sample_count"] < 10:
+            reasons.append(f"{prefix} needs at least 10 integer samples")
+        if not 0.95 <= profile["handshake_success_rate"] <= 1.0:
+            reasons.append(f"{prefix} handshake success must be between 95% and 100%")
+        if not 0.95 <= profile["reconnect_success_rate"] <= 1.0:
+            reasons.append(f"{prefix} reconnect success must be between 95% and 100%")
         if profile["median_rtt_ms"] <= 0 or profile["p95_rtt_ms"] < profile["median_rtt_ms"]:
             reasons.append(f"{prefix} RTT values are invalid")
         if profile["median_download_mbps"] <= 0 or profile["median_upload_mbps"] <= 0:
