@@ -84,7 +84,10 @@ jobs:
             # successfully for this exact main commit. Each completion event
             # rechecks the set, so the last successful workflow starts release.
             runs_json=$(gh api "/repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$commit_sha&per_page=100")
-            for required in "Android validation" "Android IPv4 IPv6 native packet regressions" "Validate imported VPN profiles" "Agent self-check" "Transport catalog validation"; do
+            # Android validation is the required baseline for every release commit.
+            # The remaining suites are path-filtered: a missing run means the
+            # commit did not touch their scope, not that validation failed.
+            for required in "Android validation"; do
               state=$(jq -r --arg name "$required" '
                 [.workflow_runs[] | select(.name == $name and .event == "push" and .head_branch == "main")][0]
                 | if . == null then "missing"
@@ -93,6 +96,20 @@ jobs:
               ' <<< "$runs_json")
               if [[ "$state" != "success" ]]; then
                 echo "::notice::$required is $state for $commit_sha; automatic release waits."
+                should_release=false
+              fi
+            done
+            # If an optional path-filtered suite did run, wait for it and require
+            # success. Missing or explicitly skipped suites are neutral.
+            for optional in "Android IPv4 IPv6 native packet regressions" "Validate imported VPN profiles" "Agent self-check" "Transport catalog validation"; do
+              state=$(jq -r --arg name "$optional" '
+                [.workflow_runs[] | select(.name == $name and .event == "push" and .head_branch == "main")][0]
+                | if . == null then "not-applicable"
+                  elif .status != "completed" then "pending"
+                  else (.conclusion // "unknown") end
+              ' <<< "$runs_json")
+              if [[ "$state" != "success" && "$state" != "skipped" && "$state" != "not-applicable" ]]; then
+                echo "::notice::$optional is $state for $commit_sha; automatic release waits."
                 should_release=false
               fi
             done
