@@ -40,7 +40,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RUN_ID: ${{ github.event.workflow_run.id }}
-        run: gh run rerun-failed "$RUN_ID" --failed --repo "$GITHUB_REPOSITORY"
+        run: gh run rerun "$RUN_ID" --failed --repo "$GITHUB_REPOSITORY"
       - name: Open diagnostic issue when code or configuration needs repair
         if: steps.diagnosis.outputs.retry != 'true' || github.event.workflow_run.run_attempt > 1
         env:
@@ -53,14 +53,15 @@ jobs:
           set -euo pipefail
           existing="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "Agent CI $RUN_ID in:title" --json number --jq length)"
           if [ "$existing" != "0" ]; then echo "Existing diagnostic issue found"; exit 0; fi
+          python -c 'import json,os; d=json.load(open(os.environ["RUNNER_TEMP"]+"/diagnosis.json")); open(os.environ["RUNNER_TEMP"]+"/excerpt.txt","w").write("\\n".join(d["excerpt"]) or "No matching error lines were found.")'
           {
             echo "Automated diagnosis from Molido Agent"
             echo "Workflow: $RUN_NAME"
             echo "Run: $RUN_URL"
             echo "Attempt: ${{ github.event.workflow_run.run_attempt }}"
             echo "Classification: $CATEGORY"
-            echo "Sanitized log excerpt (last 160 lines):"
-            tail -n 160 "$RUNNER_TEMP/failed.log"
+            echo "Sanitized error excerpt:"
+            cat "$RUNNER_TEMP/excerpt.txt"
             echo "No application code, signing key, credential, security policy or user data was modified automatically."
           } > "$RUNNER_TEMP/issue.md"
           gh issue create --repo "$GITHUB_REPOSITORY" --title "[Agent CI $RUN_ID] $CATEGORY failure in $RUN_NAME" --body-file "$RUNNER_TEMP/issue.md"
