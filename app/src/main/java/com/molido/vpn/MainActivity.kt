@@ -7807,7 +7807,7 @@ class MainActivity : Activity() {
                 try { connection.responseCode == 204 } finally { connection.disconnect() }
             } catch (_: Exception) { false }
             runOnUiThread {
-                if (selectedProtocol != Protocol.IKEV2 || isFinishing) return@runOnUiThread
+                if (selectedProtocol != Protocol.IKEV2 || isFinishing || visualState != OrbitDialView.State.CONNECTING) return@runOnUiThread
                 if (trafficOk) showConnected()
                 else if (attempt >= 12) showDisconnected(Strings.t("IKEv2 tunnel is up but internet traffic could not be verified."))
                 else Handler(Looper.getMainLooper()).postDelayed({ verifyNativeIkev2(attempt + 1) }, 1500L)
