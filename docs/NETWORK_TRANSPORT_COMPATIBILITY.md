@@ -40,6 +40,8 @@ The following is based on the checked-in client source and unit-test files, not 
 
 Relevant existing tests include `VlessTransportTest.kt`, `XhttpProfileTest.kt`, `Hysteria2ImportTest.kt`, `WartimeTunnelsTest.kt`, and Rust unit tests in `core/aether/src/quic.rs` and `core/aether/src/masque_h2.rs`. These are source/unit tests; they do not replace end-to-end tests against controlled servers.
 
+The mKCP adapter targets the repository-pinned Xray v26.10.31. The imported-profile workflow downloads the matching Linux host validator with a pinned SHA-256 and runs the rendered-outbound smoke test for VLESS, VMess and Trojan mKCP. This validates configuration acceptance by the engine; it does not prove a live server handshake or real-network performance.
+
 ## Adapter and server contract
 
 Before adding a new adapter, record:
