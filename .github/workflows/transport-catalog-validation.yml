@@ -21,6 +21,8 @@ on:
       - 'config/network/transport-catalog.json'
       - 'docs/NETWORK_TRANSPORT_COMPATIBILITY.md'
       - 'scripts/test_transport_catalog.py'
+      - 'config/network/protocol-transport-matrix.json'
+      - 'scripts/test_protocol_transport_matrix.py'
 permissions:
   contents: read
 jobs:
@@ -36,5 +38,7 @@ jobs:
         run: python -m json.tool config/network/transport-catalog.json > /dev/null
       - name: Run transport catalog tests
         run: python -m unittest discover -s scripts -p 'test_transport_*.py' -v
+      - name: Test protocol transport compatibility matrix
+        run: python -m unittest discover -s scripts -p 'test_protocol_transport_matrix.py' -v
       - name: Compile transport gate CLI
         run: python -m py_compile scripts/transport_gate.py
