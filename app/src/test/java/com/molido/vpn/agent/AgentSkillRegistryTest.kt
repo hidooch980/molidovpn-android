@@ -34,26 +34,27 @@ class AgentSkillRegistryTest {
 
     @Test
     fun networkAndBatteryGatesAreRespected() {
-        val skill = AgentSkillRegistry.all.first { it.id == "network-health" }
+        val skill = AgentSkill(
+            id = "gated-test",
+            title = "Gated test",
+            description = "Exercises the automatic skill safety gates.",
+            mode = AgentSkillMode.AUTOMATIC,
+            intervalMs = AgentSkillRegistry.FIVE_MINUTES_MS,
+            allowMetered = false,
+            requiresBatteryNotLow = true,
+            requiresTunnelIdle = true,
+        )
         val checkpoint = AgentCheckpoint(0L)
         assertFalse(
-            AgentSkillRegistry.isDue(
-                skill, checkpoint, 1_000_000L,
-                online.copy(metered = true),
-            ),
+            AgentSkillRegistry.isDue(skill, checkpoint, 1_000_000L, online.copy(metered = true)),
         )
         assertFalse(
-            AgentSkillRegistry.isDue(
-                skill, checkpoint, 1_000_000L,
-                online.copy(batteryNotLow = false),
-            ),
+            AgentSkillRegistry.isDue(skill, checkpoint, 1_000_000L, online.copy(batteryNotLow = false)),
         )
         assertFalse(
-            AgentSkillRegistry.isDue(
-                skill, checkpoint, 1_000_000L,
-                online.copy(tunnelIdle = false),
-            ),
+            AgentSkillRegistry.isDue(skill, checkpoint, 1_000_000L, online.copy(tunnelIdle = false)),
         )
+        assertTrue(AgentSkillRegistry.isDue(skill, checkpoint, 1_000_000L, online))
     }
 
     @Test
