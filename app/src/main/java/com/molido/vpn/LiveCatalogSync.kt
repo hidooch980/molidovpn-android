@@ -27,7 +27,7 @@ object LiveCatalogSync {
                     .getBoolean(PREF, true)
                 if (online && enabled && claimRefresh(context)) {
                     V2raySubscription.refreshIfDue(context, maxAgeMs = REMOTE_INTERVAL_MS)
-                    ShardSubscription.refreshIfDue(context)
+                    ShardSubscription.refreshIfDue(context, maxAgeMs = REMOTE_INTERVAL_MS)
                     RemotePolicy.refreshIfDue(context)
                     ResilienceConfig.refreshIfDue(context)
                     AppRemote.refreshIfDue(context) {
