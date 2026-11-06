@@ -1637,7 +1637,7 @@ class MainActivity : Activity() {
             OrbitDialView.State.FAILED ->
                 Triple("Try again", palette.primary, palette.violet)
             OrbitDialView.State.DISCONNECTED ->
-                Triple("Quick connect", palette.primary, palette.violet)
+                Triple("Auto connect", palette.primary, palette.violet)
         }
         quickConnectButton.text = "⏻   " + Strings.t(key)
         quickConnectButton.contentDescription = Strings.t(key)
@@ -1972,11 +1972,25 @@ class MainActivity : Activity() {
                 isFocusable = true
                 setOnClickListener { action() }
             }
-        quickActions.addView(quickAction(Strings.t("Country"), "◎") {
-            showCountryPicker { homeLocationCard?.text = Strings.t("SERVER LOCATION") + "\n" + locationCardText() }
+        quickActions.addView(quickAction(Strings.t("Manual"), "☷") {
+            if (!TunnelStatus.isActive() && visualState != OrbitDialView.State.CONNECTING) {
+                showCountryPicker {
+                    homeLocationCard?.text = Strings.t("SERVER LOCATION") + "\\n" + locationCardText()
+                    openModeScreen()
+                }
+            } else {
+                toastShort(Strings.t("Disconnect before changing the manual route"))
+            }
         }, LinearLayout.LayoutParams(0, dp(44), 1f).apply { marginEnd = dp(6) })
-        quickActions.addView(quickAction(Strings.t("Traffic monitor"), "↗") {
-            openTrafficMonitorScreen()
+        quickActions.addView(quickAction(
+            Strings.t(if (preferences().getBoolean(com.molido.vpn.engine.GamingQuality.PREF, false)) "Gaming on" else "Gaming"),
+            "🎮",
+        ) {
+            val enabled = !preferences().getBoolean(com.molido.vpn.engine.GamingQuality.PREF, false)
+            preferences().edit().putBoolean(com.molido.vpn.engine.GamingQuality.PREF, enabled).apply()
+            ConnectionLog.record("Secure gaming route scoring " + if (enabled) "enabled" else "disabled")
+            toastShort(Strings.t(if (enabled) "Gaming optimization enabled" else "Gaming optimization disabled"))
+            applyHomeMode()
         }, LinearLayout.LayoutParams(0, dp(44), 1f).apply { marginStart = dp(6) })
         homeQuickActions = quickActions
         addView(quickActions, LinearLayout.LayoutParams(
@@ -2264,7 +2278,7 @@ class MainActivity : Activity() {
         // Home layout is user-selectable: Minimal keeps only the connection
         // essentials, Compact adds live latency, Balanced adds the manual server
         // card, and Dashboard exposes the country/traffic shortcuts as well.
-        homeQuickActions?.visibility = if (style == HOME_STYLE_DASHBOARD) View.VISIBLE else View.GONE
+        homeQuickActions?.visibility = View.VISIBLE
         homeTelemetryLine?.visibility = if (style == HOME_STYLE_MINIMAL) View.GONE else View.VISIBLE
         homeLocationCard?.visibility = if (style == HOME_STYLE_BALANCED || style == HOME_STYLE_DASHBOARD) View.VISIBLE else View.GONE
         exitNodeCard.visibility = if (style == HOME_STYLE_MINIMAL) View.GONE else View.VISIBLE
