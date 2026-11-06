@@ -1,5 +1,4 @@
 import unittest
-
 from agent_ci_triage import classify
 
 class AgentCiTriageTests(unittest.TestCase):
