@@ -115,8 +115,8 @@ A passing report means **eligible for manual review only**. The script deliberat
 
 ## Modular Protocol Engine boundary
 
-The first implementation slice adds \`ProtocolEngineRegistry\` under
-\`app/src/main/java/com/molido/vpn/engine/protocol/\`. It provides stable engine IDs,
+The first implementation slice adds `ProtocolEngineRegistry` under
+`app/src/main/java/com/molido/vpn/engine/protocol/`. It provides stable engine IDs,
 runtime-family ownership, implementation state and fail-closed selection metadata.
 It is a registry boundary, not a second tunnel implementation: existing Xray,
 sing-box, Aether, Android IKEv2/SSTP and Tor launch paths remain the owners of
