@@ -10,7 +10,7 @@ AI provider. Every skill has a fixed owner, cadence and safety gate.
 |---|---|---:|
 | Server discovery | Refresh V2Ray, SHARD and Smart Split catalogs | 5 minutes while live sync is active |
 | Network policy manager | Refresh edge, routing and resilience policy | 5-minute dispatch; each provider keeps its own backoff |
-| App update manager | Fetch validated remote feature flags and update metadata | 5-minute dispatch; provider cache/backoff applies |
+| Remote app config manager | Fetch validated mode flags and admin announcements | 5-minute dispatch; provider cache/backoff applies |
 
 ## Delegated skills
 
