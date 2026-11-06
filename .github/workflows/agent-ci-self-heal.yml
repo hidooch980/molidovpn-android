@@ -1,7 +1,7 @@
 name: Agent CI self-heal
 on:
   workflow_run:
-    workflows: ["Android validation", "Android IPv4 IPv6 native packet regressions", "Smart server refresh guard"]
+    workflows: ["Android validation", "Android IPv4 IPv6 native packet regressions", "Smart server refresh guard", "Validate imported VPN profiles", "Agent self-check", "Transport catalog validation"]
     types: [completed]
 permissions:
   actions: write
