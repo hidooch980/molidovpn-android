@@ -9,9 +9,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Release version (for example 4.0.4)"
+        description: "Release version (for example 4.0.5)"
         required: true
-        default: "4.0.4"
+        default: "4.0.5"
         type: string
   # Publish automatically after a successful validation run on main.
   workflow_run:
@@ -19,6 +19,8 @@ on:
       - "Android validation"
       - "Android IPv4 IPv6 native packet regressions"
       - "Validate imported VPN profiles"
+      - "Agent self-check"
+      - "Transport catalog validation"
     types: [completed]
     branches: [main]
 
@@ -54,7 +56,7 @@ jobs:
         id: release
         env:
           GH_TOKEN: ${{ github.token }}
-          REQUESTED_VERSION: ${{ github.event.inputs.version || '4.0.4' }}
+          REQUESTED_VERSION: ${{ github.event.inputs.version || '4.0.5' }}
           EVENT_NAME: ${{ github.event_name }}
           REF_TYPE: ${{ github.ref_type }}
           REF_NAME: ${{ github.ref_name }}
@@ -82,7 +84,7 @@ jobs:
             # successfully for this exact main commit. Each completion event
             # rechecks the set, so the last successful workflow starts release.
             runs_json=$(gh api "/repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$commit_sha&per_page=100")
-            for required in "Android validation" "Android IPv4 IPv6 native packet regressions" "Validate imported VPN profiles"; do
+            for required in "Android validation" "Android IPv4 IPv6 native packet regressions" "Validate imported VPN profiles" "Agent self-check" "Transport catalog validation"; do
               state=$(jq -r --arg name "$required" '
                 [.workflow_runs[] | select(.name == $name and .event == "push" and .head_branch == "main")][0]
                 | if . == null then "missing"
@@ -341,4 +343,6 @@ jobs:
             - Signed phone ARM64, ARMv7 and universal APKs.
             - Signed Android TV ARM64 and universal APKs with Leanback launcher support.
             - SHA-256 digests are published with GitHub release assets and verified by the in-app updater.
+            - Server catalog refresh and Agent Hub reliability improvements.
+            - Transport capability audit and compatibility test gates; unvalidated transports remain disabled.
             - Upgrade in place; do not uninstall the previous version.

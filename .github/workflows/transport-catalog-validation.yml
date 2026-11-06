@@ -1,0 +1,44 @@
+name: Transport catalog validation
+on:
+  pull_request:
+    paths:
+      - 'config/network/transport-catalog.json'
+      - 'config/network/protocol-transport-matrix.json'
+      - 'docs/NETWORK_TRANSPORT_COMPATIBILITY.md'
+      - 'scripts/transport_gate.py'
+      - 'scripts/test_transport_*.py'
+      - 'scripts/test_protocol_transport_matrix.py'
+      - 'app/src/main/java/com/molido/vpn/**'
+      - 'app/src/test/java/com/molido/vpn/**'
+  push:
+    branches: [main]
+    paths:
+      - 'config/network/transport-catalog.json'
+      - 'config/network/protocol-transport-matrix.json'
+      - 'docs/NETWORK_TRANSPORT_COMPATIBILITY.md'
+      - 'scripts/transport_gate.py'
+      - 'scripts/test_transport_*.py'
+      - 'scripts/test_protocol_transport_matrix.py'
+      - 'app/src/main/java/com/molido/vpn/**'
+      - 'app/src/test/java/com/molido/vpn/**'
+permissions:
+  contents: read
+jobs:
+  catalog-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Validate JSON inventories
+        run: |
+          python -m json.tool config/network/transport-catalog.json > /dev/null
+          python -m json.tool config/network/protocol-transport-matrix.json > /dev/null
+      - name: Run transport catalog and benchmark gate tests
+        run: python -m unittest discover -s scripts -p 'test_transport_*.py' -v
+      - name: Test protocol transport compatibility matrix
+        run: python -m unittest discover -s scripts -p 'test_protocol_transport_matrix.py' -v
+      - name: Compile transport gate CLI
+        run: python -m py_compile scripts/transport_gate.py

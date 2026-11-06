@@ -152,11 +152,15 @@ object MyConfigs {
 
     // ------------------------------------------------------------ pool
 
-    fun hasProxyNodes(context: Context): Boolean = entries(context).any { it.kind == KIND_PROXY }
+    fun hasProxyNodes(context: Context): Boolean = entries(context).any { it.kind == KIND_PROXY && node(it) != null }
 
-    /** Node for a proxy entry, or null when the line no longer parses. */
-    fun node(entry: Entry): ShardNode? =
-        if (entry.kind != KIND_PROXY) null else V2rayNodes.parseOne(entry.line)?.let { V2rayNodes.toShardNode(it) }
+    /** Node for a selectable proxy entry, or null when unavailable/unvalidated. */
+    fun node(entry: Entry): ShardNode? {
+        if (entry.kind != KIND_PROXY) return null
+        val parsed = V2rayNodes.parseOne(entry.line) ?: return null
+        if (!TransportRuntimePolicy.isSelectable(parsed.network)) return null
+        return V2rayNodes.toShardNode(parsed)
+    }
 
     /** The pinned entry when one is set, otherwise every proxy entry. */
     fun shardNodes(context: Context): List<ShardNode> {
@@ -166,8 +170,14 @@ object MyConfigs {
         return chosen.mapNotNull { node(it) }.distinctBy { it.key }
     }
 
-    fun protocolLabel(entry: Entry): String =
-        if (entry.kind == KIND_WIREGUARD) "wireguard" else node(entry)?.let { NodeTest.label(it) } ?: "?"
+    fun protocolLabel(entry: Entry): String {
+        if (entry.kind == KIND_WIREGUARD) return "wireguard"
+        val parsed = if (entry.kind == KIND_PROXY) V2rayNodes.parseOne(entry.line) else null
+        if (parsed != null && !TransportRuntimePolicy.isSelectable(parsed.network)) {
+            return "${parsed.network} (pending validation)"
+        }
+        return node(entry)?.let { NodeTest.label(it) } ?: "?"
+    }
 
     // ------------------------------------------------------------ adding
 
@@ -202,7 +212,7 @@ object MyConfigs {
                 }
                 else -> {
                     val node = V2rayNodes.parseOne(line)
-                    if (node == null) {
+                    if (node == null || !TransportRuntimePolicy.isSelectable(node.network)) {
                         skipped++
                     } else {
                         proxies += Entry(newId(), node.name.ifEmpty { node.address }, V2rayNodes.shareLine(node), KIND_PROXY)

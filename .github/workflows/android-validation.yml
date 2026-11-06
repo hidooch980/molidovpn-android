@@ -100,9 +100,6 @@ jobs:
       - name: Install Rust core host-test dependencies
         run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libclang-dev
 
-      - name: Install Rust core host-test dependencies
-        run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libclang-dev
-
       - name: Install Rust Android targets
         run: |
           rustup target add aarch64-linux-android armv7-linux-androideabi
@@ -111,9 +108,6 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: core/aether -> target
-
-      - name: Run Aether Rust core unit tests
-        run: cargo test --manifest-path core/aether/Cargo.toml --locked --lib
 
       - name: Run Aether Rust core unit tests
         run: cargo test --manifest-path core/aether/Cargo.toml --locked --lib
