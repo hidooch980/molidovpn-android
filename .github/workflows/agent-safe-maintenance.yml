@@ -1,0 +1,36 @@
+name: Agent safe maintenance
+on:
+  schedule:
+    - cron: '23 4 * * 1'
+  workflow_dispatch: {}
+permissions:
+  contents: write
+  pull-requests: write
+concurrency:
+  group: agent-safe-maintenance
+  cancel-in-progress: false
+jobs:
+  python-safe-fixes:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Apply safe Python formatting and lint fixes
+        run: |
+          python -m pip install --disable-pip-version-check ruff
+          ruff check --fix scripts/agent_ci_triage.py scripts/test_agent_ci_triage.py
+          ruff format scripts/agent_ci_triage.py scripts/test_agent_ci_triage.py
+      - name: Verify scripts after fixes
+        run: python -m unittest discover -s scripts -p 'test_agent_ci_triage.py' -v
+      - name: Propose fixes for review
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ github.token }}
+          branch: bot/agent-safe-python-maintenance
+          delete-branch: true
+          commit-message: 'chore(agent): apply safe Python maintenance fixes'
+          title: 'chore(agent): safe Python maintenance fixes'
+          body: Automated Ruff fixes for scripts. Python unit tests run before opening this PR; review and CI are required before merge.
