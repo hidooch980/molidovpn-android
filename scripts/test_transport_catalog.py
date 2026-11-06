@@ -53,6 +53,15 @@ class TransportCatalogTests(unittest.TestCase):
             for test_path in entry["existing_tests"]:
                 self.assertTrue((ROOT / test_path).is_file(), test_path)
 
+    def test_catalog_status_matches_source_audit(self):
+        for entry in self.entries:
+            if entry["implementation_status"] == "not_implemented_in_current_client_source_scan":
+                self.assertEqual(entry["status"], "not_implemented")
+            elif entry["implementation_status"] == "implemented_experimental_path":
+                self.assertEqual(entry["status"], "experimental_client_path")
+            else:
+                self.assertEqual(entry["status"], "client_path_present")
+
     def test_only_unimplemented_options_are_mtproto_and_mkcp(self):
         missing = {
             entry["id"]
