@@ -7,7 +7,6 @@ import org.junit.Assume.assumeTrue
 import org.junit.Test
 import java.io.File
 import java.net.URLEncoder
-import java.util.Base64
 import java.util.concurrent.TimeUnit
 
 class VlessTransportTest {
@@ -144,7 +143,7 @@ class VlessTransportTest {
             .put("type", "none")
             .put("tls", "tls")
             .put("kcpSettings", profile)
-        val encoded = Base64.getEncoder().encodeToString(config.toString().toByteArray())
+        val encoded = android.util.Base64.encodeToString(config.toString().toByteArray(), android.util.Base64.NO_WRAP)
         val node = V2rayNodes.parseOne("vmess://$encoded")!!
         assertEquals("mkcp", node.network)
         val kcp = render(node).getJSONObject("streamSettings").getJSONObject("kcpSettings")
@@ -200,7 +199,7 @@ class VlessTransportTest {
             .put("type", "none")
             .put("tls", "tls")
             .put("kcpSettings", JSONObject().put("mtu", 1350).put("tti", 20))
-        links.add("vmess://${Base64.getEncoder().encodeToString(vmessKcp.toString().toByteArray())}")
+        links.add("vmess://${android.util.Base64.encodeToString(vmessKcp.toString().toByteArray(), android.util.Base64.NO_WRAP)}")
         for (link in links) {
             val node = V2rayNodes.parseOne(link)!!
             val file = File.createTempFile("vless-xray-", ".json")
