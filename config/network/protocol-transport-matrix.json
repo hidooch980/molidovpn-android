@@ -1,0 +1,218 @@
+{
+  "schema_version": 1,
+  "purpose": "Client-side compatibility contract for test generation; not a runtime enablement list.",
+  "policy": {
+    "default_enabled": false,
+    "requires_matching_server": true,
+    "require_end_to_end_evidence": true,
+    "unknown_combinations": "reject"
+  },
+  "engine_families": {
+    "v2ray": [
+      "vless",
+      "vmess",
+      "trojan",
+      "shadowsocks"
+    ],
+    "sing_box": [
+      "hysteria2",
+      "tuic",
+      "anytls"
+    ],
+    "aether": [
+      "wireguard"
+    ],
+    "android_platform": [
+      "ikev2",
+      "sstp"
+    ],
+    "tor_proxy": [
+      "tor"
+    ],
+    "mtproto_proxy": [
+      "mtproto_proxy"
+    ]
+  },
+  "valid_combinations": [
+    {
+      "engine": "vless",
+      "transport": "tcp",
+      "runtime": "xray",
+      "status": "existing_client_path"
+    },
+    {
+      "engine": "vless",
+      "transport": "websocket",
+      "runtime": "xray",
+      "status": "existing_client_path"
+    },
+    {
+      "engine": "vless",
+      "transport": "grpc",
+      "runtime": "xray",
+      "status": "existing_client_path"
+    },
+    {
+      "engine": "vless",
+      "transport": "xhttp",
+      "runtime": "xray",
+      "status": "existing_client_path"
+    },
+    {
+      "engine": "vless",
+      "transport": "http_upgrade",
+      "runtime": "xray",
+      "status": "existing_client_path"
+    },
+    {
+      "engine": "vmess",
+      "transport": "tcp",
+      "runtime": "xray",
+      "status": "existing_client_path"
+    },
+    {
+      "engine": "vmess",
+      "transport": "websocket",
+      "runtime": "xray",
+      "status": "existing_client_path"
+    },
+    {
+      "engine": "vmess",
+      "transport": "grpc",
+      "runtime": "xray",
+      "status": "existing_client_path"
+    },
+    {
+      "engine": "vmess",
+      "transport": "http_upgrade",
+      "runtime": "xray",
+      "status": "existing_client_path"
+    },
+    {
+      "engine": "trojan",
+      "transport": "tcp",
+      "runtime": "xray",
+      "status": "existing_client_path"
+    },
+    {
+      "engine": "trojan",
+      "transport": "websocket",
+      "runtime": "xray",
+      "status": "existing_client_path"
+    },
+    {
+      "engine": "trojan",
+      "transport": "grpc",
+      "runtime": "xray",
+      "status": "existing_client_path"
+    },
+    {
+      "engine": "trojan",
+      "transport": "http_upgrade",
+      "runtime": "xray",
+      "status": "existing_client_path"
+    },
+    {
+      "engine": "shadowsocks",
+      "transport": "tcp",
+      "runtime": "xray",
+      "status": "existing_client_path"
+    },
+    {
+      "engine": "shadowsocks",
+      "transport": "udp",
+      "runtime": "xray",
+      "status": "existing_client_path"
+    },
+    {
+      "engine": "hysteria2",
+      "transport": "quic",
+      "runtime": "sing_box",
+      "status": "existing_client_path"
+    },
+    {
+      "engine": "tuic",
+      "transport": "quic",
+      "runtime": "sing_box",
+      "status": "existing_client_path"
+    },
+    {
+      "engine": "anytls",
+      "transport": "tcp",
+      "runtime": "sing_box",
+      "status": "existing_client_path"
+    },
+    {
+      "engine": "wireguard",
+      "transport": "udp",
+      "runtime": "aether",
+      "status": "existing_client_path"
+    },
+    {
+      "engine": "ikev2",
+      "transport": "udp",
+      "runtime": "android_platform",
+      "status": "existing_client_path"
+    },
+    {
+      "engine": "sstp",
+      "transport": "tcp",
+      "runtime": "android_platform",
+      "status": "existing_client_path"
+    },
+    {
+      "engine": "tor",
+      "transport": "tcp",
+      "runtime": "tor_proxy",
+      "status": "existing_client_path_proxy_only"
+    },
+    {
+      "engine": "mtproto_proxy",
+      "transport": "tcp",
+      "runtime": "not_implemented",
+      "status": "not_implemented"
+    }
+  ],
+  "excluded_combinations": [
+    {
+      "engine": "tor",
+      "transport": "udp",
+      "reason": "Tor SOCKS proxy does not provide general UDP forwarding."
+    },
+    {
+      "engine": "mtproto_proxy",
+      "transport": "udp",
+      "reason": "No MTProto adapter exists in the current client source."
+    },
+    {
+      "engine": "hysteria2",
+      "transport": "tcp",
+      "reason": "Hysteria 2 is QUIC/UDP based."
+    },
+    {
+      "engine": "tuic",
+      "transport": "tcp",
+      "reason": "TUIC is QUIC/UDP based."
+    },
+    {
+      "engine": "wireguard",
+      "transport": "tcp",
+      "reason": "WireGuard uses UDP."
+    },
+    {
+      "engine": "ikev2",
+      "transport": "tcp",
+      "reason": "IKEv2 requires its IPsec UDP encapsulation path."
+    },
+    {
+      "engine": "sstp",
+      "transport": "udp",
+      "reason": "SSTP is TCP/TLS based."
+    },
+    {
+      "engine": "*",
+      "transport": "mkcp",
+      "reason": "mKCP is not implemented in the inspected current client source."
+    }
+  ]
+}
