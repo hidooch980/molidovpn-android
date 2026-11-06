@@ -11,6 +11,7 @@ object Strings {
 
 
     private val table = mapOf(
+        "IKEV2_ACCOUNT_HELP" to Triple("Use credentials from a free provider account or your MolidoVPN dedicated server. Free accounts must be created with the provider first.", "از اطلاعات حساب سرویس‌دهنده رایگان یا سرور اختصاصی MolidoVPN استفاده کن. ابتدا باید در سرویس‌دهنده رایگان حساب بسازی.", "请使用免费服务商账户或 MolidoVPN 专用服务器账户。免费账户需先在服务商处创建。"),
         "IKEv2 / IPsec" to Triple("IKEv2 / IPsec", "IKEv2 / آی‌پی‌سک", "IKEv2 / IPsec"),
         "IKEv2 server hostname" to Triple("IKEv2 server hostname", "نام میزبان سرور IKEv2", "IKEv2 服务器主机名"),
         "IKE identity (provider supplied)" to Triple("IKE identity (provider supplied)", "شناسه IKE ارائه‌شده توسط سرویس‌دهنده", "服务提供商提供的 IKE 身份"),
