@@ -2020,10 +2020,16 @@ class MainActivity : Activity() {
             }
         quickActions.addView(quickAction(Strings.t("Country"), "◎") {
             showCountryPicker { homeLocationCard?.text = Strings.t("SERVER LOCATION") + "\n" + locationCardText() }
-        }, LinearLayout.LayoutParams(0, dp(44), 1f).apply { marginEnd = dp(6) })
+        }, LinearLayout.LayoutParams(0, dp(44), 1f).apply { marginEnd = dp(4) })
         quickActions.addView(quickAction(Strings.t("Traffic monitor"), "↗") {
             openTrafficMonitorScreen()
-        }, LinearLayout.LayoutParams(0, dp(44), 1f).apply { marginStart = dp(6) })
+        }, LinearLayout.LayoutParams(0, dp(44), 1f).apply {
+            marginStart = dp(4)
+            marginEnd = dp(4)
+        })
+        quickActions.addView(quickAction(Strings.t("Import config"), "＋") {
+            showAddMyConfig()
+        }, LinearLayout.LayoutParams(0, dp(44), 1f).apply { marginStart = dp(4) })
         homeQuickActions = quickActions
         addView(quickActions, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, dp(44),
