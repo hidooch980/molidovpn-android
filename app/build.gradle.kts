@@ -32,6 +32,8 @@ android {
             // consent/ads bootstrap remains inert (fail-closed).
             manifestPlaceholders["ADMOB_APP_ID"] =
                 (project.findProperty("admobAppId") as String?)?.trim().orEmpty()
+            manifestPlaceholders["ADMOB_BANNER_AD_UNIT_ID"] =
+                (project.findProperty("admobBannerAdUnitId") as String?)?.trim().orEmpty()
         }
         create("tv") {
             dimension = "distribution"

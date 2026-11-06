@@ -24,6 +24,9 @@ import java.util.concurrent.atomic.AtomicBoolean
  */
 object MobileAdsBootstrap {
     private const val APP_ID_META_DATA = "com.google.android.gms.ads.APPLICATION_ID"
+    private const val BANNER_META_DATA = "com.molido.vpn.ads.BANNER_AD_UNIT_ID"
+    private const val TEST_BANNER_ID = "ca-app-pub-3940256099942544/9214589741"
+    private val sdkInitialized = AtomicBoolean(false)
     private val appIdPattern = Regex("^ca-app-pub-[0-9]{16}~[0-9]{10}$")
     private val initializationStarted = AtomicBoolean(false)
     private val backgroundScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -54,6 +57,34 @@ object MobileAdsBootstrap {
     @JvmStatic
     fun isConfigured(activity: Activity): Boolean = configuredAppId(activity) != null
 
+    @JvmStatic
+    fun isReadyToRequestAds(): Boolean = sdkInitialized.get()
+
+    /** Production IDs are never guessed; debug builds fall back to Google's test banner. */
+    @JvmStatic
+    fun bannerAdUnitId(activity: Activity): String? {
+        val metadata = try {
+            if (Build.VERSION.SDK_INT >= 33) {
+                activity.packageManager.getApplicationInfo(
+                    activity.packageName,
+                    PackageManager.ApplicationInfoFlags.of(PackageManager.GET_META_DATA.toLong()),
+                ).metaData
+            } else {
+                @Suppress("DEPRECATION")
+                activity.packageManager.getApplicationInfo(
+                    activity.packageName,
+                    PackageManager.GET_META_DATA,
+                ).metaData
+            }
+        } catch (_: PackageManager.NameNotFoundException) {
+            null
+        }
+        val configured = metadata?.getString(BANNER_META_DATA)?.trim().orEmpty()
+        if (Regex("^ca-app-pub-[0-9]{16}/[0-9]{10}$").matches(configured)) return configured
+        val isDebuggable = activity.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0
+        return if (isDebuggable) TEST_BANNER_ID else null
+    }
+
     /** Call from a visible, user-initiated Privacy choices setting. */
     @JvmStatic
     fun showPrivacyOptions(activity: Activity) {
@@ -78,8 +109,8 @@ object MobileAdsBootstrap {
                     appContext,
                     InitializationConfig.Builder(appId).build(),
                 ) {
-                    // SDK initialized. Ad units are deliberately not requested
-                    // here; the UI must first enforce the VPN-state placement gate.
+                    // The UI still enforces the disconnected-only placement gate.
+                    sdkInitialized.set(true)
                 }
             } catch (_: Exception) {
                 // Fail closed. VPN operation and app startup must never depend on ads.

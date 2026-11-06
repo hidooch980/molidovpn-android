@@ -436,9 +436,11 @@ class MainActivity : Activity() {
         override fun run() {
             if (!uiForeground) return
             renderStatus()
+            syncMobileBanner()
             statusHandler.postDelayed(this, STATUS_POLL_MS)
         }
     }
+    private var adBannerContainer: FrameLayout? = null
     private lateinit var palette: AppAppearance.Palette
     private val CANVAS get() = palette.canvas
     // Accents split in two on a light palette: the vivid value paints shapes,
@@ -805,7 +807,10 @@ class MainActivity : Activity() {
         mainRoot.addView(consoleScroll, FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.MATCH_PARENT,
-        ).apply { topMargin = dp(70) })
+        ).apply {
+            topMargin = dp(70)
+            bottomMargin = if (!isTelevisionDevice) dp(58) else 0
+        })
         fitConsoleToViewport(consoleScroll, console)
         mainRoot.addView(header, FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
@@ -815,6 +820,21 @@ class MainActivity : Activity() {
             rightMargin = dp(20)
             topMargin = dp(10)
         })
+        if (!isTelevisionDevice) {
+            adBannerContainer = FrameLayout(this).apply {
+                visibility = View.GONE
+                setBackgroundColor(Color.TRANSPARENT)
+            }
+            mainRoot.addView(adBannerContainer, FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                dp(54),
+                Gravity.BOTTOM,
+            ).apply {
+                leftMargin = dp(12)
+                rightMargin = dp(12)
+                bottomMargin = dp(4)
+            })
+        }
         mainRoot.setOnApplyWindowInsetsListener { _, insets ->
             (header.layoutParams as FrameLayout.LayoutParams).apply {
                 topMargin = insets.systemWindowInsetTop + dp(10)
@@ -822,8 +842,14 @@ class MainActivity : Activity() {
             }
             (consoleScroll.layoutParams as FrameLayout.LayoutParams).apply {
                 topMargin = insets.systemWindowInsetTop + dp(70)
-                bottomMargin = insets.systemWindowInsetBottom
+                bottomMargin = insets.systemWindowInsetBottom + if (!isTelevisionDevice) dp(58) else 0
                 consoleScroll.layoutParams = this
+            }
+            adBannerContainer?.let { banner ->
+                (banner.layoutParams as FrameLayout.LayoutParams).apply {
+                    bottomMargin = insets.systemWindowInsetBottom + dp(4)
+                    banner.layoutParams = this
+                }
             }
             insets
         }
@@ -844,6 +870,7 @@ class MainActivity : Activity() {
         configureTelevisionControls(pageHost)
         configureSystemBars()
         showOpeningOverlay()
+        syncMobileBanner()
         // Ads are optional and mobile-only. Start UMP after the opening overlay;
         // the flavor-specific bootstrap is loaded reflectively so Android TV
         // neither packages nor references the unsupported mobile ads SDK.
@@ -876,6 +903,7 @@ class MainActivity : Activity() {
             registerReceiver(statusReceiver, filter)
         }
         receiverRegistered = true
+        syncMobileBanner()
     }
 
     private var smartPanel: com.molido.vpn.ui.SmartConnectPanel? = null
@@ -892,6 +920,7 @@ class MainActivity : Activity() {
     }
 
     override fun onStop() {
+        hideMobileBanner()
         LiveCatalogSync.release(this)
         smartScope?.cancel()
         smartScope = null
@@ -8375,6 +8404,25 @@ class MainActivity : Activity() {
             )
         } else {
             ConnectionLog.record("Masque-over-Masque disarmed")
+        }
+    }
+
+    private fun syncMobileBanner() {
+        if (isTelevisionDevice) return
+        val container = adBannerContainer ?: return
+        runCatching {
+            Class.forName("com.molido.vpn.ads.MobileBannerSlot")
+                .getMethod("sync", Activity::class.java, FrameLayout::class.java, Boolean::class.javaPrimitiveType)
+                .invoke(null, this@MainActivity, container, visualState == OrbitDialView.State.DISCONNECTED)
+        }
+    }
+
+    private fun hideMobileBanner() {
+        if (isTelevisionDevice) return
+        runCatching {
+            Class.forName("com.molido.vpn.ads.MobileBannerSlot")
+                .getMethod("hide", FrameLayout::class.java)
+                .invoke(null, adBannerContainer)
         }
     }
 
