@@ -90,6 +90,14 @@ class TransportCatalogTests(unittest.TestCase):
     def test_tor_is_not_declared_as_a_general_udp_transport(self):
         self.assertEqual(self.by_id["tor"]["transport_dependencies"], ["tcp"])
 
+    def test_mkcp_has_an_explicit_runtime_disable_gate(self):
+        evidence = self.by_id["mkcp"]["runtime_gate_evidence"]
+        source_path = ROOT / evidence["path"]
+        self.assertTrue(source_path.is_file())
+        source = source_path.read_text(encoding="utf-8", errors="replace")
+        self.assertIn(evidence["marker"], source)
+        self.assertFalse(self.by_id["mkcp"]["runtime_selectable"])
+
     def test_mkcp_is_accepted_by_the_current_v2ray_parser(self):
         source = (ROOT / "app/src/main/java/com/molido/vpn/V2rayNodes.kt").read_text(encoding="utf-8")
         allowlist = next(line for line in source.splitlines() if "private val NETWORKS" in line)
