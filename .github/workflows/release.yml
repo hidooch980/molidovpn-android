@@ -77,11 +77,13 @@ jobs:
             echo "::error::Real-device validation confirmation is required before stable publication."
             exit 1
           fi
-          if [[ -z "${RELEASE_TOKEN:-}" ]]; then
-            echo "::error::GH_RELEASE_TOKEN is missing. Add a narrowly-scoped Contents: Read and write token in repository Actions secrets."
-            exit 1
+          # Prefer a dedicated release token when configured; otherwise use
+          # the workflow GITHUB_TOKEN, which has explicit contents: write.
+          if [[ -n "${RELEASE_TOKEN:-}" ]]; then
+            export GH_TOKEN="$RELEASE_TOKEN"
+          else
+            echo "GH_RELEASE_TOKEN is not configured; using the workflow token with contents: write."
           fi
-          export GH_TOKEN="$RELEASE_TOKEN"
           commit_sha="$GITHUB_SHA"
           [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
             echo "::error::Invalid release version: $version"
