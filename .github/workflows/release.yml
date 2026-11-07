@@ -264,23 +264,24 @@ jobs:
           fi
           "$AAPT" dump badging baseline-v4.0.0.apk | grep -F "package: name='com.mobin.mobin_vpn'"
 
-          # Verify the immediately previous public release too; this is the actual 4.0.9 -> 4.0.10 upgrade gate.
-          current_url="https://github.com/hidooch980/molidovpn-android/releases/download/v4.0.9/MolidoMeshAI-android-arm64.apk"
-          curl --fail --location --retry 3 --silent --show-error "$current_url" -o baseline-v4.0.9.apk
-          "$APKSIGNER" verify --verbose baseline-v4.0.9.apk
-          current_cert=$("$APKSIGNER" verify --print-certs baseline-v4.0.9.apk | \
+          # Verify the immediately previous public release (v4.0.10) as the upgrade baseline.
+          current_url="https://github.com/hidooch980/molidovpn-android/releases/download/v4.0.10/MolidoMeshAI-android-arm64.apk"
+          curl --fail --location --retry 3 --silent --show-error "$current_url" -o baseline-v4.0.10.apk
+          "$APKSIGNER" verify --verbose baseline-v4.0.10.apk
+          current_cert=$("$APKSIGNER" verify --print-certs baseline-v4.0.10.apk | \
             awk -F': ' '/Signer #1 certificate SHA-256 digest:/ {print tolower($2); exit}')
           test -n "$current_cert"
           if [[ "$current_cert" != "$expected_cert" ]]; then
-            echo "Configured keystore does not match the published v4.0.9 signing certificate; refusing upgrade release." >&2
+            echo "Configured keystore does not match the published v4.0.10 signing certificate; refusing upgrade release." >&2
             exit 1
           fi
-          current_badging=$("$AAPT" dump badging baseline-v4.0.9.apk)
+          current_badging=$("$AAPT" dump badging baseline-v4.0.10.apk)
           grep -F "package: name='com.mobin.mobin_vpn'" <<< "$current_badging"
+          grep -F "versionName='4.0.10'" <<< "$current_badging"
           current_code=$(sed -n "s/.*versionCode='\\([0-9][0-9]*\\)'.*/\\1/p" <<< "$current_badging" | head -n1)
           test -n "$current_code"
           if (( expected_code <= current_code )); then
-            echo "New APK versionCode must be greater than the published v4.0.9 baseline." >&2
+            echo "New APK versionCode must be greater than the published v4.0.10 baseline." >&2
             exit 1
           fi
 
