@@ -106,7 +106,7 @@ jobs:
 
       - name: Install Rust Android targets
         run: |
-          rustup target add aarch64-linux-android armv7-linux-androideabi
+          rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android
           cargo install cargo-ndk --locked
 
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
@@ -130,9 +130,10 @@ jobs:
         env:
           DNSTT_OUTPUT_DIR: ${{ runner.temp }}/dnstt-native
         run: |
-          bash tools/build-dnstt.sh --abi arm64-v8a,armeabi-v7a
+          bash tools/build-dnstt.sh --abi arm64-v8a,armeabi-v7a,x86_64
           test -s "$DNSTT_OUTPUT_DIR/arm64-v8a/libdnstt.so"
           test -s "$DNSTT_OUTPUT_DIR/armeabi-v7a/libdnstt.so"
+          test -s "$DNSTT_OUTPUT_DIR/x86_64/libdnstt.so"
 
       - name: Syntax-check release tooling
         run: python3 -m py_compile tools/refresh-emergency-configs.py
@@ -149,6 +150,48 @@ jobs:
             -PtargetAbi=arm64-v8a,armeabi-v7a \
             -PmolidoVersionCode=49999 \
             -PmolidoVersionName=0.0.0-ci
+
+      
+      - name: Install x86_64 emulator system image
+        run: |
+          sdkmanager "emulator" "system-images;android-35;google_apis;x86_64"
+          echo "no" | avdmanager create avd --force --name molido-x86-64 --package "system-images;android-35;google_apis;x86_64" --device pixel_2
+
+      - name: Install and launch the complete phone app on x86_64 emulator
+        timeout-minutes: 15
+        shell: bash
+        run: |
+          set -euo pipefail
+          EMULATOR_LOG="$RUNNER_TEMP/molido-emulator.log"
+          emulator -avd molido-x86-64 -no-window -no-audio -no-boot-anim -no-snapshot -wipe-data -gpu swiftshader_indirect >"$EMULATOR_LOG" 2>&1 &
+          EMULATOR_PID=$!
+          cleanup() {
+            adb logcat -d -t 2000 > "$RUNNER_TEMP/molido-emulator-logcat.txt" || true
+            kill "$EMULATOR_PID" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+          adb wait-for-device
+          for attempt in $(seq 1 90); do
+            if [[ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" == "1" ]]; then break; fi
+            sleep 2
+          done
+          [[ "$(adb shell getprop sys.boot_completed | tr -d '\r')" == "1" ]]
+          adb shell settings put global window_animation_scale 0
+          adb shell settings put global transition_animation_scale 0
+          adb shell settings put global animator_duration_scale 0
+          APK="$(find app/build/outputs/apk/mobile/release -name '*x86_64*.apk' -print -quit)"
+          test -s "$APK"
+          adb install "$APK"
+          adb shell monkey -p com.mobin.mobin_vpn 1
+          sleep 12
+          APP_PID="$(adb shell pidof com.mobin.mobin_vpn | tr -d '\r')"
+          test -n "$APP_PID"
+          adb logcat -d --pid="$APP_PID" > "$RUNNER_TEMP/molido-app-logcat.txt"
+          if grep -E 'FATAL EXCEPTION|UnsatisfiedLinkError|NoClassDefFoundError|SIGABRT' "$RUNNER_TEMP/molido-app-logcat.txt"; then
+            echo "::error::The app crashed or failed to load a native dependency on x86_64."
+            exit 1
+          fi
+          echo "x86_64 emulator app launch passed (pid=$APP_PID)."
 
       - name: Verify Android TV launcher manifest
         run: |
