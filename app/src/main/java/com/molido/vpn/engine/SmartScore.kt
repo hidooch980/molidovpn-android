@@ -136,8 +136,8 @@ object SmartScore {
  * A healthy route is sticky: a candidate needs at least three probes, at least
  * two-thirds successful probes, and a measurable median latency. Under normal
  * conditions it must also beat the current score by eight points after a
- * 90-second dwell. Two consecutive health failures may bypass dwell and score
- * improvement, but never bypass candidate evidence.
+ * 90-second dwell. Two consecutive health failures may bypass dwell only;
+ * candidate evidence and the minimum quality improvement remain mandatory.
  *
  * This is a pure decision helper; callers must still own connection lifecycle,
  * cancellation, tunnel verification, and user-selected-route protections.
@@ -170,11 +170,13 @@ data class SmartSwitchPolicy(
             stability >= minimumStability && medianLatency != null
         if (!hasEvidence) return false
 
-        if (consecutiveHealthFailures >= healthFailuresToOverride) return true
-        if (connectedForMs < minimumDwellMs) return false
-
         val candidateScore = SmartScore.score(candidate)
-        return currentScore.isFinite() &&
-            candidateScore >= currentScore + minimumImprovement
+        if (!currentScore.isFinite() || currentScore !in 0.0..100.0 ||
+            candidateScore !in 0.0..100.0 ||
+            candidateScore < currentScore + minimumImprovement
+        ) return false
+
+        val healthOverride = consecutiveHealthFailures >= healthFailuresToOverride
+        return connectedForMs >= minimumDwellMs || healthOverride
     }
 }
