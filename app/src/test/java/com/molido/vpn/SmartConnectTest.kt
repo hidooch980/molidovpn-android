@@ -114,11 +114,14 @@ class SmartConnectTest {
     }
 
     @Test
-    fun twoHealthFailuresOverrideDwellButStillRequireEvidence() {
+    fun twoHealthFailuresOverrideDwellButNotQualityImprovementOrEvidence() {
         val policy = SmartSwitchPolicy()
         val candidate = Measured("candidate", listOf(ok(80), ok(85), ok(90)))
-        assertFalse(policy.shouldSwitch(0.0, candidate, 10_000, consecutiveHealthFailures = 1))
-        assertTrue(policy.shouldSwitch(100.0, candidate, 10_000, consecutiveHealthFailures = 2))
+        val candidateScore = SmartScore.score(candidate)
+        assertFalse(policy.shouldSwitch(candidateScore - 8.0, candidate, 10_000, consecutiveHealthFailures = 1))
+        assertTrue(policy.shouldSwitch(candidateScore - 8.0, candidate, 10_000, consecutiveHealthFailures = 2))
+        assertFalse(policy.shouldSwitch(candidateScore - 7.9, candidate, 10_000, consecutiveHealthFailures = 2))
+        assertFalse(policy.shouldSwitch(100.0, candidate, 10_000, consecutiveHealthFailures = 2))
         assertFalse(policy.shouldSwitch(0.0, Measured("candidate", listOf(ok(80))), 10_000, consecutiveHealthFailures = 3))
     }
 
