@@ -4875,12 +4875,19 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
                             return@schedule
                         }
                         ConnectionLog.record("Network changed and the tunnel stopped answering — recovering now")
-                        if (currentProtocol.contains("SHARD") &&
-                            ((ShardSocksFront.isRunning && ShardManager.seamlessSwitch(this@MolidoVpnService, verboseShardLog(), 0)) ||
-                                rotateShardNode("network changed"))
-                        ) {
-                            stability.switched()
-                            return@schedule
+                        if (currentProtocol.contains("SHARD")) {
+                            // With the SHARD front-end active, never fall back to the
+                            // legacy one-probe rotation when evidence-gated promotion
+                            // rejects every candidate. Reconnect the whole route instead.
+                            val switched = if (ShardSocksFront.isRunning) {
+                                ShardManager.seamlessSwitch(this@MolidoVpnService, verboseShardLog(), 0)
+                            } else {
+                                rotateShardNode("network changed")
+                            }
+                            if (switched) {
+                                stability.switched()
+                                return@schedule
+                            }
                         }
                         onTunnelLost(Strings.t("Network changed — reconnecting"))
                     } catch (_: Exception) {
