@@ -216,4 +216,44 @@ class SmartLiveTest {
         assertEquals(0.55, ranked.getValue("new"), 1e-9)
     }
 
+
+
+    // ---- evidence-gated live route switching
+    @Test fun switchEvidenceRequiresThreeProbesAndTwoHealthy() {
+        val p = SwitchEvidencePolicy()
+        assertFalse(p.shouldSwitch(80.0, 70.0, 1, 3, 0, true))
+        assertFalse(p.shouldSwitch(80.0, 70.0, 2, 2, 0, true))
+        assertTrue(p.shouldSwitch(80.0, 70.0, 2, 3, 0, true))
+    }
+
+    @Test fun switchEvidenceRequiresEightAbsoluteScorePoints() {
+        val p = SwitchEvidencePolicy()
+        assertFalse(p.shouldSwitch(77.9, 70.0, 3, 3, 0, true))
+        assertTrue(p.shouldSwitch(78.0, 70.0, 3, 3, 0, true))
+    }
+
+    @Test fun healthFailureBypassesDwellButNotCandidateEvidence() {
+        val p = SwitchEvidencePolicy()
+        assertFalse(p.shouldSwitch(90.0, 70.0, 1, 3, 2, false))
+        assertFalse(p.shouldSwitch(75.0, 70.0, 3, 3, 2, false))
+        assertTrue(p.shouldSwitch(80.0, 70.0, 2, 3, 2, false))
+        assertFalse(p.shouldSwitch(80.0, 70.0, 2, 3, 1, false))
+    }
+
+    @Test fun switchEvidenceRejectsInvalidScoresAndProbeCounts() {
+        val p = SwitchEvidencePolicy()
+        assertFalse(p.shouldSwitch(Double.NaN, 70.0, 3, 3, 2, true))
+        assertFalse(p.shouldSwitch(101.0, 70.0, 3, 3, 2, true))
+        assertFalse(p.shouldSwitch(80.0, Double.POSITIVE_INFINITY, 3, 3, 2, true))
+        assertFalse(p.shouldSwitch(80.0, 70.0, 4, 3, 2, true))
+        assertFalse(p.shouldSwitch(80.0, 70.0, -1, 3, 2, true))
+    }
+
+    @Test fun legacySwitchPolicyRejectsNonFiniteMeasurementsAndClockRollback() {
+        val p = SwitchPolicy()
+        assertFalse(p.clearlyBetter(Double.POSITIVE_INFINITY, 10.0))
+        assertFalse(p.clearlyBetter(20.0, Double.NaN))
+        assertFalse(p.dwellOver(10_000, 9_000))
+        assertFalse(p.sustained(10_000, 9_000))
+    }
 }
