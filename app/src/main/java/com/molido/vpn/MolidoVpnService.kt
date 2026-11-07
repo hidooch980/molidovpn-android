@@ -4853,13 +4853,18 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
         if (netWatch != null) return
         val cm = getSystemService(ConnectivityManager::class.java) ?: return
         var last: Network? = null
+        var hasSeenDefaultNetwork = false
         val cb = object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) {
                 val prev = last
                 last = network
-                if (prev == null || prev == network) return
+                if (prev == network) return
+                val firstAvailable = !hasSeenDefaultNetwork
+                hasSeenDefaultNetwork = true
+                if (firstAvailable) return
                 // Invalidate any candidate measured on the previous carrier before
-                // scheduling recovery on the new default network.
+                // scheduling recovery on the new default network. This also handles
+                // loss-first transitions where onLost arrives before onAvailable.
                 ShardManager.cancelSeamlessSwitch()
                 ladderScheduler.schedule({
                     try {
@@ -4881,6 +4886,16 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
                     } catch (_: Exception) {
                     }
                 }, 3, TimeUnit.SECONDS)
+            }
+
+            override fun onLost(network: Network) {
+                // If the previous default disappears before its replacement is
+                // announced, invalidate evidence immediately. Keep the historical
+                // flag so the next onAvailable still triggers recovery.
+                if (last == network) {
+                    last = null
+                    ShardManager.cancelSeamlessSwitch()
+                }
             }
         }
         runCatching { cm.registerDefaultNetworkCallback(cb); netWatch = cb }
