@@ -830,9 +830,9 @@ object ShardManager {
                 methodId = "shard-current",
                 probes = currentProbes.map { it.copy(throughputKbps = currentKbps) },
             )
-            val currentScore = currentKbps?.takeIf { it > 0 }?.let {
+            val currentScore = if (currentProbes.any { it.ok }) {
                 com.molido.vpn.engine.SmartScore.score(measuredCurrent)
-            }
+            } else null
 
             val config = ShardConfigs.tunnelConfig(
                 context, node, listenHost, alt, if (verboseLog) "info" else "warning", smartSplit = profile,
