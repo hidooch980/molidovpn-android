@@ -24,6 +24,14 @@ class LegacyUpdateCompatibilityTest {
     }
 
     @Test
+    fun legacy32162RecognizesTheCurrent410StableLineAndDoesNotOfferDowngrades() {
+        assertTrue(UpdateSources.isNewerVersion("4.0.10", "3.2.162"))
+        assertTrue(UpdateSources.isNewerVersion("4.0.11", "3.2.162"))
+        assertTrue(!UpdateSources.isNewerVersion("3.2.162", "4.0.10"))
+        assertTrue(!UpdateSources.isNewerVersion("4.0.10", "4.0.10"))
+    }
+
+    @Test
     fun currentGithubReleaseAssetNamesAreRecognizedForLegacyPhoneInstall() {
         val digest = "fd65ec8e36546ebbcc564080ab380cd0d5ef2a19570c96f5a4652f4b81f3591b"
         val json = """
