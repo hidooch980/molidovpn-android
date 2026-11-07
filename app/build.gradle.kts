@@ -45,10 +45,13 @@ android {
         versionCode = (project.findProperty("molidoVersionCode") as String?)?.toInt() ?: 10000
         versionName = (project.findProperty("molidoVersionName") as String?) ?: "2.0.0"
 
-        // Phones only: the Rust core is built for ARM. Without this the Psiphon AAR's x86 libs made
-        // x86 devices/emulators pick an ABI that has no libaether.so and crash at start.
+        // Release builds default to ARM64/ARMv7. Explicit x86_64 builds are
+        // supported for emulator validation: core/build-android.sh builds the
+        // Rust core for x86_64 and the NDK builds JNI/tun2socks for the same ABI.
+        // Optional Tor/Xray/sing-box binaries are not bundled for x86_64 and
+        // must remain unavailable rather than loading a mismatched ARM binary.
         ndk {
-            abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+            abiFilters += targetAbis
         }
 
     }
