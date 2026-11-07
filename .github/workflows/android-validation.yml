@@ -166,7 +166,7 @@ jobs:
           fi
 
       - name: Upload unsigned validation APKs
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: molido-mesh-ai-android-validation
           path: |
@@ -176,7 +176,7 @@ jobs:
 
       - name: Upload UI regression screenshots
         if: always()
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: android-ui-regression-screenshots
           path: ${{ runner.temp }}/molido-screens/
@@ -185,7 +185,7 @@ jobs:
 
       - name: Upload JUnit test reports
         if: always()
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: molido-android-junit-${{ github.run_id }}
           path: |
