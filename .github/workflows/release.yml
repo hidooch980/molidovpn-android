@@ -342,6 +342,9 @@ jobs:
         if: ${{ github.event_name == 'workflow_run' || github.event.inputs.device_validation_confirmed == 'true' }}
         uses: softprops/action-gh-release@v3
         with:
+          # Prefer a narrowly-scoped repository secret when GITHUB_TOKEN release
+          # creation is restricted by repository or organization policy.
+          token: ${{ secrets.GH_RELEASE_TOKEN || github.token }}
           tag_name: ${{ github.event_name == 'workflow_run' && needs.prepare.outputs.candidate_tag || format('v{0}', env.VERSION) }}
           name: MolidoVPN ${{ env.VERSION }}
           target_commitish: ${{ needs.prepare.outputs.commit_sha }}
