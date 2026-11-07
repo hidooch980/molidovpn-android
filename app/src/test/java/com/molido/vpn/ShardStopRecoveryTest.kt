@@ -32,6 +32,37 @@ class ShardStopRecoveryTest {
         }
     }
 
+    private class TrackedProcess : Process() {
+        @Volatile var destroyed = false
+        override fun getOutputStream() = ByteArrayOutputStream()
+        override fun getInputStream() = ByteArrayInputStream(byteArrayOf())
+        override fun getErrorStream() = ByteArrayInputStream(byteArrayOf())
+        override fun destroy() { destroyed = true }
+        override fun isAlive() = !destroyed
+        override fun exitValue(): Int = if (destroyed) 0 else throw IllegalThreadStateException()
+        override fun waitFor(): Int { destroyed = true; return 0 }
+    }
+
+    @Test fun cancellingSeamlessTrialDestroysDetachedCandidateAndInvalidatesGeneration() {
+        val candidateField = ShardManager::class.java.getDeclaredField("seamlessCandidate")
+            .apply { isAccessible = true }
+        val generationField = ShardManager::class.java.getDeclaredField("switchGeneration")
+            .apply { isAccessible = true }
+        val generation = generationField.get(ShardManager) as java.util.concurrent.atomic.AtomicLong
+        val candidate = TrackedProcess()
+        val before = generation.get()
+        try {
+            candidateField.set(ShardManager, candidate)
+            ShardManager.cancelSeamlessSwitch()
+            assertTrue("detached candidate must be terminated immediately", candidate.destroyed)
+            assertNull("cancelled candidate must no longer be promotable", candidateField.get(ShardManager))
+            assertTrue("generation must invalidate an in-flight trial", generation.get() > before)
+        } finally {
+            candidateField.set(ShardManager, null)
+            candidate.destroy()
+        }
+    }
+
     @Test fun delayedOldStopCannotClearReplacementSession() {
         val process = ShardManager::class.java.getDeclaredField("process").apply { isAccessible = true }
         val running = ShardManager::class.java.getDeclaredField("running").apply { isAccessible = true }
