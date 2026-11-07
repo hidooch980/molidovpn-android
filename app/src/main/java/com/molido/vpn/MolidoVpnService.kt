@@ -4858,6 +4858,9 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
                 val prev = last
                 last = network
                 if (prev == null || prev == network) return
+                // Invalidate any candidate measured on the previous carrier before
+                // scheduling recovery on the new default network.
+                ShardManager.cancelSeamlessSwitch()
                 ladderScheduler.schedule({
                     try {
                         if (!connected.get() || autoTrialActive.get() || userInitiatedStop.get()) return@schedule
