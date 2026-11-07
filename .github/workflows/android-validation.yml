@@ -155,7 +155,7 @@ jobs:
       - name: Install x86_64 emulator system image
         run: |
           sdkmanager "emulator" "system-images;android-35;google_apis;x86_64"
-          echo "no" | avdmanager create avd --force --name molido-x86-64 --package "system-images;android-35;google_apis;x86_64" --device pixel_2
+          echo "no" | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd --force --name molido-x86-64 --package "system-images;android-35;google_apis;x86_64" --device pixel_2
 
       - name: Install and launch the complete phone app on x86_64 emulator
         timeout-minutes: 15
@@ -163,7 +163,7 @@ jobs:
         run: |
           set -euo pipefail
           EMULATOR_LOG="$RUNNER_TEMP/molido-emulator.log"
-          emulator -avd molido-x86-64 -no-window -no-audio -no-boot-anim -no-snapshot -wipe-data -gpu swiftshader_indirect >"$EMULATOR_LOG" 2>&1 &
+          "$ANDROID_HOME/emulator/emulator" -avd molido-x86-64 -no-window -no-audio -no-boot-anim -no-snapshot -wipe-data -gpu swiftshader_indirect >"$EMULATOR_LOG" 2>&1 &
           EMULATOR_PID=$!
           cleanup() {
             adb logcat -d -t 2000 > "$RUNNER_TEMP/molido-emulator-logcat.txt" || true
@@ -184,7 +184,7 @@ jobs:
           adb install "$APK"
           adb shell monkey -p com.mobin.mobin_vpn 1
           sleep 12
-          APP_PID="$(adb shell pidof com.mobin.mobin_vpn | tr -d '\r')"
+          APP_PID="$(adb shell pidof com.mobin.mobin_vpn | tr -d '\r' | cut -d ' ' -f1)"
           test -n "$APP_PID"
           adb logcat -d --pid="$APP_PID" > "$RUNNER_TEMP/molido-app-logcat.txt"
           if grep -E 'FATAL EXCEPTION|UnsatisfiedLinkError|NoClassDefFoundError|SIGABRT' "$RUNNER_TEMP/molido-app-logcat.txt"; then
