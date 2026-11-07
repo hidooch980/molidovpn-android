@@ -23,7 +23,7 @@ data class SwitchPolicy(
     /** [current] null = the current route failed the measurement: any working candidate is better. */
     fun clearlyBetter(candidate: Double, current: Double?): Boolean =
         candidate.isFinite() && candidate > 0 &&
-            (current == null || (current.isFinite() && (current <= 0 || candidate >= current * (1 + margin.coerceAtLeast(0.0))))
+            (current == null || (current.isFinite() && (current <= 0 || candidate >= current * (1 + margin.coerceAtLeast(0.0)))))
 }
 
 /**
