@@ -27,15 +27,15 @@ data class Measured(
 /** Relative weight of each quality; they need not sum to 1 (normalised). */
 data class Weights(
     val stability: Double = 0.45,
-    val latency: Double = 0.15,
-    val throughput: Double = 0.30,
+    val latency: Double = 0.30,
+    val throughput: Double = 0.15,
     val connect: Double = 0.10,
 )
 
 /**
  * Turns a [Measured] into a finite 0..100 score. Pure and deterministic so it is unit tested.
  *
- * Invalid or missing measurements are neutral rather than rewarded. Invalid weights are ignored;
+ * Invalid or missing measurements are neutral (0.5), never treated as perfect. Invalid weights are ignored;
  * an all-zero/invalid weight set falls back to the documented defaults.
  *
  *  - **stability**: share of probes that succeeded.
