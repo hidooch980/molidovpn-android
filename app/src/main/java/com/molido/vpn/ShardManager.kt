@@ -864,6 +864,13 @@ object ShardManager {
 
         for (raw in candidates) {
             if (cancelled()) return false
+            // Never mistake a stale listener from an earlier trial for this
+            // candidate's listener; promoting that port would route traffic to the
+            // wrong process while the newly launched process is still failing.
+            if (portAccepts(alt, 100)) {
+                ConnectionLog.record("$TAG seamless: alternate port $alt is unexpectedly occupied; refusing unsafe promotion")
+                return false
+            }
             val node = RetryTweaks.prepare(context, raw)
             val config = ShardConfigs.tunnelConfig(
                 context, node, listenHost, alt, if (verboseLog) "info" else "warning", smartSplit = profile,
