@@ -27,6 +27,8 @@ on:
       - ".github/workflows/release.yml"
       - "release-version.txt"
 
+  workflow_dispatch: {}
+
 permissions:
   contents: read
 
