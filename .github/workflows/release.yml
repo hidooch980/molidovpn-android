@@ -39,6 +39,7 @@ jobs:
       version: ${{ steps.release.outputs.version }}
       commit_sha: ${{ steps.release.outputs.commit_sha }}
       should_release: ${{ steps.release.outputs.should_release }}
+      candidate_tag: ${{ steps.release.outputs.candidate_tag }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -87,13 +88,17 @@ jobs:
             exit 1
           }
           should_release=true
+          candidate_tag=""
           if [[ "$EVENT_NAME" == "workflow_run" ]]; then
-            candidate_tag="v${version}-rc.1"
-            if git ls-remote --exit-code --tags origin "refs/tags/$candidate_tag" >/dev/null 2>&1 ||
-               gh release view "$candidate_tag" >/dev/null 2>&1; then
-              echo "::error::$candidate_tag already exists; refusing to overwrite it."
-              exit 1
-            fi
+            candidate_number=1
+            while true; do
+              candidate_tag="v${version}-rc.${candidate_number}"
+              if ! git ls-remote --exit-code --tags origin "refs/tags/$candidate_tag" >/dev/null 2>&1 &&
+                 ! gh release view "$candidate_tag" >/dev/null 2>&1; then
+                break
+              fi
+              candidate_number=$((candidate_number + 1))
+            done
           else
             if git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null 2>&1 ||
                gh release view "v$version" >/dev/null 2>&1; then
@@ -104,6 +109,7 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "commit_sha=$commit_sha" >> "$GITHUB_OUTPUT"
           echo "should_release=$should_release" >> "$GITHUB_OUTPUT"
+          echo "candidate_tag=$candidate_tag" >> "$GITHUB_OUTPUT"
 
   android:
     needs: prepare
@@ -336,7 +342,7 @@ jobs:
         if: ${{ github.event_name == 'workflow_run' || github.event.inputs.device_validation_confirmed == 'true' }}
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ github.event_name == 'workflow_run' && format('v{0}-rc.1', env.VERSION) || format('v{0}', env.VERSION) }}
+          tag_name: ${{ github.event_name == 'workflow_run' && needs.prepare.outputs.candidate_tag || format('v{0}', env.VERSION) }}
           name: MolidoVPN ${{ env.VERSION }}
           target_commitish: ${{ needs.prepare.outputs.commit_sha }}
           draft: false
