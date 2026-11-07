@@ -808,11 +808,32 @@ object ShardManager {
         val profile = if (!sessionV2ray && SmartSplit.enabled(context)) SmartSplit.cachedProfile(context) else null
         val irDirect = IranDirect.enabled(context)
         val irGeo = irDirect && unpackGeoAssets(context, File(context.filesDir, "shard").apply { mkdirs() })
-        // Anti-flap: a candidate must beat what the live node measures right now by the policy margin.
-        val policy = com.molido.vpn.engine.SwitchPolicy()
-        val currentKbps = if (ShardProbe.check(current, PROBE_TIMEOUT_MS)) SpeedTest.quickDownloadKbps(current, 500_000, 6_000) else null
+        // A live route is sticky: compare three fresh reachability/latency observations
+        // and a bounded throughput sample on BOTH routes. A single lucky probe must never
+        // move the user's tunnel. The caller owns dwell/cancellation; this method owns
+        // candidate evidence and the make-before-break process lifecycle.
+        val evidencePolicy = com.molido.vpn.engine.SwitchEvidencePolicy()
         for (raw in candidates) {
             val node = RetryTweaks.prepare(context, raw)
+
+            val currentProbes = ArrayList<com.molido.vpn.engine.Probe>(evidencePolicy.minimumProbes)
+            repeat(evidencePolicy.minimumProbes) {
+                val started = System.nanoTime()
+                val ok = ShardProbe.check(current, PROBE_TIMEOUT_MS)
+                val latency = if (ok) ((System.nanoTime() - started) / 1_000_000L).coerceAtLeast(1L) else null
+                currentProbes += com.molido.vpn.engine.Probe(ok = ok, latencyMs = latency)
+            }
+            val currentKbps = if (currentProbes.any { it.ok }) {
+                SpeedTest.quickDownloadKbps(current, 500_000, 6_000)
+            } else null
+            val measuredCurrent = com.molido.vpn.engine.Measured(
+                methodId = "shard-current",
+                probes = currentProbes.map { it.copy(throughputKbps = currentKbps) },
+            )
+            val currentScore = currentKbps?.takeIf { it > 0 }?.let {
+                com.molido.vpn.engine.SmartScore.score(measuredCurrent)
+            }
+
             val config = ShardConfigs.tunnelConfig(
                 context, node, listenHost, alt, if (verboseLog) "info" else "warning", smartSplit = profile,
                 irDirect = irDirect, irGeo = irGeo,
@@ -824,10 +845,42 @@ object ShardManager {
                 if (portAccepts(alt, 400)) { up = true; break }
                 Thread.sleep(120)
             }
-            val kbps = if (up && ShardProbe.check(alt, PROBE_TIMEOUT_MS)) SpeedTest.quickDownloadKbps(alt, 500_000, 6_000) else null
-            if (kbps == null || kbps < minKbps || !policy.clearlyBetter(kbps.toDouble(), currentKbps?.toDouble())) {
-                ConnectionLog.record("$TAG seamless: ${LogRedactor.nodeTag(node.key)} not clearly better (${kbps ?: "fail"} vs ${currentKbps ?: "fail"} kbit/s)")
-                if (kbps == null) ShardHealth.recordFailure(context, node)
+
+            val candidateProbes = ArrayList<com.molido.vpn.engine.Probe>(evidencePolicy.minimumProbes)
+            if (up) {
+                repeat(evidencePolicy.minimumProbes) {
+                    val started = System.nanoTime()
+                    val ok = ShardProbe.check(alt, PROBE_TIMEOUT_MS)
+                    val latency = if (ok) ((System.nanoTime() - started) / 1_000_000L).coerceAtLeast(1L) else null
+                    candidateProbes += com.molido.vpn.engine.Probe(ok = ok, latencyMs = latency)
+                }
+            }
+            val kbps = if (candidateProbes.any { it.ok }) {
+                SpeedTest.quickDownloadKbps(alt, 500_000, 6_000)
+            } else null
+            val measuredCandidate = com.molido.vpn.engine.Measured(
+                methodId = node.key,
+                probes = candidateProbes.map { it.copy(throughputKbps = kbps) },
+            )
+            val candidateScore = com.molido.vpn.engine.SmartScore.score(measuredCandidate)
+            val healthy = candidateProbes.count { it.ok }
+            val evidencePassed = kbps != null && kbps >= minKbps &&
+                evidencePolicy.shouldSwitch(
+                    candidateScore = candidateScore,
+                    currentScore = currentScore,
+                    healthyProbes = healthy,
+                    totalProbes = candidateProbes.size,
+                    consecutiveHealthFailures = 0,
+                    dwellElapsed = true,
+                )
+            if (!evidencePassed) {
+                ConnectionLog.record(
+                    "$TAG seamless: ${LogRedactor.nodeTag(node.key)} evidence rejected " +
+                        "(score=${"%.1f".format(java.util.Locale.US, candidateScore)}, " +
+                        "current=${currentScore?.let { "%.1f".format(java.util.Locale.US, it) } ?: "unavailable"}, " +
+                        "probes=$healthy/${candidateProbes.size}, throughput=${kbps ?: "fail"} kbit/s)"
+                )
+                if (kbps == null || healthy == 0) ShardHealth.recordFailure(context, node)
                 runCatching { next.destroy(); if (!next.waitFor(2, java.util.concurrent.TimeUnit.SECONDS)) next.destroyForcibly() }
                 continue
             }
