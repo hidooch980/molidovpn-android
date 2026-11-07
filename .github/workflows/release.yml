@@ -1,11 +1,7 @@
 name: Build Molido Mesh AI Android
 
 on:
-  # Only version tags publish automatically; editing main must never start a release.
-  push:
-    tags:
-      - "v*"
-  # Manual dispatch is an explicit, audited release action; device validation must be confirmed.
+  # Publishing is manual-only and requires explicit real-device validation confirmation.
   workflow_dispatch:
     inputs:
       version:
@@ -53,17 +49,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [[ "$EVENT_NAME" == "workflow_dispatch" && "${{ github.event.inputs.device_validation_confirmed }}" != "true" ]]; then
-            echo "::error::Manual release blocked: real-device validation has not been confirmed."
+          if [[ "$EVENT_NAME" != "workflow_dispatch" || "${{ github.event.inputs.device_validation_confirmed }}" != "true" ]]; then
+            echo "::error::Release requires manual dispatch and explicit real-device validation confirmation."
             exit 1
           fi
-          if [[ "$REF_TYPE" == "tag" ]]; then
-            version="${REF_NAME#v}"
-            commit_sha="$GITHUB_SHA"
-          else
-            version="$REQUESTED_VERSION"
-            commit_sha="$GITHUB_SHA"
+          if [[ "$REF_TYPE" != "branch" || "$REF_NAME" != "main" ]]; then
+            echo "::error::Release must be dispatched from the protected main branch."
+            exit 1
           fi
+          version="$REQUESTED_VERSION"
+          commit_sha="$GITHUB_SHA"
           [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
             echo "::error::Invalid release version: $version"
             exit 1
@@ -244,6 +239,26 @@ jobs:
             exit 1
           fi
           "$AAPT" dump badging baseline-v4.0.0.apk | grep -F "package: name='com.mobin.mobin_vpn'"
+
+          # Verify the immediately previous public release too; this is the actual 4.0.9 -> 4.0.10 upgrade gate.
+          current_url="https://github.com/hidooch980/molidovpn-android/releases/download/v4.0.9/MolidoMeshAI-android-arm64.apk"
+          curl --fail --location --retry 3 --silent --show-error "$current_url" -o baseline-v4.0.9.apk
+          "$APKSIGNER" verify --verbose baseline-v4.0.9.apk
+          current_cert=$("$APKSIGNER" verify --print-certs baseline-v4.0.9.apk | \
+            awk -F': ' '/Signer #1 certificate SHA-256 digest:/ {print tolower($2); exit}')
+          test -n "$current_cert"
+          if [[ "$current_cert" != "$expected_cert" ]]; then
+            echo "Configured keystore does not match the published v4.0.9 signing certificate; refusing upgrade release." >&2
+            exit 1
+          fi
+          current_badging=$("$AAPT" dump badging baseline-v4.0.9.apk)
+          grep -F "package: name='com.mobin.mobin_vpn'" <<< "$current_badging"
+          current_code=$(sed -n "s/.*versionCode='\\([0-9][0-9]*\\)'.*/\\1/p" <<< "$current_badging" | head -n1)
+          test -n "$current_code"
+          if (( expected_code <= current_code )); then
+            echo "New APK versionCode must be greater than the published v4.0.9 baseline." >&2
+            exit 1
+          fi
 
           # Keep the pre-4.x stable upgrade path intact as well. v3.3.60 is
           # the oldest published APK in this repository's current release history.
