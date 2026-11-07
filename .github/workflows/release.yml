@@ -1,12 +1,7 @@
 name: Build Molido Mesh AI Android
 
 on:
-  # Build a signed, downloadable verification artifact after successful Android validation on main. No prerelease tag or public release is created.
-  workflow_run:
-    workflows: ["Android validation"]
-    types: [completed]
-    branches: [main]
-  # Public publication remains manually gated by real-device validation.
+  # One manual path: validate, build, sign, and publish a stable release.
   workflow_dispatch:
     inputs:
       version:
@@ -33,7 +28,6 @@ env:
 
 jobs:
   prepare:
-    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-24.04
     outputs:
       version: ${{ steps.release.outputs.version }}
@@ -42,7 +36,7 @@ jobs:
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ github.sha }}
           fetch-depth: 0
       - name: Select verified build or stable release version
         id: release
@@ -52,10 +46,6 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           REF_TYPE: ${{ github.ref_type }}
           REF_NAME: ${{ github.ref_name }}
-          VALIDATION_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
-          VALIDATION_BRANCH: ${{ github.event.workflow_run.head_branch }}
-          VALIDATION_REPOSITORY: ${{ github.event.workflow_run.head_repository.full_name }}
-          VALIDATION_SHA: ${{ github.event.workflow_run.head_sha }}
           RELEASE_TOKEN: ${{ secrets.GH_RELEASE_TOKEN }}
         shell: bash
         run: |
@@ -82,61 +72,39 @@ jobs:
           }
 
           requested_version="${REQUESTED_VERSION:-$(tr -d '[:space:]' < release-version.txt)}"
-          if [[ "$EVENT_NAME" == "workflow_run" ]]; then
-            [[ "$VALIDATION_CONCLUSION" == "success" ]] || {
-              echo "Android validation did not succeed; skipping verification build."
-              exit 1
-            }
-            [[ "$VALIDATION_BRANCH" == "main" && "$VALIDATION_REPOSITORY" == "$GITHUB_REPOSITORY" ]] || {
-              echo "::error::Verification builds are restricted to successful validation runs from this repository's main branch."
-              exit 1
-            }
-            # Reject stale workflow_run events. Build source must be the
-            # exact current main tip, not merely an older successful commit.
-            git fetch --no-tags origin main
-            main_sha="$(git rev-parse refs/remotes/origin/main)"
-            [[ "$VALIDATION_SHA" == "$main_sha" ]] || {
-              echo "::error::Validation SHA $VALIDATION_SHA is stale; current main is $main_sha. Wait for validation on the latest main commit."
-              exit 1
-            }
-            version="$requested_version"
-            commit_sha="$VALIDATION_SHA"
-          elif [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
-            if [[ "$REF_TYPE" != "branch" || "$REF_NAME" != "main" ]]; then
-              echo "::error::Stable release must be dispatched from the main branch."
-              exit 1
-            fi
-            if [[ "${{ github.event.inputs.device_validation_confirmed }}" != "true" ]]; then
-              echo "::error::Real-device validation confirmation is required before stable publication."
-              exit 1
-            fi
-            if [[ -z "${RELEASE_TOKEN:-}" ]]; then
-              echo "::error::GH_RELEASE_TOKEN is missing. Add a narrowly-scoped Contents: Read and write token in repository Actions secrets."
-              exit 1
-            fi
-            export GH_TOKEN="$RELEASE_TOKEN"
-            version="$requested_version"
-            commit_sha="$GITHUB_SHA"
-          else
-            echo "::error::Unsupported release trigger."
+          if [[ "$EVENT_NAME" != "workflow_dispatch" ]]; then
+            echo "::error::Only manual stable publication is supported."
             exit 1
           fi
+          if [[ "$REF_TYPE" != "branch" || "$REF_NAME" != "main" ]]; then
+            echo "::error::Stable release must be dispatched from the main branch."
+            exit 1
+          fi
+          if [[ "${{ github.event.inputs.device_validation_confirmed }}" != "true" ]]; then
+            echo "::error::Real-device validation confirmation is required before stable publication."
+            exit 1
+          fi
+          if [[ -z "${RELEASE_TOKEN:-}" ]]; then
+            echo "::error::GH_RELEASE_TOKEN is missing. Add a narrowly-scoped Contents: Read and write token in repository Actions secrets."
+            exit 1
+          fi
+          export GH_TOKEN="$RELEASE_TOKEN"
+          version="$requested_version"
+          commit_sha="$GITHUB_SHA"
           [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
             echo "::error::Invalid release version: $version"
             exit 1
           }
-          should_release=true
-          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
-            if tag_or_release_exists "v$version"; then
-              echo "::error::v$version already exists; refusing to overwrite it."
-              exit 1
-            else
-              result=$?
-              if [[ "$result" -ne 1 ]]; then
-                exit "$result"
-              fi
+          if tag_or_release_exists "v$version"; then
+            echo "::error::v$version already exists; refusing to overwrite it."
+            exit 1
+          else
+            result=$?
+            if [[ "$result" -ne 1 ]]; then
+              exit "$result"
             fi
           fi
+          should_release=true
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "commit_sha=$commit_sha" >> "$GITHUB_OUTPUT"
           echo "should_release=$should_release" >> "$GITHUB_OUTPUT"
@@ -362,11 +330,6 @@ jobs:
               "package: name='com.mobin.mobin_vpn' versionCode='$expected_code' versionName='$VERSION'"
           done
           (cd dist && sha256sum *.apk > SHA256SUMS.txt)
-
-      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
-        with:
-          name: molido-mesh-ai-android
-          path: dist/*
 
       - name: Publish signed stable release (manual dispatch after real-device validation)
         if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.device_validation_confirmed == 'true' }}
