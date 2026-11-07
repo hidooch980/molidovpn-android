@@ -41,7 +41,7 @@ jobs:
       should_release: ${{ steps.release.outputs.should_release }}
       candidate_tag: ${{ steps.release.outputs.candidate_tag }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           fetch-depth: 0
@@ -57,9 +57,39 @@ jobs:
           VALIDATION_BRANCH: ${{ github.event.workflow_run.head_branch }}
           VALIDATION_REPOSITORY: ${{ github.event.workflow_run.head_repository.full_name }}
           VALIDATION_SHA: ${{ github.event.workflow_run.head_sha }}
+          RELEASE_TOKEN: ${{ secrets.GH_RELEASE_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
+          # A release must never be published with the short-lived, restricted
+          # workflow token. Require the dedicated repository release credential.
+          if [[ -z "${RELEASE_TOKEN:-}" ]]; then
+            echo "::error::GH_RELEASE_TOKEN is missing. Add a narrowly-scoped Contents: Read and write token in repository Actions secrets."
+            exit 1
+          fi
+          export GH_TOKEN="$RELEASE_TOKEN"
+
+          # Fail closed: distinguish a genuinely missing tag/release (HTTP 404)
+          # from permission, API, or network errors. A failed API request is
+          # never interpreted as proof that a version is free.
+          tag_or_release_exists() {
+            local tag="$1" response
+            if response="$(gh api --include "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" 2>&1)"; then
+              return 0
+            elif ! grep -Eqi 'HTTP/[0-9.]+ 404' <<< "$response"; then
+              echo "::error::Unable to verify tag $tag safely: $response"
+              return 2
+            fi
+            if response="$(gh api --include "repos/$GITHUB_REPOSITORY/releases/tags/$tag" 2>&1)"; then
+              return 0
+            elif grep -Eqi 'HTTP/[0-9.]+ 404' <<< "$response"; then
+              return 1
+            else
+              echo "::error::Unable to verify release $tag safely: $response"
+              return 2
+            fi
+          }
+
           requested_version="${REQUESTED_VERSION:-$(tr -d '[:space:]' < release-version.txt)}"
           if [[ "$EVENT_NAME" == "workflow_run" ]]; then
             [[ "$VALIDATION_CONCLUSION" == "success" ]] || {
@@ -68,6 +98,14 @@ jobs:
             }
             [[ "$VALIDATION_BRANCH" == "main" && "$VALIDATION_REPOSITORY" == "$GITHUB_REPOSITORY" ]] || {
               echo "::error::Candidate builds are restricted to successful validation runs from this repository's main branch."
+              exit 1
+            }
+            # Reject stale workflow_run events. Candidate source must be the
+            # exact current main tip, not merely an older successful commit.
+            git fetch --no-tags origin main
+            main_sha="$(git rev-parse refs/remotes/origin/main)"
+            [[ "$VALIDATION_SHA" == "$main_sha" ]] || {
+              echo "::error::Validation SHA $VALIDATION_SHA is stale; current main is $main_sha. Wait for validation on the latest main commit."
               exit 1
             }
             version="$requested_version"
@@ -93,17 +131,25 @@ jobs:
             candidate_number=1
             while true; do
               candidate_tag="v${version}-rc.${candidate_number}"
-              if ! git ls-remote --exit-code --tags origin "refs/tags/$candidate_tag" >/dev/null 2>&1 &&
-                 ! gh release view "$candidate_tag" >/dev/null 2>&1; then
-                break
+              if tag_or_release_exists "$candidate_tag"; then
+                candidate_number=$((candidate_number + 1))
+              else
+                result=$?
+                if [[ "$result" -eq 1 ]]; then
+                  break
+                fi
+                exit "$result"
               fi
-              candidate_number=$((candidate_number + 1))
             done
           else
-            if git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null 2>&1 ||
-               gh release view "v$version" >/dev/null 2>&1; then
+            if tag_or_release_exists "v$version"; then
               echo "::error::v$version already exists; refusing to overwrite it."
               exit 1
+            else
+              result=$?
+              if [[ "$result" -ne 1 ]]; then
+                exit "$result"
+              fi
             fi
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
@@ -117,7 +163,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           ref: ${{ needs.prepare.outputs.commit_sha }}
           fetch-depth: 0
@@ -131,12 +177,12 @@ jobs:
           [[ "$REQUESTED_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
           echo "VERSION=$REQUESTED_VERSION" >> "$GITHUB_ENV"
 
-      - uses: actions/setup-java@v5
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
         with:
           distribution: temurin
           java-version: '17'
 
-      - uses: android-actions/setup-android@v4
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4
         with:
           packages: platform-tools
 
@@ -148,7 +194,7 @@ jobs:
           rustup target add aarch64-linux-android armv7-linux-androideabi
           cargo install cargo-ndk --locked
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
           workspaces: core/aether -> target
 
@@ -157,7 +203,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: bash tools/fetch-binaries.sh
 
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version: "1.24.6"
           cache: false
@@ -333,14 +379,14 @@ jobs:
           done
           (cd dist && sha256sum *.apk > SHA256SUMS.txt)
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: molido-mesh-ai-android
           path: dist/*
 
       - name: Publish signed Candidate prerelease (automatic after all CI gates)
         if: ${{ github.event_name == 'workflow_run' || github.event.inputs.device_validation_confirmed == 'true' }}
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3
         with:
           # Prefer a narrowly-scoped repository secret when GITHUB_TOKEN release
           # creation is restricted by repository or organization policy.
