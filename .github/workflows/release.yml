@@ -5,24 +5,19 @@ on:
   push:
     tags:
       - "v*"
-  # Manual dispatch remains available for controlled recovery.
+  # Manual dispatch is an explicit, audited release action; device validation must be confirmed.
   workflow_dispatch:
     inputs:
       version:
-        description: "Release version (for example 4.0.5)"
+        description: "Release version (for example 4.0.10)"
         required: true
-        default: "4.0.5"
+        default: "4.0.10"
         type: string
-  # Publish automatically after a successful validation run on main.
-  workflow_run:
-    workflows:
-      - "Android validation"
-      - "Android IPv4 IPv6 native packet regressions"
-      - "Validate imported VPN profiles"
-      - "Agent self-check"
-      - "Transport catalog validation"
-    types: [completed]
-    branches: [main]
+      device_validation_confirmed:
+        description: "Confirm real-device Wi-Fi/mobile, Kill Switch and DNS/IP leak tests passed."
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   actions: read
@@ -37,11 +32,6 @@ env:
 
 jobs:
   prepare:
-    if: >-
-      ${{ github.event_name != 'workflow_run' ||
-          (github.event.workflow_run.conclusion == 'success' &&
-           github.event.workflow_run.event == 'push' &&
-           github.event.workflow_run.head_branch == 'main') }}
     runs-on: ubuntu-24.04
     outputs:
       version: ${{ steps.release.outputs.version }}
@@ -50,24 +40,24 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ github.sha }}
           fetch-depth: 0
       - name: Select release version and safely skip already-published versions
         id: release
         env:
           GH_TOKEN: ${{ github.token }}
-          REQUESTED_VERSION: ${{ github.event.inputs.version || '4.0.5' }}
+          REQUESTED_VERSION: ${{ github.event.inputs.version || '4.0.10' }}
           EVENT_NAME: ${{ github.event_name }}
           REF_TYPE: ${{ github.ref_type }}
           REF_NAME: ${{ github.ref_name }}
-          WORKFLOW_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
         shell: bash
         run: |
           set -euo pipefail
-          if [[ "$EVENT_NAME" == "workflow_run" ]]; then
-            version="$(tr -d '[:space:]' < release-version.txt)"
-            commit_sha="$WORKFLOW_HEAD_SHA"
-          elif [[ "$REF_TYPE" == "tag" ]]; then
+          if [[ "$EVENT_NAME" == "workflow_dispatch" && "${{ github.event.inputs.device_validation_confirmed }}" != "true" ]]; then
+            echo "::error::Manual release blocked: real-device validation has not been confirmed."
+            exit 1
+          fi
+          if [[ "$REF_TYPE" == "tag" ]]; then
             version="${REF_NAME#v}"
             commit_sha="$GITHUB_SHA"
           else
@@ -79,46 +69,7 @@ jobs:
             exit 1
           }
           should_release=true
-          if [[ "$EVENT_NAME" == "workflow_run" ]]; then
-            # Wait until every required validation workflow has completed
-            # successfully for this exact main commit. Each completion event
-            # rechecks the set, so the last successful workflow starts release.
-            runs_json=$(gh api "/repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$commit_sha&per_page=100")
-            # Android validation is the required baseline for every release commit.
-            # The remaining suites are path-filtered: a missing run means the
-            # commit did not touch their scope, not that validation failed.
-            for required in "Android validation"; do
-              state=$(jq -r --arg name "$required" '
-                [.workflow_runs[] | select(.name == $name and .event == "push" and .head_branch == "main")][0]
-                | if . == null then "missing"
-                  elif .status != "completed" then "pending"
-                  else (.conclusion // "unknown") end
-              ' <<< "$runs_json")
-              if [[ "$state" != "success" ]]; then
-                echo "::notice::$required is $state for $commit_sha; automatic release waits."
-                should_release=false
-              fi
-            done
-            # If an optional path-filtered suite did run, wait for it and require
-            # success. Missing or explicitly skipped suites are neutral.
-            for optional in "Android IPv4 IPv6 native packet regressions" "Validate imported VPN profiles" "Agent self-check" "Transport catalog validation"; do
-              state=$(jq -r --arg name "$optional" '
-                [.workflow_runs[] | select(.name == $name and .event == "push" and .head_branch == "main")][0]
-                | if . == null then "not-applicable"
-                  elif .status != "completed" then "pending"
-                  else (.conclusion // "unknown") end
-              ' <<< "$runs_json")
-              if [[ "$state" != "success" && "$state" != "skipped" && "$state" != "not-applicable" ]]; then
-                echo "::notice::$optional is $state for $commit_sha; automatic release waits."
-                should_release=false
-              fi
-            done
-            if git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null 2>&1 ||
-               gh release view "v$version" >/dev/null 2>&1; then
-              echo "::notice::v$version is already published; automatic release skipped."
-              should_release=false
-            fi
-          elif [[ "$REF_TYPE" == "tag" ]]; then
+          if [[ "$REF_TYPE" == "tag" ]]; then
             # The triggering tag is expected to exist; only reject a duplicate release.
             if gh release view "v$version" >/dev/null 2>&1; then
               echo "::error::Release v$version already exists; refusing to overwrite it."
