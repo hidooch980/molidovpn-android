@@ -27,15 +27,15 @@ data class Measured(
 /** Relative weight of each quality; they need not sum to 1 (normalised). */
 data class Weights(
     val stability: Double = 0.45,
-    val latency: Double = 0.15,
-    val throughput: Double = 0.30,
+    val latency: Double = 0.30,
+    val throughput: Double = 0.15,
     val connect: Double = 0.10,
 )
 
 /**
  * Turns a [Measured] into a finite 0..100 score. Pure and deterministic so it is unit tested.
  *
- * Invalid or missing measurements are neutral rather than rewarded. Invalid weights are ignored;
+ * Invalid or missing measurements are neutral (0.5), never treated as perfect. Invalid weights are ignored;
  * an all-zero/invalid weight set falls back to the documented defaults.
  *
  *  - **stability**: share of probes that succeeded.
@@ -114,7 +114,7 @@ object SmartScore {
         return clamp01(result / 100.0) * 100.0
     }
 
-    /** Short human reason for the UI, e.g. "84 ms · 3/3 stable · 6.2 Mbit/s". */
+    /** Short reason line for the winner card, e.g. "84 ms · 3/3 stable · 6.2 Mbit/s". */
     fun reason(m: Measured, stableWord: String = "stable", irWord: String = "IR exit"): String {
         val ok = m.probes.count { it.ok }
         val parts = ArrayList<String>()
@@ -127,5 +127,56 @@ object SmartScore {
         }
         if (m.iranExit) parts += irWord
         return parts.joinToString(" · ")
+    }
+}
+
+/**
+ * Conservative policy for changing an already-working route.
+ *
+ * A healthy route is sticky: a candidate needs at least three probes, at least
+ * two-thirds successful probes, and a measurable median latency. Under normal
+ * conditions it must also beat the current score by eight points after a
+ * 90-second dwell. Two consecutive health failures may bypass dwell only;
+ * candidate evidence and the minimum quality improvement remain mandatory.
+ *
+ * This is a pure decision helper; callers must still own connection lifecycle,
+ * cancellation, tunnel verification, and user-selected-route protections.
+ */
+data class SmartSwitchPolicy(
+    val minimumDwellMs: Long = 90_000L,
+    val minimumImprovement: Double = 8.0,
+    val minimumProbeRounds: Int = 3,
+    val minimumStability: Double = 2.0 / 3.0,
+    val healthFailuresToOverride: Int = 2,
+) {
+    fun shouldSwitch(
+        currentScore: Double,
+        candidate: Measured,
+        connectedForMs: Long,
+        consecutiveHealthFailures: Int = 0,
+    ): Boolean {
+        if (minimumProbeRounds < 1 || healthFailuresToOverride < 1 ||
+            !minimumStability.isFinite() || minimumStability !in 0.0..1.0 ||
+            !minimumImprovement.isFinite() || minimumImprovement < 0.0
+        ) return false
+
+        val successful = candidate.probes.count { it.ok }
+        val stability = if (candidate.probes.isEmpty()) 0.0
+            else successful.toDouble() / candidate.probes.size
+        val medianLatency = SmartScore.median(
+            candidate.probes.filter { it.ok }.mapNotNull { it.latencyMs?.takeIf { value -> value > 0 } }
+        )
+        val hasEvidence = candidate.probes.size >= minimumProbeRounds &&
+            stability >= minimumStability && medianLatency != null
+        if (!hasEvidence) return false
+
+        val candidateScore = SmartScore.score(candidate)
+        if (!currentScore.isFinite() || currentScore !in 0.0..100.0 ||
+            candidateScore !in 0.0..100.0 ||
+            candidateScore < currentScore + minimumImprovement
+        ) return false
+
+        val healthOverride = consecutiveHealthFailures >= healthFailuresToOverride
+        return connectedForMs >= minimumDwellMs || healthOverride
     }
 }

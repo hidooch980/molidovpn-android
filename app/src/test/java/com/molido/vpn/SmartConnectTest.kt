@@ -9,6 +9,7 @@ import com.molido.vpn.engine.QualityMonitor
 import com.molido.vpn.engine.SmartConfig
 import com.molido.vpn.engine.SmartPlan
 import com.molido.vpn.engine.SmartScore
+import com.molido.vpn.engine.SmartSwitchPolicy
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -66,9 +67,62 @@ class SmartConnectTest {
     }
 
     @Test
+    fun missingConnectTimeIsNeutralRatherThanPerfect() {
+        val probes = listOf(ok(100, 50_000), ok(100, 50_000), ok(100, 50_000))
+        val unknown = SmartScore.score(Measured("a", probes))
+        val fast = SmartScore.score(Measured("a", probes, connectMs = 2_000))
+        val slow = SmartScore.score(Measured("a", probes, connectMs = 90_000))
+        assertTrue(fast > unknown)
+        assertTrue(unknown > slow)
+        assertEquals((fast + slow) / 2.0, unknown, 1e-9)
+    }
+
+    @Test
+    fun defaultWeightsMatchDesktopSmartConnect() {
+        assertEquals(0.45, com.molido.vpn.engine.Weights().stability, 0.0)
+        assertEquals(0.30, com.molido.vpn.engine.Weights().latency, 0.0)
+        assertEquals(0.15, com.molido.vpn.engine.Weights().throughput, 0.0)
+        assertEquals(0.10, com.molido.vpn.engine.Weights().connect, 0.0)
+    }
+
+    @Test
     fun reasonIsHumanReadable() {
         val r = SmartScore.reason(Measured("a", listOf(ok(84, 6_200), ok(90), ok(80))))
         assertEquals("84 ms · 3/3 stable · 6.2 Mbit/s", r)
+    }
+
+
+    // ---------------------------------------------------------- live switch policy
+
+    @Test
+    fun switchPolicyRequiresThreeStableProbeRounds() {
+        val policy = SmartSwitchPolicy()
+        val insufficient = Measured("candidate", listOf(ok(80), ok(85)))
+        val unstable = Measured("candidate", listOf(ok(80), fail, fail))
+        assertFalse(policy.shouldSwitch(0.0, insufficient, 120_000))
+        assertFalse(policy.shouldSwitch(0.0, unstable, 120_000))
+    }
+
+    @Test
+    fun switchPolicyRequiresDwellAndEightPointImprovement() {
+        val policy = SmartSwitchPolicy()
+        val candidate = Measured("candidate", listOf(ok(80, 8_000), ok(85, 8_000), ok(90, 8_000)))
+        val score = SmartScore.score(candidate)
+        assertFalse(policy.shouldSwitch(score - 20.0, candidate, 89_999))
+        assertFalse(policy.shouldSwitch(score - 7.9, candidate, 120_000))
+        assertTrue(policy.shouldSwitch(score - 8.0, candidate, 90_000))
+    }
+
+    @Test
+    fun twoHealthFailuresOverrideDwellButNotQualityImprovementOrEvidence() {
+        val policy = SmartSwitchPolicy()
+        val candidate = Measured("candidate", listOf(ok(80), ok(85), ok(90)))
+        val candidateScore = SmartScore.score(candidate)
+        assertFalse(policy.shouldSwitch(candidateScore - 8.0, candidate, 10_000, consecutiveHealthFailures = 1))
+        assertTrue(policy.shouldSwitch(candidateScore - 8.0, candidate, 10_000, consecutiveHealthFailures = 2))
+        assertFalse(policy.shouldSwitch(candidateScore - 7.9, candidate, 10_000, consecutiveHealthFailures = 2))
+        assertFalse(policy.shouldSwitch(100.0, candidate, 10_000, consecutiveHealthFailures = 2))
+        assertFalse(policy.shouldSwitch(0.0, Measured("candidate", listOf(ok(80))), 10_000, consecutiveHealthFailures = 3))
     }
 
     // ---------------------------------------------------------------- ordering
