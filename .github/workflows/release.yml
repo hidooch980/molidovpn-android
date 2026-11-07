@@ -1,7 +1,7 @@
 name: Build Molido Mesh AI Android
 
 on:
-  # Automatically build a signed Candidate after successful Android validation on main.
+  # Build a signed, downloadable verification artifact after successful Android validation on main. No prerelease tag or public release is created.
   workflow_run:
     workflows: ["Android validation"]
     types: [completed]
@@ -39,13 +39,12 @@ jobs:
       version: ${{ steps.release.outputs.version }}
       commit_sha: ${{ steps.release.outputs.commit_sha }}
       should_release: ${{ steps.release.outputs.should_release }}
-      candidate_tag: ${{ steps.release.outputs.candidate_tag }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           fetch-depth: 0
-      - name: Select release version and safely skip already-published versions
+      - name: Select verified build or stable release version
         id: release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -61,14 +60,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # A release must never be published with the short-lived, restricted
-          # workflow token. Require the dedicated repository release credential.
-          if [[ -z "${RELEASE_TOKEN:-}" ]]; then
-            echo "::error::GH_RELEASE_TOKEN is missing. Add a narrowly-scoped Contents: Read and write token in repository Actions secrets."
-            exit 1
-          fi
-          export GH_TOKEN="$RELEASE_TOKEN"
-
           # Fail closed: distinguish a genuinely missing tag/release (HTTP 404)
           # from permission, API, or network errors. A failed API request is
           # never interpreted as proof that a version is free.
@@ -93,14 +84,14 @@ jobs:
           requested_version="${REQUESTED_VERSION:-$(tr -d '[:space:]' < release-version.txt)}"
           if [[ "$EVENT_NAME" == "workflow_run" ]]; then
             [[ "$VALIDATION_CONCLUSION" == "success" ]] || {
-              echo "Android validation did not succeed; skipping Candidate build."
+              echo "Android validation did not succeed; skipping verification build."
               exit 1
             }
             [[ "$VALIDATION_BRANCH" == "main" && "$VALIDATION_REPOSITORY" == "$GITHUB_REPOSITORY" ]] || {
-              echo "::error::Candidate builds are restricted to successful validation runs from this repository's main branch."
+              echo "::error::Verification builds are restricted to successful validation runs from this repository's main branch."
               exit 1
             }
-            # Reject stale workflow_run events. Candidate source must be the
+            # Reject stale workflow_run events. Build source must be the
             # exact current main tip, not merely an older successful commit.
             git fetch --no-tags origin main
             main_sha="$(git rev-parse refs/remotes/origin/main)"
@@ -112,9 +103,18 @@ jobs:
             commit_sha="$VALIDATION_SHA"
           elif [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
             if [[ "$REF_TYPE" != "branch" || "$REF_NAME" != "main" ]]; then
-              echo "::error::Release must be dispatched from the main branch."
+              echo "::error::Stable release must be dispatched from the main branch."
               exit 1
             fi
+            if [[ "${{ github.event.inputs.device_validation_confirmed }}" != "true" ]]; then
+              echo "::error::Real-device validation confirmation is required before stable publication."
+              exit 1
+            fi
+            if [[ -z "${RELEASE_TOKEN:-}" ]]; then
+              echo "::error::GH_RELEASE_TOKEN is missing. Add a narrowly-scoped Contents: Read and write token in repository Actions secrets."
+              exit 1
+            fi
+            export GH_TOKEN="$RELEASE_TOKEN"
             version="$requested_version"
             commit_sha="$GITHUB_SHA"
           else
@@ -126,22 +126,7 @@ jobs:
             exit 1
           }
           should_release=true
-          candidate_tag=""
-          if [[ "$EVENT_NAME" == "workflow_run" ]]; then
-            candidate_number=1
-            while true; do
-              candidate_tag="v${version}-rc.${candidate_number}"
-              if tag_or_release_exists "$candidate_tag"; then
-                candidate_number=$((candidate_number + 1))
-              else
-                result=$?
-                if [[ "$result" -eq 1 ]]; then
-                  break
-                fi
-                exit "$result"
-              fi
-            done
-          else
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
             if tag_or_release_exists "v$version"; then
               echo "::error::v$version already exists; refusing to overwrite it."
               exit 1
@@ -155,7 +140,6 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "commit_sha=$commit_sha" >> "$GITHUB_OUTPUT"
           echo "should_release=$should_release" >> "$GITHUB_OUTPUT"
-          echo "candidate_tag=$candidate_tag" >> "$GITHUB_OUTPUT"
 
   android:
     needs: prepare
@@ -384,25 +368,25 @@ jobs:
           name: molido-mesh-ai-android
           path: dist/*
 
-      - name: Publish signed Candidate prerelease (automatic after all CI gates)
-        if: ${{ github.event_name == 'workflow_run' || github.event.inputs.device_validation_confirmed == 'true' }}
+      - name: Publish signed stable release (manual dispatch after real-device validation)
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.device_validation_confirmed == 'true' }}
         uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3
         with:
           # Prefer a narrowly-scoped repository secret when GITHUB_TOKEN release
           # creation is restricted by repository or organization policy.
           token: ${{ secrets.GH_RELEASE_TOKEN || github.token }}
-          tag_name: ${{ github.event_name == 'workflow_run' && needs.prepare.outputs.candidate_tag || format('v{0}', env.VERSION) }}
+          tag_name: v${{ env.VERSION }}
           name: MolidoVPN ${{ env.VERSION }}
           target_commitish: ${{ needs.prepare.outputs.commit_sha }}
           draft: false
-          prerelease: ${{ github.event_name == 'workflow_run' }}
-          make_latest: ${{ github.event_name != 'workflow_run' }}
+          prerelease: false
+          make_latest: true
           fail_on_unmatched_files: true
           files: |
             dist/*.apk
             dist/SHA256SUMS.txt
           body: |
-            ${{ github.event_name == 'workflow_run' && 'AUTOMATED CANDIDATE — real-device validation is still required before stable promotion.' || 'Stable MolidoVPN Android release.' }}
+            Stable MolidoVPN Android release. Published only after all automated checks and explicit real-device validation confirmation.
 
             MolidoVPN Android build ${{ env.VERSION }}.
 
