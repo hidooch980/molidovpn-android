@@ -4894,8 +4894,18 @@ class MainActivity : Activity() {
             row.setValue(Strings.t("Testing…"))
             Thread({
                 val r = SpeedTest.run(this)
+                val reason = when (r.error) {
+                    "VPN_NOT_CONNECTED" -> Strings.t("Connect VPN before testing")
+                    "TUNNEL_MEASUREMENT_UNAVAILABLE" -> Strings.t("This tunnel mode cannot be measured safely yet; no direct test was run")
+                    "TUNNEL_PROXY_UNAVAILABLE" -> Strings.t("Tunnel test endpoint is unavailable")
+                    "DOWNLOAD_AND_UPLOAD_FAILED" -> Strings.t("Download and upload measurements failed")
+                    "DOWNLOAD_FAILED" -> Strings.t("Download measurement failed")
+                    "UPLOAD_FAILED" -> Strings.t("Upload measurement failed")
+                    "PING_UNAVAILABLE" -> Strings.t("Ping measurement unavailable")
+                    else -> r.error ?: "?"
+                }
                 val text = if (r.downMbps == null && r.upMbps == null) {
-                    Strings.tf("Speed test failed: %s", r.error ?: "?")
+                    Strings.tf("Speed test failed: %s", reason)
                 } else {
                     String.format(
                         java.util.Locale.US,
