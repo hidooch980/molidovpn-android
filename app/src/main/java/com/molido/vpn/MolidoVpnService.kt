@@ -3204,16 +3204,23 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
             )
             return false
         }
-        shardRotations++
-        ConnectionLog.record("SHARD: $reason — rotating node ($shardRotations)")
+        ConnectionLog.record("SHARD: $reason — testing an evidence-gated node switch")
         sendStatus(STATUS_CONNECTING, Strings.t("Switching to another node…"), 60)
+        // This helper is only entered while the SHARD front-end and tun2socks
+        // are alive. Keep every live-session node switch on the same evidence-gated
+        // make-before-break path; the legacy one-probe rotate() tears down the
+        // current xray process before proving the replacement.
         val ok = try {
-            ShardManager.rotate(this, verboseShardLog())
+            ShardManager.seamlessSwitch(this, verboseShardLog(), 0L)
         } catch (e: Exception) {
-            ConnectionLog.record("SHARD rotate failed: ${e.message}")
+            ConnectionLog.record("SHARD seamless recovery failed: ${e.message}")
             false
         }
         if (!ok) return false
+        // Count only a committed promotion; rejected candidates must not exhaust
+        // the session's recovery budget.
+        shardRotations++
+        ConnectionLog.record("SHARD: committed node switch ($shardRotations)")
         // A fresh baseline: the next tick must compare against post-rotation
         // counters, not the ones that were current when the old node died.
         shardLastTx = ShardSocksFront.sessionTx
@@ -4809,8 +4816,14 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
         }
         if (currentProtocol.contains("SHARD")) {
             val cfg = ResilienceConfig.smart(this)
-            val switched = (ShardSocksFront.isRunning && ShardManager.seamlessSwitch(this, verboseShardLog(), SmartScore.MIN_VIDEO_KBPS / 2)) ||
+            // With the front-end active, a failed evidence-gated trial must not fall
+            // through to the old one-probe rotation path. Keep the current node and let
+            // the ordinary method-level recovery path decide whether another transport works.
+            val switched = if (ShardSocksFront.isRunning) {
+                ShardManager.seamlessSwitch(this, verboseShardLog(), SmartScore.MIN_VIDEO_KBPS / 2)
+            } else {
                 rotateShardNode("quality degraded")
+            }
             if (switched) {
                 smartLastSwitchAt = SystemClock.elapsedRealtime()
                 stability.switched()
@@ -4847,11 +4860,19 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
         if (netWatch != null) return
         val cm = getSystemService(ConnectivityManager::class.java) ?: return
         var last: Network? = null
+        var hasSeenDefaultNetwork = false
         val cb = object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) {
                 val prev = last
                 last = network
-                if (prev == null || prev == network) return
+                if (prev == network) return
+                val firstAvailable = !hasSeenDefaultNetwork
+                hasSeenDefaultNetwork = true
+                if (firstAvailable) return
+                // Invalidate any candidate measured on the previous carrier before
+                // scheduling recovery on the new default network. This also handles
+                // loss-first transitions where onLost arrives before onAvailable.
+                ShardManager.cancelSeamlessSwitch()
                 ladderScheduler.schedule({
                     try {
                         if (!connected.get() || autoTrialActive.get() || userInitiatedStop.get()) return@schedule
@@ -4861,17 +4882,34 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
                             return@schedule
                         }
                         ConnectionLog.record("Network changed and the tunnel stopped answering — recovering now")
-                        if (currentProtocol.contains("SHARD") &&
-                            ((ShardSocksFront.isRunning && ShardManager.seamlessSwitch(this@MolidoVpnService, verboseShardLog(), 0)) ||
-                                rotateShardNode("network changed"))
-                        ) {
-                            stability.switched()
-                            return@schedule
+                        if (currentProtocol.contains("SHARD")) {
+                            // With the SHARD front-end active, never fall back to the
+                            // legacy one-probe rotation when evidence-gated promotion
+                            // rejects every candidate. Reconnect the whole route instead.
+                            val switched = if (ShardSocksFront.isRunning) {
+                                ShardManager.seamlessSwitch(this@MolidoVpnService, verboseShardLog(), 0)
+                            } else {
+                                rotateShardNode("network changed")
+                            }
+                            if (switched) {
+                                stability.switched()
+                                return@schedule
+                            }
                         }
                         onTunnelLost(Strings.t("Network changed — reconnecting"))
                     } catch (_: Exception) {
                     }
                 }, 3, TimeUnit.SECONDS)
+            }
+
+            override fun onLost(network: Network) {
+                // If the previous default disappears before its replacement is
+                // announced, invalidate evidence immediately. Keep the historical
+                // flag so the next onAvailable still triggers recovery.
+                if (last == network) {
+                    last = null
+                    ShardManager.cancelSeamlessSwitch()
+                }
             }
         }
         runCatching { cm.registerDefaultNetworkCallback(cb); netWatch = cb }
