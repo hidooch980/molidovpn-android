@@ -66,6 +66,25 @@ class SmartConnectTest {
     }
 
     @Test
+    fun missingConnectTimeIsNeutralRatherThanPerfect() {
+        val probes = listOf(ok(100, 50_000), ok(100, 50_000), ok(100, 50_000))
+        val unknown = SmartScore.score(Measured("a", probes))
+        val fast = SmartScore.score(Measured("a", probes, connectMs = 2_000))
+        val slow = SmartScore.score(Measured("a", probes, connectMs = 90_000))
+        assertTrue(fast > unknown)
+        assertTrue(unknown > slow)
+        assertEquals((fast + slow) / 2.0, unknown, 1e-9)
+    }
+
+    @Test
+    fun defaultWeightsMatchDesktopSmartConnect() {
+        assertEquals(0.45, com.molido.vpn.engine.Weights().stability, 0.0)
+        assertEquals(0.30, com.molido.vpn.engine.Weights().latency, 0.0)
+        assertEquals(0.15, com.molido.vpn.engine.Weights().throughput, 0.0)
+        assertEquals(0.10, com.molido.vpn.engine.Weights().connect, 0.0)
+    }
+
+    @Test
     fun reasonIsHumanReadable() {
         val r = SmartScore.reason(Measured("a", listOf(ok(84, 6_200), ok(90), ok(80))))
         assertEquals("84 ms · 3/3 stable · 6.2 Mbit/s", r)
