@@ -7,6 +7,7 @@ import java.io.InputStreamReader
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Owns the xray process and picks the node to connect through.
@@ -123,6 +124,28 @@ object ShardManager {
     private var lastResponders: List<ShardNode> = emptyList()
 
     private val running = AtomicBoolean(false)
+
+    /**
+     * Invalidates in-flight make-before-break trials when the user disconnects or
+     * the underlying network changes. The generation is checked after every
+     * blocking probe and again under [switchCommitLock] immediately before commit.
+     */
+    private val switchGeneration = AtomicLong(0L)
+    private val switchCommitLock = Any()
+
+    /** Detached candidate currently being measured; never the live [process]. */
+    @Volatile
+    private var seamlessCandidate: Process? = null
+
+    /** Cancel a pending seamless trial and terminate its detached process promptly. */
+    fun cancelSeamlessSwitch() {
+        val candidate = synchronized(switchCommitLock) {
+            switchGeneration.incrementAndGet()
+            seamlessCandidate.also { seamlessCandidate = null }
+        }
+        runCatching { candidate?.destroy() }
+    }
+
 
     /**
      * Signals [start] to abandon the connect at its next checkpoint, without
@@ -275,17 +298,24 @@ object ShardManager {
 
     /** Stop the process and forget the session. */
     fun stop() {
-        // Latch FIRST, lock-free: a start that is mid-race sees this at its next
-        // checkpoint and unwinds itself. Blocking on a lock here is what froze
-        // the UI for the whole race budget when a disconnect arrived during
-        // Connecting — the main thread must never wait on start()'s monitor.
+        // Latch FIRST without taking start()'s monitor. The only lock below is
+        // the short switch-commit critical section; it never waits for probes or
+        // process startup, so Disconnect cannot block behind a live trial.
         stopRequestedDuringStart = true
+        // Serialize only the tiny generation/capture operation with a seamless
+        // switch commit. Never wait for the long-running probe loop here.
+        val (proc, candidate) = synchronized(switchCommitLock) {
+            switchGeneration.incrementAndGet()
+            val trial = seamlessCandidate
+            seamlessCandidate = null
+            process to trial
+        }
+        runCatching { candidate?.destroy() }
         SingBox.stop()
         ShardConfigs.upstreamSocksPort = 0
         // CAPTURED now, not read inside the thread: a quick Disconnect → Connect
         // can start a NEW process before this thread runs, and reading the
         // field there would tear down the fresh session's process.
-        val proc = process
         // destroy() is idempotent and non-blocking; a start that already passed
         // its checkpoints sees the process die in awaitListener() and unwinds.
         try {
@@ -796,58 +826,186 @@ object ShardManager {
         if (!isRunning || !ShardSocksFront.isRunning || ShardConfigs.upstreamSocksPort > 0) return false
         val current = listenPort
         if (current != SOCKS_PORT && current != ALT_SOCKS_PORT) return false
+        val currentProcess = process ?: return false
+        val generation = switchGeneration.get()
         val alt = if (current == SOCKS_PORT) ALT_SOCKS_PORT else SOCKS_PORT
         val active = activeNode
         val candidates = (listOfNotNull(standbyNode) + lastResponders)
             .filter { active == null || it.key != active.key }
-            .filterNot { SingBox.isSingBox(it) } // the sidecar's ports belong to the live session
+            .filterNot { SingBox.isSingBox(it) }
             .distinctBy { it.key }
-            .take(3)
+            .take(2)
         if (candidates.isEmpty()) return false
+
+        fun cancelled(): Boolean =
+            switchGeneration.get() != generation || !isRunning || !ShardSocksFront.isRunning
+
         val listenHost = if (CoreConfig.lanSharingEnabled(context)) "0.0.0.0" else "127.0.0.1"
         val profile = if (!sessionV2ray && SmartSplit.enabled(context)) SmartSplit.cachedProfile(context) else null
         val irDirect = IranDirect.enabled(context)
         val irGeo = irDirect && unpackGeoAssets(context, File(context.filesDir, "shard").apply { mkdirs() })
-        // Anti-flap: a candidate must beat what the live node measures right now by the policy margin.
-        val policy = com.molido.vpn.engine.SwitchPolicy()
-        val currentKbps = if (ShardProbe.check(current, PROBE_TIMEOUT_MS)) SpeedTest.quickDownloadKbps(current, 500_000, 6_000) else null
+        val evidencePolicy = com.molido.vpn.engine.SwitchEvidencePolicy()
+        val probeTimeoutMs = 2_500
+
+        // Measure the live route once per switching decision, not once per candidate.
+        // This halves repeated traffic and makes candidate comparisons use one baseline.
+        val currentProbes = ArrayList<com.molido.vpn.engine.Probe>(evidencePolicy.minimumProbes)
+        repeat(evidencePolicy.minimumProbes) {
+            if (cancelled()) return false
+            val started = System.nanoTime()
+            val ok = ShardProbe.check(current, probeTimeoutMs)
+            val latency = if (ok) ((System.nanoTime() - started) / 1_000_000L).coerceAtLeast(1L) else null
+            currentProbes += com.molido.vpn.engine.Probe(ok = ok, latencyMs = latency)
+        }
+        if (cancelled()) return false
+        val currentKbps = if (currentProbes.any { it.ok }) {
+            SpeedTest.quickDownloadKbps(current, 500_000, 6_000)
+        } else null
+        if (cancelled()) return false
+        val measuredCurrent = com.molido.vpn.engine.Measured(
+            methodId = "shard-current",
+            probes = currentProbes.map { it.copy(throughputKbps = currentKbps) },
+        )
+        val currentScore = if (currentProbes.any { it.ok }) {
+            com.molido.vpn.engine.SmartScore.score(measuredCurrent)
+        } else null
+
         for (raw in candidates) {
+            if (cancelled()) return false
+            // Never mistake a stale listener from an earlier trial for this
+            // candidate's listener; promoting that port would route traffic to the
+            // wrong process while the newly launched process is still failing.
+            if (portAccepts(alt, 100)) {
+                ConnectionLog.record("$TAG seamless: alternate port $alt is unexpectedly occupied; refusing unsafe promotion")
+                return false
+            }
             val node = RetryTweaks.prepare(context, raw)
             val config = ShardConfigs.tunnelConfig(
                 context, node, listenHost, alt, if (verboseLog) "info" else "warning", smartSplit = profile,
                 irDirect = irDirect, irGeo = irGeo,
             )
-            val next = launchDetached(context, ShardConfigs.writeConfig(context, "tunnel-$alt.json", config)) ?: continue
-            val deadline = System.currentTimeMillis() + 6_000
-            var up = false
-            while (System.currentTimeMillis() < deadline && next.isAlive) {
-                if (portAccepts(alt, 400)) { up = true; break }
-                Thread.sleep(120)
-            }
-            val kbps = if (up && ShardProbe.check(alt, PROBE_TIMEOUT_MS)) SpeedTest.quickDownloadKbps(alt, 500_000, 6_000) else null
-            if (kbps == null || kbps < minKbps || !policy.clearlyBetter(kbps.toDouble(), currentKbps?.toDouble())) {
-                ConnectionLog.record("$TAG seamless: ${LogRedactor.nodeTag(node.key)} not clearly better (${kbps ?: "fail"} vs ${currentKbps ?: "fail"} kbit/s)")
-                if (kbps == null) ShardHealth.recordFailure(context, node)
-                runCatching { next.destroy(); if (!next.waitFor(2, java.util.concurrent.TimeUnit.SECONDS)) next.destroyForcibly() }
-                continue
-            }
-            val old = process
-            process = next
-            listenPort = alt
-            activeNode = node
-            if (standbyNode?.key == node.key) standbyNode = null
-            ShardSocksFront.retarget(alt)
-            RetryTweaks.recordSuccess(context, node)
-            ConnectionLog.record("$TAG seamless switch to ${LogRedactor.nodeTag(node.key)} on $alt ($kbps kbit/s); old node drains")
-            Thread({
-                runCatching {
-                    Thread.sleep(DRAIN_MS)
-                    old?.destroy()
-                    if (old != null && !old.waitFor(3, java.util.concurrent.TimeUnit.SECONDS)) old.destroyForcibly()
+            val next = launchDetached(context, ShardConfigs.writeConfig(context, "tunnel-$alt.json", config))
+                ?: continue
+            var promoted = false
+            try {
+                val registered = synchronized(switchCommitLock) {
+                    if (switchGeneration.get() != generation || process !== currentProcess ||
+                        !isRunning || !ShardSocksFront.isRunning
+                    ) {
+                        false
+                    } else {
+                        seamlessCandidate = next
+                        true
+                    }
                 }
-            }, "shard-drain").apply { isDaemon = true }.start()
-            refreshStandbyInBackground(context)
-            return true
+                if (!registered) return false
+
+                val deadlineNanos = System.nanoTime() + java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(6_000)
+                var up = false
+                while (System.nanoTime() < deadlineNanos && next.isAlive) {
+                    if (cancelled()) return false
+                    if (portAccepts(alt, 400)) {
+                        up = true
+                        break
+                    }
+                    Thread.sleep(120)
+                }
+                if (cancelled()) return false
+
+                val candidateProbes = ArrayList<com.molido.vpn.engine.Probe>(evidencePolicy.minimumProbes)
+                if (up) {
+                    repeat(evidencePolicy.minimumProbes) {
+                        if (cancelled()) return false
+                        val started = System.nanoTime()
+                        val ok = ShardProbe.check(alt, probeTimeoutMs)
+                        val latency = if (ok) ((System.nanoTime() - started) / 1_000_000L).coerceAtLeast(1L) else null
+                        candidateProbes += com.molido.vpn.engine.Probe(ok = ok, latencyMs = latency)
+                    }
+                }
+                if (cancelled()) return false
+                val kbps = if (candidateProbes.any { it.ok }) {
+                    SpeedTest.quickDownloadKbps(alt, 500_000, 6_000)
+                } else null
+                if (cancelled()) return false
+
+                val measuredCandidate = com.molido.vpn.engine.Measured(
+                    methodId = node.key,
+                    probes = candidateProbes.map { it.copy(throughputKbps = kbps) },
+                )
+                val candidateScore = com.molido.vpn.engine.SmartScore.score(measuredCandidate)
+                val healthy = candidateProbes.count { it.ok }
+                val evidencePassed = kbps != null && kbps >= minKbps &&
+                    evidencePolicy.shouldSwitch(
+                        candidateScore = candidateScore,
+                        currentScore = currentScore,
+                        healthyProbes = healthy,
+                        totalProbes = candidateProbes.size,
+                        consecutiveHealthFailures = 0,
+                        dwellElapsed = true,
+                    )
+                if (!evidencePassed) {
+                    ConnectionLog.record(
+                        "$TAG seamless: ${LogRedactor.nodeTag(node.key)} evidence rejected " +
+                            "(score=${"%.1f".format(java.util.Locale.US, candidateScore)}, " +
+                            "current=${currentScore?.let { "%.1f".format(java.util.Locale.US, it) } ?: "unavailable"}, " +
+                            "probes=$healthy/${candidateProbes.size}, throughput=${kbps ?: "fail"} kbit/s)"
+                    )
+                    if (kbps == null || healthy == 0) ShardHealth.recordFailure(context, node)
+                    continue
+                }
+
+                // Disconnect and network-change cancellation share this tiny commit
+                // lock with stop(). Whichever wins invalidates the other operation;
+                // a stale candidate can never resurrect a stopped tunnel.
+                val committed = synchronized(switchCommitLock) {
+                    if (switchGeneration.get() != generation || process !== currentProcess ||
+                        seamlessCandidate !== next || !isRunning || !ShardSocksFront.isRunning
+                    ) {
+                        false
+                    } else {
+                        seamlessCandidate = null
+                        process = next
+                        listenPort = alt
+                        activeNode = node
+                        if (standbyNode?.key == node.key) standbyNode = null
+                        ShardSocksFront.retarget(alt)
+                        true
+                    }
+                }
+                if (!committed) return false
+                promoted = true
+                runCatching { RetryTweaks.recordSuccess(context, node) }
+                ConnectionLog.record(
+                    "$TAG seamless switch to ${LogRedactor.nodeTag(node.key)} on $alt ($kbps kbit/s); old node drains"
+                )
+                Thread({
+                    runCatching {
+                        Thread.sleep(DRAIN_MS)
+                        currentProcess.destroy()
+                        if (!currentProcess.waitFor(3, java.util.concurrent.TimeUnit.SECONDS)) {
+                            currentProcess.destroyForcibly()
+                        }
+                    }
+                }, "shard-drain").apply { isDaemon = true }.start()
+                refreshStandbyInBackground(context)
+                return true
+            } catch (e: InterruptedException) {
+                Thread.currentThread().interrupt()
+                return false
+            } catch (e: Exception) {
+                ConnectionLog.record("$TAG seamless trial failed safely: ${e.javaClass.simpleName}")
+                if (cancelled()) return false
+            } finally {
+                synchronized(switchCommitLock) {
+                    if (seamlessCandidate === next) seamlessCandidate = null
+                }
+                if (!promoted) {
+                    runCatching {
+                        next.destroy()
+                        if (!next.waitFor(2, java.util.concurrent.TimeUnit.SECONDS)) next.destroyForcibly()
+                    }
+                }
+            }
         }
         return false
     }
