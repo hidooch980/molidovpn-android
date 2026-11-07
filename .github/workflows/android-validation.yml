@@ -151,7 +151,6 @@ jobs:
             -PmolidoVersionCode=49999 \
             -PmolidoVersionName=0.0.0-ci
 
-      
       - name: Install x86_64 emulator system image
         run: |
           sdkmanager "emulator" "system-images;android-35;google_apis;x86_64"
@@ -192,6 +191,18 @@ jobs:
             exit 1
           fi
           echo "x86_64 emulator app launch passed (pid=$APP_PID)."
+
+      - name: Upload x86_64 emulator diagnostics
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: android-x86_64-emulator-diagnostics
+          path: |
+            ${{ runner.temp }}/molido-emulator.log
+            ${{ runner.temp }}/molido-emulator-logcat.txt
+            ${{ runner.temp }}/molido-app-logcat.txt
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Verify Android TV launcher manifest
         run: |
