@@ -10,12 +10,12 @@ import java.net.URL
 
 /**
  * Settings > Speed test: 10 MB download and 5 MB upload against
- * speed.cloudflare.com, plus a ping (median of 3 tiny requests).
+ * speed.cloudflare.com, plus an HTTP round-trip estimate (median of 3 requests).
  *
- * Our own package is excluded from the TUN, so a plain request would measure the
- * carrier link. The test therefore goes through the tunnel's local SOCKS port
- * whenever one exists (SHARD/V2Ray, proxy mode, Psiphon, Tor). WireGuard/MASQUE
- * in VPN mode have no local listener; there the result is marked as direct.
+ * The app UID is intentionally excluded from Android's TUN to prevent routing
+ * loops. Therefore this test MUST use a verified local tunnel SOCKS listener.
+ * Native TUN modes without such a listener are reported as unsupported instead
+ * of silently measuring the carrier connection.
  */
 object SpeedTest {
 
@@ -37,28 +37,43 @@ object SpeedTest {
         false
     }
 
-    /** The tunnel's SOCKS port, or null when traffic can only go direct. */
+    /** Returns only a local listener that is accepting connections now. */
     private fun socksPort(context: Context): Int? {
         if (!TunnelStatus.isActive()) return null
-        if (ShardManager.isRunning) return ShardManager.listenPort
-        if (TunnelStatus.isProxyMode) return CoreConfig.proxyListenPort(context)
-        if (TunnelStatus.isNativeTunMode) return null
-        return listOf(CoreConfig.SOCKS_PORT, TorManager.FRONT_SOCKS_PORT).firstOrNull { accepts(it) }
+        val candidate = when {
+            ShardManager.isRunning -> ShardManager.listenPort
+            TunnelStatus.isProxyMode -> CoreConfig.proxyListenPort(context)
+            TunnelStatus.isNativeTunMode -> return null
+            else -> listOf(CoreConfig.SOCKS_PORT, TorManager.FRONT_SOCKS_PORT)
+                .firstOrNull { accepts(it) } ?: return null
+        }
+        return candidate.takeIf { accepts(it) }
     }
 
-    /** Blocking; call off the main thread. */
+    /** Blocking; call off the main thread. Never falls back to the carrier link. */
     fun run(context: Context): Result {
-        val port = socksPort(context)
-        val proxy = port?.let { Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", it)) } ?: Proxy.NO_PROXY
-        return try {
-            val pings = (0 until 3).mapNotNull { timed(proxy, "$BASE/__down?bytes=0") }
-            val ping = pings.sorted().getOrNull(pings.size / 2)
-            val down = download(proxy)
-            val up = upload(proxy)
-            Result(ping, down, up, port != null)
-        } catch (e: Exception) {
-            Result(null, null, null, port != null, e.message ?: e.javaClass.simpleName)
+        if (!TunnelStatus.isActive()) {
+            return Result(null, null, null, false, "VPN_NOT_CONNECTED")
         }
+        val port = socksPort(context) ?: return Result(
+            null, null, null, false,
+            if (TunnelStatus.isNativeTunMode) "TUNNEL_MEASUREMENT_UNAVAILABLE"
+            else "TUNNEL_PROXY_UNAVAILABLE",
+        )
+        val proxy = Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", port))
+
+        val pings = (0 until 3).mapNotNull { timed(proxy, "$BASE/__down?bytes=0") }
+        val ping = pings.sorted().getOrNull(pings.size / 2).takeIf { pings.size >= 2 }
+        val down = try { download(proxy) } catch (_: Exception) { null }
+        val up = try { upload(proxy) } catch (_: Exception) { null }
+        val error = when {
+            down == null && up == null -> "DOWNLOAD_AND_UPLOAD_FAILED"
+            down == null -> "DOWNLOAD_FAILED"
+            up == null -> "UPLOAD_FAILED"
+            ping == null -> "PING_UNAVAILABLE"
+            else -> null
+        }
+        return Result(ping, down, up, true, error)
     }
 
     private fun open(proxy: Proxy, url: String): HttpURLConnection =
@@ -66,65 +81,76 @@ object SpeedTest {
             connectTimeout = 10_000
             readTimeout = 20_000
             useCaches = false
+            instanceFollowRedirects = false
         }
 
+    internal fun isSuccessfulHttpStatus(status: Int): Boolean = status in 200..299
+
+    internal fun calculateMbps(bytes: Long, elapsedMs: Long): Double? =
+        if (bytes <= 0L || elapsedMs <= 0L) null
+        else bytes * 8.0 / 1_000_000.0 / (elapsedMs / 1000.0)
+
     private fun timed(proxy: Proxy, url: String): Long? = try {
-        val t0 = SystemClock.elapsedRealtime()
-        val c = open(proxy, url)
+        val started = SystemClock.elapsedRealtime()
+        val connection = open(proxy, url)
         try {
-            c.inputStream.use { it.readBytes() }
-            SystemClock.elapsedRealtime() - t0
+            if (!isSuccessfulHttpStatus(connection.responseCode)) return null
+            connection.inputStream.use { input ->
+                val buffer = ByteArray(1024)
+                while (input.read(buffer) >= 0) Unit
+            }
+            (SystemClock.elapsedRealtime() - started).takeIf { it > 0L }
         } finally {
-            c.disconnect()
+            connection.disconnect()
         }
     } catch (_: Exception) {
         null
     }
 
-    private fun mbps(bytes: Long, ms: Long): Double = if (ms <= 0) 0.0 else bytes * 8.0 / 1_000_000.0 / (ms / 1000.0)
-
     private fun download(proxy: Proxy): Double? {
-        val c = open(proxy, "$BASE/__down?bytes=$DOWN_BYTES")
+        val connection = open(proxy, "$BASE/__down?bytes=$DOWN_BYTES")
         try {
-            val t0 = SystemClock.elapsedRealtime()
+            if (!isSuccessfulHttpStatus(connection.responseCode)) return null
+            val started = SystemClock.elapsedRealtime()
             var total = 0L
-            c.inputStream.use { input ->
-                val buf = ByteArray(64 * 1024)
+            connection.inputStream.use { input ->
+                val buffer = ByteArray(64 * 1024)
                 while (true) {
-                    val n = input.read(buf)
-                    if (n < 0) break
-                    total += n
+                    val count = input.read(buffer)
+                    if (count < 0) break
+                    total += count
+                    if (total > DOWN_BYTES) return null
                 }
             }
-            val ms = SystemClock.elapsedRealtime() - t0
-            return if (total > 0) mbps(total, ms) else null
+            // A truncated or oversized response is not a valid speed sample.
+            if (total != DOWN_BYTES.toLong()) return null
+            return calculateMbps(total, SystemClock.elapsedRealtime() - started)
         } finally {
-            c.disconnect()
+            connection.disconnect()
         }
     }
 
     private fun upload(proxy: Proxy): Double? {
-        val c = open(proxy, "$BASE/__up")
+        val connection = open(proxy, "$BASE/__up")
         try {
-            c.requestMethod = "POST"
-            c.doOutput = true
-            c.setFixedLengthStreamingMode(UP_BYTES)
-            c.setRequestProperty("Content-Type", "application/octet-stream")
+            connection.requestMethod = "POST"
+            connection.doOutput = true
+            connection.setFixedLengthStreamingMode(UP_BYTES)
+            connection.setRequestProperty("Content-Type", "application/octet-stream")
             val chunk = ByteArray(64 * 1024)
-            val t0 = SystemClock.elapsedRealtime()
-            c.outputStream.use { out ->
-                var left = UP_BYTES
-                while (left > 0) {
-                    val n = minOf(left, chunk.size)
-                    out.write(chunk, 0, n)
-                    left -= n
+            val started = SystemClock.elapsedRealtime()
+            connection.outputStream.use { output ->
+                var remaining = UP_BYTES
+                while (remaining > 0) {
+                    val count = minOf(remaining, chunk.size)
+                    output.write(chunk, 0, count)
+                    remaining -= count
                 }
             }
-            c.responseCode
-            val ms = SystemClock.elapsedRealtime() - t0
-            return mbps(UP_BYTES.toLong(), ms)
+            if (!isSuccessfulHttpStatus(connection.responseCode)) return null
+            return calculateMbps(UP_BYTES.toLong(), SystemClock.elapsedRealtime() - started)
         } finally {
-            c.disconnect()
+            connection.disconnect()
         }
     }
 
@@ -132,29 +158,35 @@ object SpeedTest {
      * Small download through a local SOCKS port, for Smart Connect's throughput figure.
      * Returns kbit/s, or null on failure. Blocking, bounded by [timeoutMs].
      */
-    fun quickDownloadKbps(port: Int, bytes: Int, timeoutMs: Int): Long? = try {
-        val proxy = Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", port))
-        val c = java.net.URL("$BASE/__down?bytes=$bytes").openConnection(proxy) as HttpURLConnection
-        c.connectTimeout = timeoutMs
-        c.readTimeout = timeoutMs
-        val started = System.nanoTime()
-        var total = 0L
-        try {
-            c.inputStream.use { input ->
-                val buf = ByteArray(16 * 1024)
-                while (true) {
-                    val n = input.read(buf)
-                    if (n < 0) break
-                    total += n
-                    if ((System.nanoTime() - started) / 1_000_000 > timeoutMs) break
+    fun quickDownloadKbps(port: Int, bytes: Int, timeoutMs: Int): Long? {
+        if (port !in 1..65535 || bytes < 4_096 || timeoutMs <= 0 || !accepts(port)) return null
+        return try {
+            val proxy = Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", port))
+            val connection = URL("$BASE/__down?bytes=$bytes").openConnection(proxy) as HttpURLConnection
+            connection.connectTimeout = timeoutMs
+            connection.readTimeout = timeoutMs
+            connection.useCaches = false
+            connection.instanceFollowRedirects = false
+            val started = System.nanoTime()
+            var total = 0L
+            try {
+                if (!isSuccessfulHttpStatus(connection.responseCode)) return null
+                connection.inputStream.use { input ->
+                    val buffer = ByteArray(16 * 1024)
+                    while (true) {
+                        val count = input.read(buffer)
+                        if (count < 0) break
+                        total += count
+                        if ((System.nanoTime() - started) / 1_000_000 > timeoutMs) break
+                    }
                 }
+            } finally {
+                connection.disconnect()
             }
-        } finally {
-            c.disconnect()
+            val elapsedMs = ((System.nanoTime() - started) / 1_000_000).coerceAtLeast(1)
+            if (total < 4_096) null else total * 8 / elapsedMs
+        } catch (_: Exception) {
+            null
         }
-        val ms = ((System.nanoTime() - started) / 1_000_000).coerceAtLeast(1)
-        if (total < 4_096) null else total * 8 / ms
-    } catch (_: Exception) {
-        null
     }
 }
