@@ -38,7 +38,7 @@ jobs:
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
-      - name: Select verified build or stable release version
+      - name: Validate stable release request
         id: release
         env:
           GH_TOKEN: ${{ github.token }}
