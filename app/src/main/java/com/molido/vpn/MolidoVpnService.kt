@@ -3204,8 +3204,7 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
             )
             return false
         }
-        shardRotations++
-        ConnectionLog.record("SHARD: $reason — rotating node ($shardRotations)")
+        ConnectionLog.record("SHARD: $reason — testing an evidence-gated node switch")
         sendStatus(STATUS_CONNECTING, Strings.t("Switching to another node…"), 60)
         // This helper is only entered while the SHARD front-end and tun2socks
         // are alive. Keep every live-session node switch on the same evidence-gated
@@ -3218,6 +3217,10 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
             false
         }
         if (!ok) return false
+        // Count only a committed promotion; rejected candidates must not exhaust
+        // the session's recovery budget.
+        shardRotations++
+        ConnectionLog.record("SHARD: committed node switch ($shardRotations)")
         // A fresh baseline: the next tick must compare against post-rotation
         // counters, not the ones that were current when the old node died.
         shardLastTx = ShardSocksFront.sessionTx
