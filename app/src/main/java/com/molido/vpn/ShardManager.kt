@@ -133,11 +133,17 @@ object ShardManager {
     private val switchGeneration = AtomicLong(0L)
     private val switchCommitLock = Any()
 
-    /** Cancel a pending seamless trial without waiting for its probe timeout. */
+    /** Detached candidate currently being measured; never the live [process]. */
+    @Volatile
+    private var seamlessCandidate: Process? = null
+
+    /** Cancel a pending seamless trial and terminate its detached process promptly. */
     fun cancelSeamlessSwitch() {
-        synchronized(switchCommitLock) {
+        val candidate = synchronized(switchCommitLock) {
             switchGeneration.incrementAndGet()
+            seamlessCandidate.also { seamlessCandidate = null }
         }
+        runCatching { candidate?.destroy() }
     }
 
 
@@ -298,10 +304,13 @@ object ShardManager {
         stopRequestedDuringStart = true
         // Serialize only the tiny generation/capture operation with a seamless
         // switch commit. Never wait for the long-running probe loop here.
-        val proc = synchronized(switchCommitLock) {
+        val (proc, candidate) = synchronized(switchCommitLock) {
             switchGeneration.incrementAndGet()
-            process
+            val trial = seamlessCandidate
+            seamlessCandidate = null
+            process to trial
         }
+        runCatching { candidate?.destroy() }
         SingBox.stop()
         ShardConfigs.upstreamSocksPort = 0
         // CAPTURED now, not read inside the thread: a quick Disconnect → Connect
@@ -879,6 +888,18 @@ object ShardManager {
                 ?: continue
             var promoted = false
             try {
+                val registered = synchronized(switchCommitLock) {
+                    if (switchGeneration.get() != generation || process !== currentProcess ||
+                        !isRunning || !ShardSocksFront.isRunning
+                    ) {
+                        false
+                    } else {
+                        seamlessCandidate = next
+                        true
+                    }
+                }
+                if (!registered) return false
+
                 val deadlineNanos = System.nanoTime() + java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(6_000)
                 var up = false
                 while (System.nanoTime() < deadlineNanos && next.isAlive) {
@@ -938,10 +959,11 @@ object ShardManager {
                 // a stale candidate can never resurrect a stopped tunnel.
                 val committed = synchronized(switchCommitLock) {
                     if (switchGeneration.get() != generation || process !== currentProcess ||
-                        !isRunning || !ShardSocksFront.isRunning
+                        seamlessCandidate !== next || !isRunning || !ShardSocksFront.isRunning
                     ) {
                         false
                     } else {
+                        seamlessCandidate = null
                         process = next
                         listenPort = alt
                         activeNode = node
@@ -974,6 +996,9 @@ object ShardManager {
                 ConnectionLog.record("$TAG seamless trial failed safely: ${e.javaClass.simpleName}")
                 if (cancelled()) return false
             } finally {
+                synchronized(switchCommitLock) {
+                    if (seamlessCandidate === next) seamlessCandidate = null
+                }
                 if (!promoted) {
                     runCatching {
                         next.destroy()
