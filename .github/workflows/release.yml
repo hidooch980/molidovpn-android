@@ -54,7 +54,7 @@ jobs:
             exit 1
           fi
           if [[ "$REF_TYPE" != "branch" || "$REF_NAME" != "main" ]]; then
-            echo "::error::Release must be dispatched from the protected main branch."
+            echo "::error::Release must be dispatched from the main branch."
             exit 1
           fi
           version="$REQUESTED_VERSION"
