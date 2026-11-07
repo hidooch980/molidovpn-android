@@ -49,8 +49,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [[ "$EVENT_NAME" != "workflow_dispatch" || "${{ github.event.inputs.device_validation_confirmed }}" != "true" ]]; then
-            echo "::error::Release requires manual dispatch and explicit real-device validation confirmation."
+          if [[ "$EVENT_NAME" != "workflow_dispatch" ]]; then
+            echo "::error::Only manual dispatch is permitted."
             exit 1
           fi
           if [[ "$REF_TYPE" != "branch" || "$REF_NAME" != "main" ]]; then
@@ -308,6 +308,7 @@ jobs:
           path: dist/*
 
       - name: Publish installable GitHub Release
+        if: ${{ github.event.inputs.device_validation_confirmed == 'true' }}
         uses: softprops/action-gh-release@v3
         with:
           tag_name: v${{ env.VERSION }}
