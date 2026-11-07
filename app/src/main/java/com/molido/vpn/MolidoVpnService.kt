@@ -3207,10 +3207,14 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
         shardRotations++
         ConnectionLog.record("SHARD: $reason — rotating node ($shardRotations)")
         sendStatus(STATUS_CONNECTING, Strings.t("Switching to another node…"), 60)
+        // This helper is only entered while the SHARD front-end and tun2socks
+        // are alive. Keep every live-session node switch on the same evidence-gated
+        // make-before-break path; the legacy one-probe rotate() tears down the
+        // current xray process before proving the replacement.
         val ok = try {
-            ShardManager.rotate(this, verboseShardLog())
+            ShardManager.seamlessSwitch(this, verboseShardLog(), 0L)
         } catch (e: Exception) {
-            ConnectionLog.record("SHARD rotate failed: ${e.message}")
+            ConnectionLog.record("SHARD seamless recovery failed: ${e.message}")
             false
         }
         if (!ok) return false
