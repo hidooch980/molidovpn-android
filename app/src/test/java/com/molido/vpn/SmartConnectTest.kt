@@ -9,6 +9,7 @@ import com.molido.vpn.engine.QualityMonitor
 import com.molido.vpn.engine.SmartConfig
 import com.molido.vpn.engine.SmartPlan
 import com.molido.vpn.engine.SmartScore
+import com.molido.vpn.engine.SmartSwitchPolicy
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -88,6 +89,37 @@ class SmartConnectTest {
     fun reasonIsHumanReadable() {
         val r = SmartScore.reason(Measured("a", listOf(ok(84, 6_200), ok(90), ok(80))))
         assertEquals("84 ms · 3/3 stable · 6.2 Mbit/s", r)
+    }
+
+
+    // ---------------------------------------------------------- live switch policy
+
+    @Test
+    fun switchPolicyRequiresThreeStableProbeRounds() {
+        val policy = SmartSwitchPolicy()
+        val insufficient = Measured("candidate", listOf(ok(80), ok(85)))
+        val unstable = Measured("candidate", listOf(ok(80), fail, fail))
+        assertFalse(policy.shouldSwitch(0.0, insufficient, 120_000))
+        assertFalse(policy.shouldSwitch(0.0, unstable, 120_000))
+    }
+
+    @Test
+    fun switchPolicyRequiresDwellAndEightPointImprovement() {
+        val policy = SmartSwitchPolicy()
+        val candidate = Measured("candidate", listOf(ok(80, 8_000), ok(85, 8_000), ok(90, 8_000)))
+        val score = SmartScore.score(candidate)
+        assertFalse(policy.shouldSwitch(score - 20.0, candidate, 89_999))
+        assertFalse(policy.shouldSwitch(score - 7.9, candidate, 120_000))
+        assertTrue(policy.shouldSwitch(score - 8.0, candidate, 90_000))
+    }
+
+    @Test
+    fun twoHealthFailuresOverrideDwellButStillRequireEvidence() {
+        val policy = SmartSwitchPolicy()
+        val candidate = Measured("candidate", listOf(ok(80), ok(85), ok(90)))
+        assertFalse(policy.shouldSwitch(0.0, candidate, 10_000, consecutiveHealthFailures = 1))
+        assertTrue(policy.shouldSwitch(100.0, candidate, 10_000, consecutiveHealthFailures = 2))
+        assertFalse(policy.shouldSwitch(0.0, Measured("candidate", listOf(ok(80))), 10_000, consecutiveHealthFailures = 3))
     }
 
     // ---------------------------------------------------------------- ordering
