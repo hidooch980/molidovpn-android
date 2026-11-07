@@ -4809,8 +4809,14 @@ class MolidoVpnService : VpnService(), NativeCore.CoreCallback, PsiphonTunnel.Ho
         }
         if (currentProtocol.contains("SHARD")) {
             val cfg = ResilienceConfig.smart(this)
-            val switched = (ShardSocksFront.isRunning && ShardManager.seamlessSwitch(this, verboseShardLog(), SmartScore.MIN_VIDEO_KBPS / 2)) ||
+            // With the front-end active, a failed evidence-gated trial must not fall
+            // through to the old one-probe rotation path. Keep the current node and let
+            // the ordinary method-level recovery path decide whether another transport works.
+            val switched = if (ShardSocksFront.isRunning) {
+                ShardManager.seamlessSwitch(this, verboseShardLog(), SmartScore.MIN_VIDEO_KBPS / 2)
+            } else {
                 rotateShardNode("quality degraded")
+            }
             if (switched) {
                 smartLastSwitchAt = SystemClock.elapsedRealtime()
                 stability.switched()
