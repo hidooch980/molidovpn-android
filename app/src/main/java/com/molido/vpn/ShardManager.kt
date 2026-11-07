@@ -292,10 +292,9 @@ object ShardManager {
 
     /** Stop the process and forget the session. */
     fun stop() {
-        // Latch FIRST, lock-free: a start that is mid-race sees this at its next
-        // checkpoint and unwinds itself. Blocking on a lock here is what froze
-        // the UI for the whole race budget when a disconnect arrived during
-        // Connecting — the main thread must never wait on start()'s monitor.
+        // Latch FIRST without taking start()'s monitor. The only lock below is
+        // the short switch-commit critical section; it never waits for probes or
+        // process startup, so Disconnect cannot block behind a live trial.
         stopRequestedDuringStart = true
         // Serialize only the tiny generation/capture operation with a seamless
         // switch commit. Never wait for the long-running probe loop here.
