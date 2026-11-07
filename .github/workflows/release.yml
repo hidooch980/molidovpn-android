@@ -57,9 +57,39 @@ jobs:
           VALIDATION_BRANCH: ${{ github.event.workflow_run.head_branch }}
           VALIDATION_REPOSITORY: ${{ github.event.workflow_run.head_repository.full_name }}
           VALIDATION_SHA: ${{ github.event.workflow_run.head_sha }}
+          RELEASE_TOKEN: ${{ secrets.GH_RELEASE_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
+          # A release must never be published with the short-lived, restricted
+          # workflow token. Require the dedicated repository release credential.
+          if [[ -z "${RELEASE_TOKEN:-}" ]]; then
+            echo "::error::GH_RELEASE_TOKEN is missing. Add a narrowly-scoped Contents: Read and write token in repository Actions secrets."
+            exit 1
+          fi
+          export GH_TOKEN="$RELEASE_TOKEN"
+
+          # Fail closed: distinguish a genuinely missing tag/release (HTTP 404)
+          # from permission, API, or network errors. A failed API request is
+          # never interpreted as proof that a version is free.
+          tag_or_release_exists() {
+            local tag="$1" response
+            if response="$(gh api --include "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" 2>&1)"; then
+              return 0
+            elif ! grep -Eqi 'HTTP/[0-9.]+ 404' <<< "$response"; then
+              echo "::error::Unable to verify tag $tag safely: $response"
+              return 2
+            fi
+            if response="$(gh api --include "repos/$GITHUB_REPOSITORY/releases/tags/$tag" 2>&1)"; then
+              return 0
+            elif grep -Eqi 'HTTP/[0-9.]+ 404' <<< "$response"; then
+              return 1
+            else
+              echo "::error::Unable to verify release $tag safely: $response"
+              return 2
+            fi
+          }
+
           requested_version="${REQUESTED_VERSION:-$(tr -d '[:space:]' < release-version.txt)}"
           if [[ "$EVENT_NAME" == "workflow_run" ]]; then
             [[ "$VALIDATION_CONCLUSION" == "success" ]] || {
@@ -68,6 +98,14 @@ jobs:
             }
             [[ "$VALIDATION_BRANCH" == "main" && "$VALIDATION_REPOSITORY" == "$GITHUB_REPOSITORY" ]] || {
               echo "::error::Candidate builds are restricted to successful validation runs from this repository's main branch."
+              exit 1
+            }
+            # Reject stale workflow_run events. Candidate source must be the
+            # exact current main tip, not merely an older successful commit.
+            git fetch --no-tags origin main
+            main_sha="$(git rev-parse refs/remotes/origin/main)"
+            [[ "$VALIDATION_SHA" == "$main_sha" ]] || {
+              echo "::error::Validation SHA $VALIDATION_SHA is stale; current main is $main_sha. Wait for validation on the latest main commit."
               exit 1
             }
             version="$requested_version"
@@ -93,17 +131,25 @@ jobs:
             candidate_number=1
             while true; do
               candidate_tag="v${version}-rc.${candidate_number}"
-              if ! git ls-remote --exit-code --tags origin "refs/tags/$candidate_tag" >/dev/null 2>&1 &&
-                 ! gh release view "$candidate_tag" >/dev/null 2>&1; then
-                break
+              if tag_or_release_exists "$candidate_tag"; then
+                candidate_number=$((candidate_number + 1))
+              else
+                result=$?
+                if [[ "$result" -eq 1 ]]; then
+                  break
+                fi
+                exit "$result"
               fi
-              candidate_number=$((candidate_number + 1))
             done
           else
-            if git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null 2>&1 ||
-               gh release view "v$version" >/dev/null 2>&1; then
+            if tag_or_release_exists "v$version"; then
               echo "::error::v$version already exists; refusing to overwrite it."
               exit 1
+            else
+              result=$?
+              if [[ "$result" -ne 1 ]]; then
+                exit "$result"
+              fi
             fi
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
