@@ -1913,21 +1913,44 @@ class MainActivity : Activity() {
         val connectionCard = LinearLayout(this@MainActivity).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
-            setPadding(dp(18), dp(18), dp(18), dp(18))
-            background = Sculpt.sculptedBackground(
-                resources.displayMetrics.density,
-                palette.surface,
-                24,
-                Sculpt.withAlpha(palette.primary, 0.28f),
-            )
+            setPadding(dp(20), dp(22), dp(20), dp(20))
+            clipToOutline = true
+            elevation = dp(8).toFloat()
+            background = GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                intArrayOf(
+                    Sculpt.lighten(palette.surface, 0.035f),
+                    palette.primaryContainer,
+                    palette.surface,
+                ),
+            ).apply {
+                cornerRadius = dp(28).toFloat()
+                setStroke(dp(1), Sculpt.withAlpha(palette.primary, 0.42f))
+            }
         }
         connectionCard.addView(
-            label("MOLIDO  ·  SMART CONNECTION", 10f, palette.primaryText, TypefaceStyle.MEDIUM).apply {
+            label("MOLIDO  ·  AI NETWORK", 10f, palette.primaryText, TypefaceStyle.MEDIUM).apply {
                 gravity = Gravity.CENTER
-                letterSpacing = 0.09f
+                letterSpacing = 0.13f
                 maxLines = 1
+                setPadding(dp(12), dp(7), dp(12), dp(7))
+                background = roundedBackground(
+                    Sculpt.withAlpha(palette.primary, 0.13f), 30,
+                    Sculpt.withAlpha(palette.primary, 0.22f),
+                )
             },
-            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT),
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT),
+        )
+        connectionCard.addView(
+            View(this@MainActivity).apply {
+                setBackground(
+                    GradientDrawable(
+                        GradientDrawable.Orientation.LEFT_RIGHT,
+                        intArrayOf(palette.primary, palette.violet, palette.mint),
+                    ).apply { cornerRadius = dp(3).toFloat() },
+                )
+            },
+            LinearLayout.LayoutParams(dp(54), dp(3)).apply { topMargin = dp(12) },
         )
         connectionTitle.gravity = Gravity.CENTER
         connectionCard.addView(connectionTitle, LinearLayout.LayoutParams(
@@ -1939,10 +1962,10 @@ class MainActivity : Activity() {
             ViewGroup.LayoutParams.WRAP_CONTENT,
         ).apply { topMargin = dp(3) })
 
-        quickConnectButton.minHeight = dp(58)
-        quickConnectButton.setPadding(dp(14), dp(8), dp(14), dp(8))
-        quickConnectButton.elevation = dp(4).toFloat()
-        quickConnectButton.translationZ = 0f
+        quickConnectButton.minHeight = dp(62)
+        quickConnectButton.setPadding(dp(16), dp(9), dp(16), dp(9))
+        quickConnectButton.elevation = dp(10).toFloat()
+        quickConnectButton.translationZ = dp(2).toFloat()
         connectionCard.addView(quickConnectButton, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             dp(58),
