@@ -86,10 +86,19 @@ jobs:
             exit 1
           }
           should_release=true
-          if git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null 2>&1 ||
-             gh release view "v$version" >/dev/null 2>&1; then
-            echo "::error::v$version already exists; refusing to overwrite it."
-            exit 1
+          if [[ "$EVENT_NAME" == "workflow_run" ]]; then
+            candidate_tag="v${version}-rc.1"
+            if git ls-remote --exit-code --tags origin "refs/tags/$candidate_tag" >/dev/null 2>&1 ||
+               gh release view "$candidate_tag" >/dev/null 2>&1; then
+              echo "::error::$candidate_tag already exists; refusing to overwrite it."
+              exit 1
+            fi
+          else
+            if git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null 2>&1 ||
+               gh release view "v$version" >/dev/null 2>&1; then
+              echo "::error::v$version already exists; refusing to overwrite it."
+              exit 1
+            fi
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "commit_sha=$commit_sha" >> "$GITHUB_OUTPUT"
@@ -321,22 +330,24 @@ jobs:
           name: molido-mesh-ai-android
           path: dist/*
 
-      - name: Publish installable GitHub Release
-        if: ${{ github.event.inputs.device_validation_confirmed == 'true' }}
+      - name: Publish signed Candidate prerelease (automatic after all CI gates)
+        if: ${{ github.event_name == 'workflow_run' || github.event.inputs.device_validation_confirmed == 'true' }}
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: v${{ env.VERSION }}
+          tag_name: ${{ github.event_name == 'workflow_run' && format('v{0}-rc.1', env.VERSION) || format('v{0}', env.VERSION) }}
           name: MolidoVPN ${{ env.VERSION }}
           target_commitish: ${{ needs.prepare.outputs.commit_sha }}
           draft: false
-          prerelease: false
-          make_latest: true
+          prerelease: ${{ github.event_name == 'workflow_run' }}
+          make_latest: ${{ github.event_name != 'workflow_run' }}
           fail_on_unmatched_files: true
           files: |
             dist/*.apk
             dist/SHA256SUMS.txt
           body: |
-            MolidoVPN Android release ${{ env.VERSION }}.
+            ${{ github.event_name == 'workflow_run' && 'AUTOMATED CANDIDATE — real-device validation is still required before stable promotion.' || 'Stable MolidoVPN Android release.' }}
+
+            MolidoVPN Android build ${{ env.VERSION }}.
 
             - Signed phone ARM64, ARMv7 and universal APKs.
             - Signed Android TV ARM64 and universal APKs with Leanback launcher support.
